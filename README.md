@@ -51,7 +51,7 @@ python main.py
 pyinstaller --noconfirm --clean thione.spec
 ```
 
-产物为单文件 `dist\thione.exe` 
+产物为单文件 `dist\thione.exe` 只有用 `thione.spec` 构建才会带上图标与版本资源 
 
 ## 数据目录
 
