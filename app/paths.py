@@ -1,15 +1,20 @@
 """资源路径与运行目录辅助。
 
 统一约定 (集成后三个工具共用一套目录):
-    用户配置 -> %APPDATA%\\thpy
-    运行日志 -> %LOCALAPPDATA%\\thpy\\logs
+    用户配置 -> %APPDATA%\\thione
+    运行日志 -> %LOCALAPPDATA%\\thione\\logs
     只读资源 -> 打包后的解压目录, 源码运行时为项目根目录
+
+更名前使用的 %APPDATA%\\thpy 只作为兼容读取来源, 不再写入。
 """
 
 import os
 import sys
 
-APP_DIR_NAME = "thpy"
+APP_DIR_NAME = "thione"
+
+#: 更名前使用的目录名, 仅用于读取旧位置留下的数据
+LEGACY_APP_DIR_NAME = "thpy"
 
 
 def _project_root():
@@ -41,18 +46,30 @@ def app_root():
     return _project_root()
 
 
-def user_data_dir():
-    """返回用户级配置目录: %APPDATA%\\thpy。"""
-    appdata = (
+def _appdata_dir():
+    """返回漫游应用数据目录 (%APPDATA%), 取不到时回落到用户主目录。"""
+    return (
         os.environ.get("APPDATA")
         or os.environ.get("LOCALAPPDATA")
         or os.path.expanduser("~")
     )
-    return os.path.join(appdata, APP_DIR_NAME)
+
+
+def user_data_dir():
+    """返回用户级配置目录: %APPDATA%\\thione。"""
+    return os.path.join(_appdata_dir(), APP_DIR_NAME)
+
+
+def legacy_user_data_dir():
+    """返回更名前的配置目录 %APPDATA%\\thpy, 只作为兼容读取来源。
+
+    @return: 更名前的用户级配置目录路径
+    """
+    return os.path.join(_appdata_dir(), LEGACY_APP_DIR_NAME)
 
 
 def user_log_dir():
-    """返回用户级日志目录: %LOCALAPPDATA%\\thpy\\logs。"""
+    """返回用户级日志目录: %LOCALAPPDATA%\\thione\\logs。"""
     local = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
     if local:
         return os.path.join(local, APP_DIR_NAME, "logs")

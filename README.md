@@ -1,4 +1,4 @@
-# thpy
+# thione
 
 把图片查重 批量重命名 划词翻译三个工具集成到同一个窗口的 Windows 桌面工具箱 
 
@@ -6,9 +6,11 @@
 
 ## 界面
 
-- 深色与浅色两套模式 配色与博客 phxxblog 的默认预设保持一致 
+- 深色与浅色两套模式 扁平风格 只用描边与留白分层 没有渐变与阴影 
 - `Ctrl+T` 或侧栏底部的按钮切换 切换时颜色平滑过渡 
 - 左侧导航为自绘控件 选中项的指示条会滑动 悬停底色淡入 页面切换带轻微位移动效 
+- 三个工具页面共用一套工具条骨架 顶部是标题与说明 右侧是主次操作 
+- 没有内容可显示时给出引导文案与下一步动作 不留白屏 
 
 ## 功能
 
@@ -46,30 +48,30 @@ python main.py
 ## 打包
 
 ```bash
-pyinstaller --noconfirm --clean thpy.spec
+pyinstaller --noconfirm --clean thione.spec
 ```
 
-产物为单文件 `dist\thpy.exe` 
+产物为单文件 `dist\thione.exe` 
 
 ## 数据目录
 
 | 用途 | 路径 |
 | --- | --- |
-| 华为云凭据 | `%APPDATA%\thpy\config.ini` |
-| 界面偏好 | `%APPDATA%\thpy\settings.ini` |
-| 运行日志 | `%LOCALAPPDATA%\thpy\logs\thpy.log` |
+| 华为云凭据 | `%APPDATA%\thione\config.ini` |
+| 界面偏好 | `%APPDATA%\thione\settings.ini` |
+| 运行日志 | `%LOCALAPPDATA%\thione\logs\thione.log` |
 
-从独立版 transpy 迁移无需任何操作 程序会自动读取 `%APPDATA%\transpy\config.ini` 
+从更名前或独立版迁移无需任何操作 程序会自动读取旧位置的 `%APPDATA%\thpy\config.ini` 与 `%APPDATA%\transpy\config.ini` 
 
 ## 目录结构
 
 ```
 main.py                     入口
-thpy.spec                   打包配置
+thione.spec                   打包配置
 assets/images/logo.ico      图标
 app/                        集成后的应用
 docs/                       技术文档
-dupy/ renamepy/ transpy/    集成前的独立版本
+CHANGELOG.md                版本变更记录
 ```
 
 ## 文档
@@ -78,4 +80,4 @@ dupy/ renamepy/ transpy/    集成前的独立版本
 - `docs/配置与数据.md` 目录约定 凭据优先级 迁移方式 
 - `docs/开发与打包.md` 环境 打包要点 新增工具的方法 
 
-集成前的三个独立版本仍保留在各自目录中 但后续改动以根目录的集成版本为准 
+集成前的三个独立版本已移出仓库 后续改动一律以本仓库的集成版本为准 

@@ -1,15 +1,16 @@
 """用户级配置的读写。
 
-配置主落点是 `%APPDATA%\\thpy\\config.ini`, 用户无需关心程序被装在哪里,
+配置主落点是 `%APPDATA%\\thione\\config.ini`, 用户无需关心程序被装在哪里,
 也不需要手工编辑文件 —— 在划词翻译页面填好保存即可。
 
 读取优先级 (高 -> 低):
     1. 环境变量 HUAWEI_AK / HUAWEI_SK / HUAWEI_PROJECT_ID / HUAWEI_REGION
-    2. %APPDATA%\\thpy\\config.ini           (界面保存, 主要落点)
-    3. %APPDATA%\\transpy\\config.ini        (独立版 transpy 的旧配置, 向后兼容)
-    4. 程序所在目录的 .env                   (便携版 / 向后兼容)
-    5. 当前工作目录的 .env
-    6. IAM_transpy-accessKeys.csv            (只提供 AK/SK)
+    2. %APPDATA%\\thione\\config.ini           (界面保存, 主要落点)
+    3. %APPDATA%\\thpy\\config.ini             (更名前的配置, 向后兼容)
+    4. %APPDATA%\\transpy\\config.ini          (独立版 transpy 的旧配置, 向后兼容)
+    5. 程序所在目录的 .env                   (便携版 / 向后兼容)
+    6. 当前工作目录的 .env
+    7. IAM_transpy-accessKeys.csv             (只提供 AK/SK)
 
 所有落点都找不到时抛出 MissingConfigError, 由界面提示用户配置。
 """
@@ -20,7 +21,12 @@ import logging
 import os
 
 from . import constants
-from ...paths import app_root, ensure_dir, user_data_dir
+from ...paths import (
+    app_root,
+    ensure_dir,
+    legacy_user_data_dir,
+    user_data_dir,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +62,11 @@ def legacy_config_path():
         or os.path.expanduser("~")
     )
     return os.path.join(appdata, LEGACY_APP_DIR_NAME, constants.CONFIG_FILE_NAME)
+
+
+def renamed_config_path():
+    """返回更名前 (thpy) 保存在 %APPDATA%\\thpy 下的配置路径, 用作兼容来源。"""
+    return os.path.join(legacy_user_data_dir(), constants.CONFIG_FILE_NAME)
 
 
 def _read_ini(path):
@@ -124,6 +135,9 @@ def load():
 
     ini_path = config_path()
     ini = _read_ini(ini_path)
+    # 更名前由 thpy 保存的配置: 仅作为主配置文件的兜底
+    renamed_path = renamed_config_path()
+    renamed_ini = _read_ini(renamed_path)
     # 集成前由独立版 transpy 保存的配置: 仅作为主配置文件的兜底
     old_path = legacy_config_path()
     old_ini = _read_ini(old_path)
@@ -135,15 +149,16 @@ def load():
         for k, v in _read_env_file(os.path.join(d, ".env")).items():
             file_env.setdefault(k, v)
 
-    searched = (ini_path, old_path) + tuple(
+    searched = (ini_path, renamed_path, old_path) + tuple(
         os.path.join(d, ".env") for d in dirs
     )
 
     def pick(name):
-        """按 环境变量 -> config.ini -> 旧版配置 -> .env 的顺序取值。"""
+        """按 环境变量 -> 新配置 -> 更名前配置 -> 旧版配置 -> .env 取值。"""
         sources = (
             ("环境变量", os.environ.get(f"{constants.ENV_PREFIX}{name}")),
             (ini_path, ini.get(name)),
+            (renamed_path, renamed_ini.get(name)),
             (old_path, old_ini.get(name)),
             (".env", file_env.get(f"{constants.ENV_PREFIX}{name}")),
         )
@@ -202,7 +217,7 @@ def load():
 
 
 def save(config):
-    """把配置写入 %APPDATA%\\thpy\\config.ini。"""
+    """把配置写入 %APPDATA%\\thione\\config.ini。"""
     path = config_path()
     ensure_dir(os.path.dirname(path))
 
@@ -242,6 +257,7 @@ def current_values():
     来源 (环境变量 / 旧版配置 / .env / csv) 的基础上补齐剩余字段。
     """
     ini = _read_ini(config_path())
+    renamed_ini = _read_ini(renamed_config_path())
     old_ini = _read_ini(legacy_config_path())
 
     file_env = {}
@@ -253,6 +269,7 @@ def current_values():
         candidates = (
             os.environ.get(f"{constants.ENV_PREFIX}{name}"),
             ini.get(name),
+            renamed_ini.get(name),
             old_ini.get(name),
             file_env.get(f"{constants.ENV_PREFIX}{name}"),
         )

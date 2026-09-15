@@ -1,4 +1,4 @@
-"""工具箱主窗口: 顶部渐变线 + 侧栏 + 内容区 + 状态栏。
+"""工具箱主窗口: 顶部主色条 + 侧栏 + 内容区 + 状态栏。
 
 它同时负责页面装载与切换, 以及跨线程投递队列的轮询。
 """
@@ -10,19 +10,17 @@ from tkinter import ttk
 
 from ..constants import APP_MIN_SIZE, APP_SIZE, APP_TITLE, QUEUE_POLL_MS
 from ..motion import Tween, ease_out_cubic
-from ..palettes import mix
 from ..theme import ThemeManager
 from .sidebar import Sidebar
 
 logger = logging.getLogger(__name__)
 
-#: 顶部渐变装饰线的高度与分段数
-ACCENT_LINE_HEIGHT = 3
-ACCENT_LINE_SEGMENTS = 48
+#: 窗口顶部主色条的高度
+ACCENT_LINE_HEIGHT = 2
 
 #: 页面切换时内容上移到位: 起始偏移与时长 (毫秒)
-REVEAL_OFFSET = 10
-REVEAL_MS = 150
+REVEAL_OFFSET = 8
+REVEAL_MS = 140
 
 
 class ShellWindow:
@@ -69,7 +67,7 @@ class ShellWindow:
 
     # -- 构建 -------------------------------------------------------------
     def _build_accent_line(self):
-        """窗口顶部的渐变色带, 位置在侧栏与内容区之上。"""
+        """窗口顶部的主色条, 位置在侧栏与内容区之上。"""
         self.accent_line = tk.Canvas(
             self.root, height=ACCENT_LINE_HEIGHT, highlightthickness=0, bd=0
         )
@@ -77,9 +75,8 @@ class ShellWindow:
         self.accent_line.bind("<Configure>", lambda _event: self._paint_accent_line())
 
     def _paint_accent_line(self):
-        """按当前配色重画渐变线; 窗口宽度变化与主题过渡时都会调用。"""
+        """把主色条刷成实心主色; 窗口宽度变化与主题过渡时都会调用。"""
         canvas = self.accent_line
-        p = self.theme.palette
         try:
             width = canvas.winfo_width()
         except tk.TclError:
@@ -87,17 +84,13 @@ class ShellWindow:
         if width <= 1:
             return
         canvas.delete("all")
-        segments = max(1, min(ACCENT_LINE_SEGMENTS, width))
-        step = width / segments
-        for index in range(segments):
-            ratio = index / max(1, segments - 1)
-            canvas.create_rectangle(
-                index * step, 0, (index + 1) * step + 1, ACCENT_LINE_HEIGHT,
-                fill=mix(p["grad_from"], p["grad_to"], ratio), outline="",
-            )
+        canvas.create_rectangle(
+            0, 0, width, ACCENT_LINE_HEIGHT,
+            fill=self.theme.palette["accent"], outline="",
+        )
 
     def _build_statusbar(self):
-        bar = ttk.Frame(self.root, style="Panel.TFrame", padding=(14, 6))
+        bar = ttk.Frame(self.root, style="Panel.TFrame", padding=(16, 8))
         bar.pack(side="bottom", fill="x")
 
         self._status_var = tk.StringVar(value="")

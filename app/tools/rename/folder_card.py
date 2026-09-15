@@ -12,7 +12,7 @@ class FolderCard(ttk.LabelFrame):
     """一个文件夹卡片：路径、筛选下拉框、计数、文件列表、删除按钮。"""
 
     def __init__(self, parent, app, idx):
-        super().__init__(parent, text=f"文件夹 {idx}", padding=8)
+        super().__init__(parent, text=f"文件夹 {idx}", padding=12)
         self.app = app
         self.idx = idx
 
@@ -22,11 +22,11 @@ class FolderCard(ttk.LabelFrame):
         self._tree_drag_y = None
         self._tree_drag_h = None
 
-        self.pack(fill="x", padx=2, pady=(0, 10))
+        self.pack(fill="x", pady=(0, 12))
 
         # ---- 操作行 ----
-        row = ttk.Frame(self)
-        row.pack(fill="x", pady=(0, 8))
+        row = ttk.Frame(self, style="Card.TFrame")
+        row.pack(fill="x", pady=(0, 10))
 
         self.btn_select = ttk.Button(row, text="选择文件夹", style="Secondary.TButton",
                                      command=self.select_folder)
@@ -49,11 +49,13 @@ class FolderCard(ttk.LabelFrame):
         self.btn_delete.pack(side="left")
 
         # ---- 文件列表（固定高度，可拖拽调整） ----
-        self.tree_frame = ttk.Frame(self, height=TREE_DEFAULT_HEIGHT)
+        self.tree_frame = ttk.Frame(self, style="Card.TFrame",
+                                     height=TREE_DEFAULT_HEIGHT)
         self.tree_frame.pack_propagate(False)
         self.tree_frame.pack(fill="x")
 
-        self.tree = ttk.Treeview(self.tree_frame, columns=("name", "ext"), show="headings")
+        self.tree = ttk.Treeview(self.tree_frame, columns=("name", "ext"),
+                                 show="headings", style="Card.Treeview")
         self.tree.heading("name", text="文件名")
         self.tree.heading("ext", text="后缀")
         self.tree.column("name", width=700, anchor="w")

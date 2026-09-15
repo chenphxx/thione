@@ -45,6 +45,7 @@ class DedupePage(ToolPage):
         self.duplicates = []
 
         self._build_toolbar()
+        self.add_divider()
         self._build_stats()
         self._build_main_area()
         self._build_statusbar()
@@ -53,36 +54,42 @@ class DedupePage(ToolPage):
 
     # -------------------------- 界面构建 --------------------------
     def _build_toolbar(self):
-        bar = ttk.Frame(self, style="Panel.TFrame", padding=(10, 8))
-        bar.pack(side="top", fill="x")
+        bar, head, actions = self.build_toolbar()
 
-        ttk.Label(bar, text=APP_TITLE,
-                  style="PanelHeader.TLabel").pack(side="left", padx=(0, 18))
+        ttk.Label(head, text=APP_TITLE, style="PanelHeader.TLabel").pack(side="left")
+        ttk.Label(head, text="扫描文件夹, 找出视觉上重复的图片",
+                  style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
 
-        ttk.Button(bar, text="选择文件夹", style="Secondary.TButton",
-                   command=self.on_select_folder).pack(side="left", padx=(0, 6))
-        self.lbl_folder = ttk.Label(bar, text="当前文件夹: (未选择)",
-                                    style="PanelMuted.TLabel", width=44, anchor="w")
-        self.lbl_folder.pack(side="left", padx=(0, 8))
-        ttk.Button(bar, text="刷新扫描", style="Secondary.TButton",
-                   command=self._rescan_current_folder).pack(side="left", padx=(0, 8))
+        ttk.Button(actions, text="查找重复项", style="Accent.TButton",
+                   command=self.on_find_duplicates).pack(side="right")
+        self.btn_thumbs = ttk.Button(actions, text="显示缩略图",
+                                     style="Secondary.TButton",
+                                     command=self.on_show_thumbnails)
+        self.btn_thumbs.pack(side="right", padx=(0, 8))
+        ttk.Button(actions, text="刷新扫描", style="Secondary.TButton",
+                   command=self._rescan_current_folder).pack(side="right",
+                                                             padx=(0, 8))
 
-        ttk.Label(bar, text="筛选类型:", style="Panel.TLabel").pack(side="left", padx=(6, 2))
-        self.combo_ext = ttk.Combobox(bar, state="readonly", width=10)
-        self.combo_ext.pack(side="left")
+        row = ttk.Frame(bar, style="Panel.TFrame")
+        row.pack(side="top", fill="x", pady=(10, 0))
+
+        ttk.Button(row, text="选择文件夹", style="Secondary.TButton",
+                   command=self.on_select_folder).pack(side="left")
+        self.lbl_folder = ttk.Label(row, text="当前文件夹: (未选择)",
+                                    style="PanelMuted.TLabel", anchor="w")
+        self.lbl_folder.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
+        ttk.Label(row, text="筛选类型", style="Panel.TLabel").pack(side="left")
+        self.combo_ext = ttk.Combobox(row, state="readonly", width=10)
+        self.combo_ext.pack(side="left", padx=(6, 0))
         self.combo_ext.bind("<<ComboboxSelected>>",
                             lambda e: self.apply_filter_and_show_list())
 
-        ttk.Button(bar, text="显示缩略图", style="Secondary.TButton",
-                   command=self.on_show_thumbnails).pack(side="left", padx=(12, 0))
-        ttk.Button(bar, text="查找重复项", style="Accent.TButton",
-                   command=self.on_find_duplicates).pack(side="left", padx=(8, 0))
-
     def _build_stats(self):
-        stats = ttk.Frame(self, padding=(12, 4))
+        stats = ttk.Frame(self, padding=(16, 10))
         stats.pack(side="top", fill="x")
         self.lbl_total = ttk.Label(stats, text="总文件数: 0", style="Muted.TLabel")
-        self.lbl_total.pack(side="left", padx=(0, 14))
+        self.lbl_total.pack(side="left", padx=(0, 16))
         self.lbl_filtered = ttk.Label(stats, text="筛选后文件数: 0",
                                       style="Muted.TLabel")
         self.lbl_filtered.pack(side="left")
@@ -95,9 +102,13 @@ class DedupePage(ToolPage):
         self.paned = ttk.Panedwindow(main, orient="vertical")
         self.paned.pack(side="top", fill="both", expand=True)
 
-        list_frame = ttk.Frame(self.paned, padding=(12, 8))
+        list_frame = ttk.Frame(self.paned, padding=(16, 12))
         self.paned.add(list_frame, weight=1)
-        self.tree = ttk.Treeview(list_frame, columns=("name", "ext", "path"),
+
+        # 文件列表与空状态占位块共用同一块区域, 按需要显示其中之一
+        self.tree_box = ttk.Frame(list_frame)
+        self.tree_box.pack(side="top", fill="both", expand=True)
+        self.tree = ttk.Treeview(self.tree_box, columns=("name", "ext", "path"),
                                  show="headings")
         self.tree.heading("name", text="文件名")
         self.tree.heading("ext", text="后缀")
@@ -106,10 +117,13 @@ class DedupePage(ToolPage):
         self.tree.column("ext", width=80, anchor="center")
         self.tree.column("path", width=600, anchor="w")
         self.tree.pack(side="left", fill="both", expand=True)
-        self.tree_scroll = ttk.Scrollbar(list_frame, orient="vertical",
+        self.tree_scroll = ttk.Scrollbar(self.tree_box, orient="vertical",
                                          command=self.tree.yview)
         self.tree.configure(yscrollcommand=self.tree_scroll.set)
-        self.tree_scroll.pack(side="left", fill="y")
+        self.tree_scroll.pack(side="left", fill="y", padx=(8, 0))
+
+        self.empty_state = self._build_empty_state(list_frame)
+        self._update_empty_state()
         self.tree.bind("<Double-1>", self.on_tree_double_click)
         self.tree.bind("<Button-3>", self.on_tree_right_click)
 
@@ -145,8 +159,41 @@ class DedupePage(ToolPage):
         self.thumb_canvas_container.bind("<Configure>",
                                          self._on_thumb_pane_configure)
 
+    def _build_empty_state(self, parent):
+        """建立文件列表的空状态占位块。
+
+        没有可显示的文件时用它顶替列表, 给出下一步该做什么, 而不是留一块白屏。
+
+        @param parent: 承载占位块的父容器
+        @return: 占位块 Frame (默认不显示)
+        """
+        box = ttk.Frame(parent, style="Card.TFrame")
+        inner = ttk.Frame(box, style="Card.TFrame")
+        inner.place(relx=0.5, rely=0.42, anchor="center")
+        ttk.Label(inner, text="🗂", style="EmptyIcon.TLabel").pack()
+        self.empty_title = ttk.Label(inner, text="", style="EmptyTitle.TLabel")
+        self.empty_title.pack(pady=(8, 0))
+        self.empty_hint = ttk.Label(inner, text="", style="EmptyHint.TLabel")
+        self.empty_hint.pack(pady=(6, 0))
+        return box
+
+    def _update_empty_state(self):
+        """按当前是否有可显示的文件, 在列表与空状态之间切换。"""
+        if self.filtered_files:
+            self.empty_state.pack_forget()
+            self.tree_box.pack(side="top", fill="both", expand=True)
+            return
+        if self.current_folder:
+            self.empty_title.config(text="这个文件夹里没有可显示的图片")
+            self.empty_hint.config(text="换一个文件夹, 或者把筛选类型改回「全部」")
+        else:
+            self.empty_title.config(text="还没有选择文件夹")
+            self.empty_hint.config(text="点击左上角的「选择文件夹」开始扫描")
+        self.tree_box.pack_forget()
+        self.empty_state.pack(side="top", fill="both", expand=True)
+
     def _build_statusbar(self):
-        status = ttk.Frame(self, style="Panel.TFrame", padding=(10, 6))
+        status = ttk.Frame(self, style="Panel.TFrame", padding=(16, 8))
         status.pack(side="bottom", fill="x")
         self.progress = ttk.Progressbar(status, orient="horizontal",
                                         mode="determinate")
@@ -234,6 +281,7 @@ class DedupePage(ToolPage):
         self.lbl_total.config(text=f"总文件数: {len(self.all_files)}")
         self.lbl_filtered.config(
             text=f"筛选后文件数: {len(self.filtered_files)}")
+        self._update_empty_state()
 
     # -------------------------- 缩略图 --------------------------
     def on_show_thumbnails(self):
@@ -241,6 +289,7 @@ class DedupePage(ToolPage):
             self.paned.forget(self.thumb_canvas_container)
             self.thumb_visible = False
             self.thumb_loading = False
+            self.btn_thumbs.configure(text="显示缩略图")
             self._restoring_preview = False
         else:
             self.thumb_box = self._current_thumb_box()
@@ -257,6 +306,7 @@ class DedupePage(ToolPage):
             threading.Thread(target=self._load_thumbnails_thread,
                              daemon=True).start()
             self.root.after(60, self._poll_thumb_queue)
+            self.btn_thumbs.configure(text="隐藏缩略图")
 
     def _load_thumbnails_thread(self):
         """后台线程: 只做 PIL 缩略图计算, 结果经队列交给主线程渲染。"""

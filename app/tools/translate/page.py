@@ -1,6 +1,6 @@
 """划词翻译页面: 凭据配置、启动开关与最近一次翻译结果。
 
-翻译功能默认不启动: 打开 thpy 只是把凭据读进来, 全局热键与托盘图标都要等
+翻译功能默认不启动: 打开 thione 只是把凭据读进来, 全局热键与托盘图标都要等
 用户在本页面点「启动翻译」之后才建立, 避免一开程序就挂上全局键盘钩子。
 """
 
@@ -33,6 +33,9 @@ SKIP_TEST_TEXT = "Hello"
 #: 最近一次结果在界面上最多显示的长度
 MAX_RESULT_CHARS = 600
 
+#: 还没有翻译过时结果区显示的引导文案
+EMPTY_RESULT_HINT = "还没有翻译记录 启动翻译后选中任意文本 连续按两次 Ctrl 试试"
+
 
 class TranslatePage(ToolPage):
     """配置华为云 NLP 凭据并常驻划词翻译热键的工具页面。"""
@@ -47,7 +50,7 @@ class TranslatePage(ToolPage):
 
         self._vars = {key: tk.StringVar() for key, _ in FIELDS}
         self._status_var = tk.StringVar(value="")
-        self._result_var = tk.StringVar(value="(尚无)")
+        self._result_var = tk.StringVar(value=EMPTY_RESULT_HINT)
         self._test_queue = queue.Queue()
         self._test_poll_id = None
         self._testing = False
@@ -62,6 +65,7 @@ class TranslatePage(ToolPage):
         )
 
         self._build_toolbar()
+        self.add_divider()
         self._build_form()
         self._build_report()
 
@@ -71,30 +75,32 @@ class TranslatePage(ToolPage):
 
     # ---------------- 界面构建 ----------------
     def _build_toolbar(self):
-        bar = ttk.Frame(self, style="Panel.TFrame", padding=(10, 8))
-        bar.pack(side="top", fill="x")
+        bar, head, actions = self.build_toolbar()
 
-        ttk.Label(bar, text=APP_TITLE, style="PanelHeader.TLabel").pack(
-            side="left", padx=(0, 18)
+        ttk.Label(head, text=APP_TITLE, style="PanelHeader.TLabel").pack(
+            side="left"
         )
+        ttk.Label(head, text="启动后选中文本, 连续按两次 Ctrl 即可翻译",
+                  style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
 
+        # 右侧按 主操作 在最外, 次操作 靠内 的顺序排
         self.btn_toggle = ttk.Button(
-            bar, text="启动翻译", style="Accent.TButton",
+            actions, text="启动翻译", style="Accent.TButton",
             command=self._toggle_running,
         )
-        self.btn_toggle.pack(side="left")
+        self.btn_toggle.pack(side="right")
 
         self.btn_pause = ttk.Button(
-            bar, text="暂停热键", style="Secondary.TButton",
+            actions, text="暂停热键", style="Secondary.TButton",
             command=self._toggle_pause, state="disabled",
         )
-        self.btn_pause.pack(side="left", padx=(8, 0))
+        self.btn_pause.pack(side="right", padx=(0, 8))
 
     def _build_form(self):
-        body = ttk.Frame(self, padding=(12, 10))
+        body = ttk.Frame(self, padding=(16, 14))
         body.pack(side="top", fill="x")
 
-        card = ttk.LabelFrame(body, text="华为云 NLP 凭据", padding=14)
+        card = ttk.LabelFrame(body, text="华为云 NLP 凭据", padding=16)
         card.pack(side="top", fill="x")
         card.columnconfigure(1, weight=1)
 
@@ -126,19 +132,18 @@ class TranslatePage(ToolPage):
                    command=self._save).pack(side="left")
 
     def _build_report(self):
-        body = ttk.Frame(self, padding=(12, 4))
+        body = ttk.Frame(self, padding=(16, 0))
         body.pack(side="top", fill="both", expand=True)
 
         ttk.Label(body, textvariable=self._status_var,
                   style="Muted.TLabel").pack(anchor="w")
 
-        ttk.Label(body, text="最近一次翻译", style="Muted.TLabel").pack(
-            anchor="w", pady=(14, 4)
-        )
+        card = ttk.LabelFrame(body, text="最近一次翻译", padding=16)
+        card.pack(side="top", fill="both", expand=True, pady=(12, 16))
         ttk.Label(
-            body, textvariable=self._result_var, style="TLabel",
-            wraplength=820, justify="left",
-        ).pack(anchor="w")
+            card, textvariable=self._result_var, style="Card.TLabel",
+            wraplength=820, justify="left", anchor="nw",
+        ).pack(anchor="w", fill="both", expand=True)
 
     # ---------------- 初始数据 ----------------
     def _prefill(self):
@@ -211,7 +216,7 @@ class TranslatePage(ToolPage):
 
         self.shell.set_indicator("translate", indicator)
 
-        result = self.service.last_result or "(尚无)"
+        result = self.service.last_result or EMPTY_RESULT_HINT
         if len(result) > MAX_RESULT_CHARS:
             result = result[:MAX_RESULT_CHARS] + " ..."
         self._result_var.set(result)
@@ -283,7 +288,7 @@ class TranslatePage(ToolPage):
                 self._test_queue.put((False, f"连接失败: {exc}"))
 
         threading.Thread(
-            target=worker, name="thpy-translate-test", daemon=True
+            target=worker, name="thione-translate-test", daemon=True
         ).start()
         self._schedule_test_poll()
 

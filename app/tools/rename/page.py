@@ -35,44 +35,52 @@ class RenamePage(ToolPage):
         self.cancel_flag = False
 
         self._build_toolbar()
+        self.add_divider()
         self._build_stats()
         self._build_main_area()
         self._build_statusbar()
 
     # ---------------- 界面构建 ----------------
     def _build_toolbar(self):
-        bar = ttk.Frame(self, style="Panel.TFrame", padding=(10, 8))
-        bar.pack(side="top", fill="x")
+        bar, head, actions = self.build_toolbar()
 
-        ttk.Label(bar, text="批量重命名工具", style="PanelHeader.TLabel").pack(
-            side="left", padx=(0, 18))
+        ttk.Label(head, text=APP_TITLE, style="PanelHeader.TLabel").pack(side="left")
+        ttk.Label(head, text="按前缀与起始序号批量改名, 可在原文件夹内直接改",
+                  style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
 
-        self.btn_add_folder = ttk.Button(bar, text="+ 添加文件夹", style="Secondary.TButton",
+        self.btn_rename = ttk.Button(actions, text="开始处理",
+                                     style="Accent.TButton",
+                                     command=self.rename_and_save)
+        self.btn_rename.pack(side="right")
+
+        row = ttk.Frame(bar, style="Panel.TFrame")
+        row.pack(side="top", fill="x", pady=(10, 0))
+
+        self.btn_add_folder = ttk.Button(row, text="+ 添加文件夹",
+                                         style="Secondary.TButton",
                                          command=self.add_folder)
         self.btn_add_folder.pack(side="left")
 
-        ttk.Label(bar, text="文件名前缀", style="Panel.TLabel").pack(side="left", padx=(16, 4))
-        self.entry_prefix = ttk.Entry(bar, width=18)
+        ttk.Label(row, text="文件名前缀", style="Panel.TLabel").pack(
+            side="left", padx=(16, 6))
+        self.entry_prefix = ttk.Entry(row, width=18)
         self.entry_prefix.pack(side="left")
 
-        ttk.Label(bar, text="起始数字", style="Panel.TLabel").pack(side="left", padx=(14, 4))
-        self.entry_start = ttk.Entry(bar, width=6)
+        ttk.Label(row, text="起始数字", style="Panel.TLabel").pack(
+            side="left", padx=(14, 6))
+        self.entry_start = ttk.Entry(row, width=6)
         self.entry_start.insert(0, "1")
         self.entry_start.pack(side="left")
 
-        self.btn_rename = ttk.Button(bar, text="开始处理", style="Accent.TButton",
-                                     command=self.rename_and_save)
-        self.btn_rename.pack(side="left", padx=(18, 0))
-
     def _build_stats(self):
-        stats = ttk.Frame(self, padding=(12, 4))
+        stats = ttk.Frame(self, padding=(16, 10))
         stats.pack(side="top", fill="x")
 
         self.lbl_folders = ttk.Label(stats, text="文件夹: 0", style="Muted.TLabel")
-        self.lbl_folders.pack(side="left", padx=(0, 14))
+        self.lbl_folders.pack(side="left", padx=(0, 16))
         self.lbl_total = ttk.Label(stats, text="总文件数: 0", style="Muted.TLabel")
         self.lbl_total.pack(side="left")
-        ttk.Label(stats, text="提示: 保存位置选原文件夹即原地重命名",
+        ttk.Label(stats, text="保存位置选原文件夹即原地重命名",
                   style="Muted.TLabel").pack(side="right")
 
     def _build_main_area(self):
@@ -83,7 +91,7 @@ class RenamePage(ToolPage):
         self.paned = ttk.Panedwindow(main, orient="vertical")
         self.paned.pack(side="top", fill="both", expand=True)
 
-        cards_container = ttk.Frame(self.paned, padding=(12, 8))
+        cards_container = ttk.Frame(self.paned, padding=(16, 12))
         self.paned.add(cards_container, weight=1)
 
         self.canvas = tk.Canvas(cards_container, highlightthickness=0)
@@ -109,7 +117,7 @@ class RenamePage(ToolPage):
         self.add_folder()
 
     def _build_statusbar(self):
-        status = ttk.Frame(self, style="Panel.TFrame", padding=(10, 6))
+        status = ttk.Frame(self, style="Panel.TFrame", padding=(16, 8))
         status.pack(side="bottom", fill="x")
 
         self.progress = ttk.Progressbar(status, orient="horizontal", mode="determinate")

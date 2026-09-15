@@ -121,7 +121,7 @@ class TranslateService:
             return
         # pystray 的 stop 在 Windows 上偶有阻塞, 不能让它卡住退出流程
         stopper = threading.Thread(
-            target=tray.stop, name="thpy-tray-stop", daemon=True
+            target=tray.stop, name="thione-tray-stop", daemon=True
         )
         stopper.start()
         stopper.join(timeout=2.0)

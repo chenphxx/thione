@@ -1,7 +1,8 @@
 """默认主题的令牌表。
 
-配色取自博客 chenphxx/phxxblog 的默认预设 (「预设」cuanmu), 颜色值与该仓库
-frontend/src/styles/themes/_source/tokens.mjs 中的 cuanmu 保持一致。
+配色取自 ui-ux-pro-max 的 Flat Design 设计系统 (folder blue + file amber):
+主色是蓝色, 语义色与进度色用琥珀色, 界面不出现渐变与阴影, 只靠描边和留白分层。
+
 这里只保留浅色与深色两组基础令牌, 界面用到的其余令牌 (悬停, 输入框, 滚动条,
 缩略图占位色等) 由 build_palette() 按当前明暗方向推导, 不重复维护。
 
@@ -9,49 +10,49 @@ frontend/src/styles/themes/_source/tokens.mjs 中的 cuanmu 保持一致。
 在下面再加一组同样结构的令牌, 并让 ThemeManager 记住选中的那一套即可。
 """
 
-#: 主题圆角基准 (像素), 与博客默认预设保持一致
-RADIUS = 8
+#: 主题圆角基准 (像素), 自绘控件按它取圆角半径
+RADIUS = 10
 
 #: 浅色模式的基础令牌
 LIGHT = {
-    "bg": "#f6f6f7",
+    "bg": "#f8fafc",
     "cardBg": "#ffffff",
-    "text": "#3c3c43",
-    "muted": "#67676c",
-    "border": "#e2e2e3",
-    "borderStrong": "#c2c2c4",
-    "primary": "#3a5ccc",
-    "primaryStrong": "#3451b2",
-    "primaryWeak": "#eff2fd",
+    "text": "#0f172a",
+    "muted": "#475569",
+    "border": "#e4ecfc",
+    "borderStrong": "#cbd9f2",
+    "primary": "#2563eb",
+    "primaryStrong": "#1d4ed8",
+    "primaryWeak": "#eff6ff",
     "onPrimary": "#ffffff",
-    "link": "#3451b2",
-    "ok": "#18794e",
-    "warn": "#915930",
-    "danger": "#b8272c",
-    "gradFrom": "#5672cd",
-    "gradTo": "#3a5ccc",
-    "codeBg": "#f6f6f7",
+    "secondary": "#3b82f6",
+    "accentAlt": "#d97706",
+    "link": "#1d4ed8",
+    "ok": "#059669",
+    "warn": "#b45309",
+    "danger": "#dc2626",
+    "codeBg": "#f1f5fd",
 }
 
 #: 深色模式的基础令牌
 DARK = {
-    "bg": "#1b1b1f",
-    "cardBg": "#202127",
-    "text": "#dfdfd6",
-    "muted": "#9facba",
-    "border": "#2e2e32",
-    "borderStrong": "#3c3f44",
-    "primary": "#3e63dd",
-    "primaryStrong": "#5c73e7",
-    "primaryWeak": "#21283d",
+    "bg": "#0b1220",
+    "cardBg": "#111c31",
+    "text": "#e6ecf5",
+    "muted": "#93a3bc",
+    "border": "#1e2c46",
+    "borderStrong": "#2b3b58",
+    "primary": "#2563eb",
+    "primaryStrong": "#3b82f6",
+    "primaryWeak": "#16243d",
     "onPrimary": "#ffffff",
-    "link": "#a8b1ff",
-    "ok": "#3dd68c",
-    "warn": "#f9b44e",
-    "danger": "#f66f81",
-    "gradFrom": "#5c73e7",
-    "gradTo": "#a8b1ff",
-    "codeBg": "#161618",
+    "secondary": "#3b82f6",
+    "accentAlt": "#f59e0b",
+    "link": "#93b4fd",
+    "ok": "#34d399",
+    "warn": "#fbbf24",
+    "danger": "#f87171",
+    "codeBg": "#0a101c",
 }
 
 #: 深浅模式在界面上的显示名
@@ -120,17 +121,17 @@ def build_palette(mode):
     border_strong = base["borderStrong"]
     primary = base["primary"]
 
-    # 浅色模式对灰阶更敏感, 派生比例整体收一档, 否则输入框与悬停底色会显脏
-    scale = 1.0 if dark else 0.8
+    # 派生底色统一往描边色方向混: 既保证深浅两侧都朝正确的明暗方向走,
+    # 又让输入框与悬停底色带上和描边一致的一点冷色, 而不是脏灰
 
     return {
         # 表面层
         "bg": bg,
         "panel": card,
         "card": card,
-        "input": mix(card, text, 0.06 * scale),
-        "hover": mix(card, text, 0.09 * scale),
-        "active": mix(card, text, 0.16 * scale),
+        "input": mix(card, border_strong, 0.30),
+        "hover": mix(card, border_strong, 0.45),
+        "active": mix(card, border_strong, 0.70),
         "border": base["border"],
         "border_strong": border_strong,
         "text": text,
@@ -140,9 +141,11 @@ def build_palette(mode):
         "accent": primary,
         "accent_hover": base["primaryStrong"],
         "accent_weak": base["primaryWeak"],
+        "accent_alt": base["accentAlt"],
+        "secondary": base["secondary"],
         "on_accent": base["onPrimary"],
         "link": base["link"],
-        "ring": mix(bg, primary, 0.45),
+        "ring": mix(bg, primary, 0.5),
         # 语义色
         "ok": base["ok"],
         "warn": base["warn"],
@@ -153,8 +156,6 @@ def build_palette(mode):
         "scroll": mix(border_strong, text, 0.2),
         "trough": card,
         "preview": base["codeBg"],
-        "grad_from": base["gradFrom"],
-        "grad_to": base["gradTo"],
         # 缩略图占位色直接交给 PIL, 保持 RGB 三元组
         "placeholder": to_rgb(mix(card, text, 0.18)),
         # 元信息

@@ -17,7 +17,7 @@ from ..theme import sans
 NAV_WIDTH = 208
 
 #: 导航项高度, 间距与左右留白
-ITEM_HEIGHT = 38
+ITEM_HEIGHT = 40
 ITEM_GAP = 4
 ITEM_PAD = 8
 
@@ -27,11 +27,11 @@ INDICATOR_HEIGHT = 18
 INDICATOR_INSET = 6
 
 #: 品牌标记尺寸
-MARK_SIZE = 34
+MARK_SIZE = 32
 
-#: 悬停淡入与指示条滑动的时长 (毫秒)
-HOVER_MS = 130
-SLIDE_MS = 180
+#: 悬停淡入与指示条滑动的时长 (毫秒), 都控制在 200 毫秒以内
+HOVER_MS = 110
+SLIDE_MS = 160
 
 
 def _round_points(x1, y1, x2, y2, radius):
@@ -115,10 +115,10 @@ class Sidebar(ttk.Frame):
 
         self.mark = tk.Canvas(top, width=MARK_SIZE, height=MARK_SIZE,
                               highlightthickness=0, bd=0)
-        self.mark._thpy_surface = "panel"
+        self.mark._thione_surface = "panel"
         self.mark.pack(side="left")
 
-        ttk.Label(top, text="thpy", style="Brand.TLabel").pack(
+        ttk.Label(top, text="thione", style="Brand.TLabel").pack(
             side="left", padx=(10, 0)
         )
 
@@ -135,7 +135,7 @@ class Sidebar(ttk.Frame):
             self, width=NAV_WIDTH, height=self._nav_height(),
             highlightthickness=0, bd=0,
         )
-        self.nav._thpy_surface = "panel"
+        self.nav._thione_surface = "panel"
         self.nav.pack(side="top", fill="x")
 
         for index, (key, icon, title) in enumerate(self._items):
@@ -145,7 +145,7 @@ class Sidebar(ttk.Frame):
                 "top": top,
                 "pill": _draw_round_rect(
                     self.nav, ITEM_PAD, top, NAV_WIDTH - ITEM_PAD,
-                    top + ITEM_HEIGHT, 9,
+                    top + ITEM_HEIGHT, 8,
                 ),
                 "label": self.nav.create_text(
                     ITEM_PAD + 30, top + ITEM_HEIGHT / 2,
@@ -187,19 +187,15 @@ class Sidebar(ttk.Frame):
             pass
 
     def _paint_mark(self):
-        """画品牌标记: 圆角方块 + 斜向的第二主色, 用点阵网纹过渡。"""
+        """画品牌标记: 一个实心主色的圆角方块, 中间放品牌首字母。"""
         p = self.theme.palette
         self.mark.delete("all")
         size = MARK_SIZE
-        _draw_round_rect(self.mark, 1, 1, size - 1, size - 1, 10,
-                         fill=p["grad_from"], outline="")
-        self.mark.create_polygon(
-            size - 1, 1, size - 1, size - 1, 1, size - 1,
-            fill=p["grad_to"], outline="", stipple="gray25",
-        )
+        _draw_round_rect(self.mark, 1, 1, size - 1, size - 1, 9,
+                         fill=p["accent"], outline="")
         self.mark.create_text(
             size / 2, size / 2, text="t", fill=p["on_accent"],
-            font=sans(15, bold=True),
+            font=sans(14, bold=True),
         )
 
     def _paint_rows(self):

@@ -18,7 +18,7 @@ _IS_WINDOWS = sys.platform == "win32"
 # 任务栏图标分组
 # ---------------------------------------------------------------------------
 
-APP_USER_MODEL_ID = "thpy.agent.1"
+APP_USER_MODEL_ID = "thione.agent.1"
 
 
 def set_app_user_model_id(app_id=APP_USER_MODEL_ID):
@@ -45,7 +45,7 @@ ERROR_ALREADY_EXISTS = 183
 _MUTEX_HANDLE = None  # 必须持有到进程结束, 否则互斥量会被释放
 
 
-def acquire_single_instance(name="Global\\thpy.single-instance"):
+def acquire_single_instance(name="Global\\thione.single-instance"):
     """尝试获取单实例互斥量。
 
     返回 True 表示这是第一个实例; False 表示已有实例在运行。
@@ -122,7 +122,7 @@ def start_activation_server(on_activate):
                 except OSError:
                     pass
 
-    thread = threading.Thread(target=_serve, name="thpy-activation", daemon=True)
+    thread = threading.Thread(target=_serve, name="thione-activation", daemon=True)
     thread.start()
     return server
 
@@ -147,7 +147,7 @@ def is_windows():
 
 def ctrl_alt_shortcut_hint():
     """返回一个不依赖托盘图标的退出方式说明, 用于托盘不可用时提示用户。"""
-    return "程序在后台运行中。若找不到托盘图标, 请在任务管理器中结束 thpy.exe。"
+    return "程序在后台运行中。若找不到托盘图标, 请在任务管理器中结束 thione.exe。"
 
 
 def open_folder(path):

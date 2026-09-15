@@ -1,4 +1,4 @@
-"""thpy 启动入口。
+"""thione 启动入口。
 
 启动顺序有讲究:
     1. 初始化日志 —— 之后所有异常都有迹可循;
@@ -19,7 +19,7 @@ from app.settings import AppSettings
 from app.shell import ShellWindow
 from app.tools import TOOL_PAGES
 
-logger = logging.getLogger("thpy")
+logger = logging.getLogger("thione")
 
 
 class Application:
@@ -46,14 +46,14 @@ class Application:
 
         root = tk.Tk()
         self.shell = ShellWindow(root, AppSettings.load(), TOOL_PAGES)
-        logger.info("thpy 已就绪: 左侧选择工具, 双击 Ctrl 触发划词翻译")
+        logger.info("thione 已就绪: 左侧选择工具, 双击 Ctrl 触发划词翻译")
 
         try:
             root.mainloop()
         except KeyboardInterrupt:
             self.shell.on_close()
 
-        logger.info("thpy 已退出")
+        logger.info("thione 已退出")
         self._cleanup()
         return 0
 
@@ -71,7 +71,7 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     logging_setup.setup()
     logger.info(
-        "thpy 启动 (Python %s, frozen=%s, argv=%s)",
+        "thione 启动 (Python %s, frozen=%s, argv=%s)",
         sys.version.split()[0],
         bool(getattr(sys, "frozen", False)),
         argv or "-",

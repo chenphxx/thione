@@ -2,7 +2,7 @@
 
 打包成 GUI 程序后没有控制台, print() 的内容会消失。这里做两件事:
 
-1. 把日志写入 %LOCALAPPDATA%\\thpy\\logs\\thpy.log (按大小轮转);
+1. 把日志写入 %LOCALAPPDATA%\\thione\\logs\\thione.log (按大小轮转);
 2. 若确实没有可用的 stdout/stderr, 把 print 重定向到日志, 保留 print 的可见性。
 
 日志目录不可写时自动降级为只输出到 stderr, 不影响程序启动。
@@ -15,8 +15,8 @@ from logging.handlers import RotatingFileHandler
 
 from .paths import ensure_dir, user_log_dir
 
-LOGGER_NAME = "thpy"
-LOG_FILE = "thpy.log"
+LOGGER_NAME = "thione"
+LOG_FILE = "thione.log"
 MAX_BYTES = 512 * 1024
 BACKUP_COUNT = 2
 

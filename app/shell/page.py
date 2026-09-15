@@ -44,6 +44,30 @@ class ToolPage(ttk.Frame):
         """主窗口关闭前调用; 返回 False 可以阻止退出。"""
         return True
 
+    # -- 页面骨架 ---------------------------------------------------------
+    def build_toolbar(self):
+        """建立页面顶部的工具条。
+
+        工具条统一使用 panel 底色, 与侧栏连成一片; 标题与说明放在 head 的左侧,
+        操作按钮放进 actions (已经右对齐)。需要第二行筛选控件时, 直接在返回的
+        bar 里再 pack 一个子 Frame 即可。
+
+        @return: (bar, head, actions) 三个 ttk.Frame
+        """
+        bar = ttk.Frame(self, style="Panel.TFrame", padding=(16, 12))
+        bar.pack(side="top", fill="x")
+        head = ttk.Frame(bar, style="Panel.TFrame")
+        head.pack(side="top", fill="x")
+        actions = ttk.Frame(head, style="Panel.TFrame")
+        actions.pack(side="right")
+        return bar, head, actions
+
+    def add_divider(self):
+        """在工具条与内容区之间补一条 1 像素分隔线。"""
+        divider = ttk.Frame(self, style="Divider.TFrame", height=1)
+        divider.pack(side="top", fill="x")
+        return divider
+
     # -- 便捷访问 ---------------------------------------------------------
     @property
     def root(self):

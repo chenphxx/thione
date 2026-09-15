@@ -1,6 +1,6 @@
 """主题管理。
 
-配色令牌来自 palettes.py (与博客的默认预设一致), 这里只做三件事:
+配色令牌来自 palettes.py (Flat Design 设计系统), 这里只做三件事:
 
 1. 把令牌翻译成 ttk 样式, 并通过 option database 与递归遍历覆盖 tk 原生控件;
 2. 维护当前深浅模式, 切换时按帧插值做颜色过渡, 过渡结束后通知监听者;
@@ -23,15 +23,16 @@ logger = logging.getLogger(__name__)
 FONT_SIZE = 10
 
 #: 字体候选: 取系统里第一个装了的; 中文字形由 Windows 的字体链接回退
-SANS_STACK = ("Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Tahoma")
+SANS_STACK = ("Plus Jakarta Sans", "Inter", "Segoe UI Variable Text",
+              "Segoe UI", "Microsoft YaHei UI", "Tahoma")
 MONO_STACK = ("Cascadia Code", "Cascadia Mono", "Consolas", "Courier New")
 
 #: 解析后的字体族, 由 _resolve_fonts() 在拿到根窗口后写入
-FONT_SANS = SANS_STACK[1]
+FONT_SANS = "Segoe UI"
 FONT_MONO = MONO_STACK[2]
 
-#: 主题过渡时长 (毫秒)
-TRANSITION_MS = 240
+#: 主题过渡时长 (毫秒), 扁平风格的过渡控制在 150-200 毫秒之间
+TRANSITION_MS = 180
 
 
 def _font_tuple(family, size, bold, italic):
@@ -247,11 +248,11 @@ class ThemeManager:
     def _walk(self, widget):
         """递归刷新 tk 原生控件; ttk 控件由样式负责, 这里不碰。
 
-        控件可以用 _thpy_surface 属性声明自己所在的表面层 (panel / card / bg),
+        控件可以用 _thione_surface 属性声明自己所在的表面层 (panel / card / bg),
         缺省按页面底色处理; 自绘的画布需要它来拿到正确的底色。
         """
         p = self.palette
-        surface = getattr(widget, "_thpy_surface", None)
+        surface = getattr(widget, "_thione_surface", None)
         base = p.get(surface, p["bg"]) if surface else p["bg"]
         cls = widget.winfo_class()
         try:
@@ -278,8 +279,9 @@ class ThemeManager:
     def _configure_styles(self, p):
         """把调色板写进 ttk 样式。
 
-        约定: 页面底用 bg, 侧栏与工具条用 panel, 卡片用 card。按钮统一扁平,
-        lightcolor/darkcolor 必须跟着背景色一起映射, 否则 clam 会画出立体高光。
+        约定: 页面底用 bg, 侧栏与工具条用 panel, 卡片用 card。整体是扁平风格,
+        只用 1 像素描边和留白分层, 不画渐变与阴影; lightcolor/darkcolor 必须
+        跟着背景色一起映射, 否则 clam 会画出立体高光。
         """
         s = self.style
         s.configure(
@@ -298,9 +300,10 @@ class ThemeManager:
         s.configure("TFrame", background=p["bg"])
         s.configure("Panel.TFrame", background=p["panel"])
         s.configure("Card.TFrame", background=p["card"])
+        s.configure("Divider.TFrame", background=p["border"])
         s.configure("Drag.TFrame", background=p["border"])
         s.configure("DragHover.TFrame", background=p["accent"])
-        s.configure("TPanedwindow", background=p["border"], sashwidth=5,
+        s.configure("TPanedwindow", background=p["border"], sashwidth=6,
                     sashrelief="flat")
         s.configure("TSeparator", background=p["border"])
 
@@ -313,71 +316,90 @@ class ThemeManager:
         s.configure("Card.TLabel", background=p["card"], foreground=p["text"])
         s.configure("CardMuted.TLabel", background=p["card"], foreground=p["muted"])
         s.configure("Header.TLabel", background=p["bg"], foreground=p["header"],
-                    font=sans(14, bold=True))
+                    font=sans(15, bold=True))
         s.configure("PanelHeader.TLabel", background=p["panel"],
+                    foreground=p["header"], font=sans(15, bold=True))
+        s.configure("PanelHint.TLabel", background=p["panel"],
+                    foreground=p["muted"], font=sans(10))
+        s.configure("CardTitle.TLabel", background=p["card"],
                     foreground=p["header"], font=sans(11, bold=True))
         s.configure("Brand.TLabel", background=p["panel"],
                     foreground=p["header"], font=sans(16, bold=True))
         s.configure("SidebarMuted.TLabel", background=p["panel"],
                     foreground=p["muted"], font=sans(9))
 
-        # 按钮: 默认次级, 描边加轻微填充
-        s.configure("TButton", background=p["input"], foreground=p["text"],
-                    bordercolor=p["border_strong"], lightcolor=p["input"],
-                    darkcolor=p["input"], borderwidth=1, relief="solid",
-                    padding=(12, 6), focusthickness=0, font=sans())
+        # 空状态: 一个符号加一句引导, 避免出现整块白屏
+        s.configure("EmptyIcon.TLabel", background=p["card"],
+                    foreground=p["muted"], font=sans(26))
+        s.configure("EmptyTitle.TLabel", background=p["card"],
+                    foreground=p["text"], font=sans(12, bold=True))
+        s.configure("EmptyHint.TLabel", background=p["card"],
+                    foreground=p["muted"], font=sans(10))
+
+        # 按钮: 默认次级, 白底加 1 像素描边; 悬停与按下只改底色
+        s.configure("TButton", background=p["card"], foreground=p["text"],
+                    bordercolor=p["border_strong"], lightcolor=p["card"],
+                    darkcolor=p["card"], borderwidth=1, relief="solid",
+                    padding=(14, 7), focusthickness=0, font=sans())
         s.map("TButton",
-              background=[("disabled", p["card"]), ("pressed", p["active"]),
+              background=[("disabled", p["input"]), ("pressed", p["active"]),
                           ("active", p["hover"])],
-              lightcolor=[("disabled", p["card"]), ("pressed", p["active"]),
+              lightcolor=[("disabled", p["input"]), ("pressed", p["active"]),
                           ("active", p["hover"])],
-              darkcolor=[("disabled", p["card"]), ("pressed", p["active"]),
+              darkcolor=[("disabled", p["input"]), ("pressed", p["active"]),
                          ("active", p["hover"])],
-              bordercolor=[("focus", p["ring"]), ("pressed", p["border_strong"]),
-                           ("active", p["border_strong"])],
+              bordercolor=[("focus", p["ring"]), ("pressed", p["accent"]),
+                           ("active", p["accent"])],
               foreground=[("disabled", p["muted"])])
 
+        # 次级按钮与 TButton 同款, 单独命名是为了调用处语义清晰
         s.configure("Secondary.TButton", background=p["card"],
                     foreground=p["text"], bordercolor=p["border_strong"],
                     lightcolor=p["card"], darkcolor=p["card"], borderwidth=1,
-                    relief="solid", padding=(12, 6), focusthickness=0, font=sans())
+                    relief="solid", padding=(14, 7), focusthickness=0, font=sans())
         s.map("Secondary.TButton",
-              background=[("disabled", p["bg"]), ("pressed", p["active"]),
+              background=[("disabled", p["input"]), ("pressed", p["active"]),
                           ("active", p["hover"])],
-              lightcolor=[("disabled", p["bg"]), ("pressed", p["active"]),
+              lightcolor=[("disabled", p["input"]), ("pressed", p["active"]),
                           ("active", p["hover"])],
-              darkcolor=[("disabled", p["bg"]), ("pressed", p["active"]),
+              darkcolor=[("disabled", p["input"]), ("pressed", p["active"]),
                          ("active", p["hover"])],
-              bordercolor=[("focus", p["ring"]), ("active", p["border_strong"])],
+              bordercolor=[("focus", p["ring"]), ("active", p["accent"])],
               foreground=[("disabled", p["muted"])])
 
+        # 主操作: 实心主色, 每页只出现一个
         s.configure("Accent.TButton", background=p["accent"],
                     foreground=p["on_accent"], bordercolor=p["accent"],
                     lightcolor=p["accent"], darkcolor=p["accent"], borderwidth=1,
-                    relief="solid", padding=(14, 7), focusthickness=0,
+                    relief="solid", padding=(16, 8), focusthickness=0,
                     font=sans(bold=True))
         s.map("Accent.TButton",
-              background=[("disabled", p["input"]), ("pressed", p["accent_hover"]),
+              background=[("disabled", p["input"]),
+                          ("pressed", p["accent_hover"]),
                           ("active", p["accent_hover"])],
-              lightcolor=[("disabled", p["input"]), ("pressed", p["accent_hover"]),
+              lightcolor=[("disabled", p["input"]),
+                          ("pressed", p["accent_hover"]),
                           ("active", p["accent_hover"])],
-              darkcolor=[("disabled", p["input"]), ("pressed", p["accent_hover"]),
+              darkcolor=[("disabled", p["input"]),
+                         ("pressed", p["accent_hover"]),
                          ("active", p["accent_hover"])],
-              bordercolor=[("focus", p["ring"]), ("pressed", p["accent_hover"]),
+              bordercolor=[("focus", p["ring"]),
+                           ("disabled", p["input"]),
+                           ("pressed", p["accent_hover"]),
                            ("active", p["accent_hover"])],
               foreground=[("disabled", p["muted"])])
 
         # 危险操作用描边而不是实心红: 两套模式下都不需要另配前景色
-        s.configure("Danger.TButton", background=p["input"], foreground=p["danger"],
-                    bordercolor=p["danger"], lightcolor=p["input"],
-                    darkcolor=p["input"], borderwidth=1, relief="solid",
-                    padding=(12, 6), focusthickness=0, font=sans())
+        s.configure("Danger.TButton", background=p["card"],
+                    foreground=p["danger"], bordercolor=p["danger"],
+                    lightcolor=p["card"], darkcolor=p["card"], borderwidth=1,
+                    relief="solid", padding=(14, 7), focusthickness=0, font=sans())
         s.map("Danger.TButton",
-              background=[("disabled", p["card"]), ("pressed", p["active"]),
+              background=[("disabled", p["input"]), ("pressed", p["active"]),
                           ("active", p["hover"])],
-              lightcolor=[("disabled", p["card"]), ("pressed", p["active"]),
+              lightcolor=[("disabled", p["input"]), ("pressed", p["active"]),
                           ("active", p["hover"])],
-              darkcolor=[("disabled", p["card"]), ("pressed", p["active"]),
+              darkcolor=[("disabled", p["input"]), ("pressed", p["active"]),
                          ("active", p["hover"])],
               bordercolor=[("focus", p["ring"]), ("disabled", p["border"])],
               foreground=[("disabled", p["muted"])])
@@ -386,12 +408,12 @@ class ThemeManager:
         s.configure("Chip.TButton", background=p["panel"], foreground=p["text"],
                     bordercolor=p["border"], lightcolor=p["panel"],
                     darkcolor=p["panel"], borderwidth=1, relief="solid",
-                    anchor="w", padding=(10, 6), focusthickness=0, font=sans())
+                    anchor="w", padding=(12, 7), focusthickness=0, font=sans())
         s.map("Chip.TButton",
               background=[("pressed", p["active"]), ("active", p["hover"])],
               lightcolor=[("pressed", p["active"]), ("active", p["hover"])],
               darkcolor=[("pressed", p["active"]), ("active", p["hover"])],
-              bordercolor=[("focus", p["ring"]), ("active", p["border_strong"])])
+              bordercolor=[("focus", p["ring"]), ("active", p["accent"])])
 
         # 勾选框
         s.configure("TCheckbutton", background=p["bg"], foreground=p["text"],
@@ -418,8 +440,7 @@ class ThemeManager:
         s.configure("TEntry", fieldbackground=p["input"], foreground=p["text"],
                     insertcolor=p["text"], bordercolor=p["border_strong"],
                     lightcolor=p["border_strong"], darkcolor=p["border_strong"],
-                    borderwidth=1,
-                    relief="flat", padding=(8, 5))
+                    borderwidth=1, relief="flat", padding=(9, 6))
         s.map("TEntry",
               bordercolor=[("focus", p["accent"])],
               lightcolor=[("focus", p["accent"])],
@@ -428,7 +449,7 @@ class ThemeManager:
         s.configure("TCombobox", fieldbackground=p["input"], background=p["input"],
                     foreground=p["text"], arrowcolor=p["muted"],
                     bordercolor=p["border_strong"], lightcolor=p["border_strong"],
-                    darkcolor=p["border_strong"], padding=(8, 5), arrowsize=13,
+                    darkcolor=p["border_strong"], padding=(9, 6), arrowsize=13,
                     font=sans())
         s.map("TCombobox",
               fieldbackground=[("readonly", p["input"])],
@@ -440,22 +461,31 @@ class ThemeManager:
               bordercolor=[("focus", p["accent"])],
               arrowcolor=[("active", p["text"])])
 
-        # 树形列表: 选中态用主色的浅底加主色文字, 比整行实心更轻
+        # 树形列表: 选中态用主色的浅底配主色文字, 比整行实心更轻
         s.configure("Treeview", background=p["bg"], fieldbackground=p["bg"],
                     foreground=p["text"], bordercolor=p["border"], borderwidth=0,
-                    relief="flat", rowheight=30, font=sans())
+                    relief="flat", rowheight=28, font=sans())
         s.map("Treeview",
               background=[("selected", p["accent_weak"])],
               foreground=[("selected", p["link"])])
         s.configure("Treeview.Heading", background=p["panel"],
                     foreground=p["muted"], bordercolor=p["border"],
-                    borderwidth=0, relief="flat", padding=(8, 8),
+                    borderwidth=0, relief="flat", padding=(10, 8),
                     font=sans(bold=True))
         s.map("Treeview.Heading",
               background=[("active", p["hover"]), ("pressed", p["active"])],
               foreground=[("active", p["text"])])
 
-        # 滚动条与进度条
+        # 卡片内的列表: 底色与卡片一致, 免得卡片里凹出一块另一种底色
+        s.configure("Card.Treeview", background=p["card"],
+                    fieldbackground=p["card"], foreground=p["text"],
+                    bordercolor=p["border"], borderwidth=0, relief="flat",
+                    rowheight=28, font=sans())
+        s.map("Card.Treeview",
+              background=[("selected", p["accent_weak"])],
+              foreground=[("selected", p["link"])])
+
+        # 滚动条与进度条 (进度用琥珀色, 和主色形成一冷一暖的层次)
         for orient in ("Vertical", "Horizontal"):
             name = "%s.TScrollbar" % orient
             s.configure(name, background=p["scroll"], troughcolor=p["trough"],
@@ -464,10 +494,10 @@ class ThemeManager:
                         arrowcolor=p["muted"], arrowsize=13)
             s.map(name, background=[("active", p["border_strong"])],
                   arrowcolor=[("active", p["text"])])
-        s.configure("Horizontal.TProgressbar", background=p["accent"],
+        s.configure("Horizontal.TProgressbar", background=p["accent_alt"],
                     troughcolor=p["input"], bordercolor=p["input"],
-                    lightcolor=p["accent"], darkcolor=p["accent"], borderwidth=0,
-                    thickness=6)
+                    lightcolor=p["accent_alt"], darkcolor=p["accent_alt"],
+                    borderwidth=0, thickness=6)
 
         # 分组卡片
         s.configure("TLabelframe", background=p["card"],
