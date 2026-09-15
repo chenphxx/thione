@@ -1,0 +1,60 @@
+"""工具页面基类。"""
+
+from tkinter import ttk
+
+
+class ToolPage(ttk.Frame):
+    """外壳中一个工具页面的公共父类。
+
+    子类通过类属性声明在侧栏中的呈现方式, 并按需实现生命周期回调。
+
+    注意: 页面只是内容区里的一个 ttk.Frame, 因此不要在构造里创建 Tk 根窗口
+    或调用 mainloop —— 根窗口与事件循环都由外壳持有。
+    """
+
+    #: 侧栏唯一标识, 同时也用于记录上次停留的页面
+    key = ""
+    #: 侧栏显示名
+    title = ""
+    #: 侧栏图标 (单个字符, 避免依赖外部图标资源)
+    icon = ""
+    #: 状态栏提示, 说明这个工具是做什么的
+    subtitle = ""
+
+    def __init__(self, master, shell):
+        super().__init__(master)
+        self.shell = shell
+        self.theme = shell.theme
+
+    # -- 生命周期 ---------------------------------------------------------
+    def on_show(self):
+        """页面被切换到前台时调用, 每次显示都会调用。"""
+
+    def on_hide(self):
+        """页面被切换到后台时调用。"""
+
+    def on_theme_changed(self):
+        """主题切换后调用。
+
+        绝大多数控件由 ThemeManager 统一刷新, 这里只处理那些把颜色写进了
+        数据而非控件选项的场景 (例如 Treeview 的行标签色、已渲染的预览图)。
+        """
+
+    def on_close(self):
+        """主窗口关闭前调用; 返回 False 可以阻止退出。"""
+        return True
+
+    # -- 便捷访问 ---------------------------------------------------------
+    @property
+    def root(self):
+        """根窗口。仅用于 after/after_cancel 等定时器, 不要在这里改窗口属性。"""
+        return self.shell.root
+
+    @property
+    def window(self):
+        """承载本页面的顶层窗口, 适合作为对话框的 parent。"""
+        return self.winfo_toplevel()
+
+    def set_status(self, message):
+        """把提示写到外壳状态栏。"""
+        self.shell.set_status(message)

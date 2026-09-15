@@ -1,0 +1,21 @@
+# thpy 运行依赖 (三个工具合并后的并集)
+
+# 图片查重: 缩略图与感知哈希
+Pillow>=10.0.0
+ImageHash>=4.3.1
+
+# 批量重命名: Excel 预览 (缺失时该功能降级, 不影响其它功能)
+openpyxl>=3.1.0
+
+# 划词翻译: 热键、剪贴板与华为云 NLP
+pynput>=1.7.6
+pyperclip>=1.8.2
+huaweicloudsdkcore>=3.1.211
+huaweicloudsdknlp>=3.1.211
+
+# 托盘图标
+# 注意: 打包时不能在 excludes 中排除 PIL, 否则托盘图标与缩略图都会失效
+pystray>=0.19.5
+
+# 打包 (可选)
+pyinstaller>=6.0.0

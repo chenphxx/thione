@@ -1,0 +1,40 @@
+# UTF-8
+#
+# thpy 的 PyInstaller 版本资源。
+# 写入 exe 属性后, 任务栏/资源管理器的悬浮提示与文件属性会显示这些信息,
+# 而不是默认的 python.exe 描述。
+#
+# 用法: pyinstaller thpy.spec  (spec 的 EXE(...) 中已引用 version='version_info.txt')
+
+VSVersionInfo(
+    ffi=FixedFileInfo(
+        filevers=(1, 0, 0, 0),
+        prodvers=(1, 0, 0, 0),
+        mask=0x3F,
+        flags=0x0,
+        OS=0x40004,
+        fileType=0x1,
+        subtype=0x0,
+        date=(0, 0),
+    ),
+    kids=[
+        StringFileInfo(
+            [
+                StringTable(
+                    "080404b0",
+                    [
+                        StringStruct("CompanyName", "thpy"),
+                        StringStruct("FileDescription", "thpy 桌面工具箱"),
+                        StringStruct("FileVersion", "1.0.0"),
+                        StringStruct("InternalName", "thpy"),
+                        StringStruct("LegalCopyright", ""),
+                        StringStruct("OriginalFilename", "thpy.exe"),
+                        StringStruct("ProductName", "thpy"),
+                        StringStruct("ProductVersion", "1.0.0"),
+                    ],
+                )
+            ]
+        ),
+        VarFileInfo([VarStruct("Translation", [0x0804, 1200])]),
+    ],
+)
