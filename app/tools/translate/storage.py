@@ -21,6 +21,7 @@ import logging
 import os
 
 from . import constants
+from .config import Config
 from ...paths import (
     app_root,
     ensure_dir,
@@ -131,8 +132,6 @@ def legacy_dirs():
 
 def load():
     """加载运行配置, 返回 Config。缺少凭据时抛出 MissingConfigError。"""
-    from .config import Config  # 延迟导入, 避免与 config 模块循环依赖
-
     ini_path = config_path()
     ini = _read_ini(ini_path)
     # 更名前由 thpy 保存的配置: 仅作为主配置文件的兜底
@@ -236,18 +235,6 @@ def save(config):
         parser.write(f)
     os.replace(tmp, path)
     return path
-
-
-def clear():
-    """删除 config.ini, 返回是否真的删除了文件。"""
-    path = config_path()
-    if os.path.isfile(path):
-        try:
-            os.remove(path)
-            return True
-        except OSError:
-            return False
-    return False
 
 
 def current_values():

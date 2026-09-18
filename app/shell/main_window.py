@@ -22,6 +22,9 @@ ACCENT_LINE_HEIGHT = 2
 REVEAL_OFFSET = 8
 REVEAL_MS = 140
 
+#: 侧栏与内容区之间拖动手柄的宽度
+SPLITTER_WIDTH = 5
+
 
 class ShellWindow:
     """把若干个 ToolPage 组装成一个单窗口应用。
@@ -42,6 +45,7 @@ class ShellWindow:
         self._queue = queue.Queue()
         self._queue_job = None
         self._reveal = None
+        self._splitter_origin = None
         self._closing = False
 
         root.title(APP_TITLE)
@@ -116,8 +120,44 @@ class ShellWindow:
         )
         self.sidebar.pack(side="left", fill="y")
 
+        # 侧栏宽度由这个手柄拖动调整, 悬停时用主色提示可拖
+        self.splitter = ttk.Frame(body, style="Drag.TFrame",
+                                  width=SPLITTER_WIDTH,
+                                  cursor="sb_h_double_arrow")
+        self.splitter.pack_propagate(False)
+        self.splitter.pack(side="left", fill="y")
+        self.splitter.bind("<Button-1>", self._on_splitter_press)
+        self.splitter.bind("<B1-Motion>", self._on_splitter_drag)
+        self.splitter.bind("<ButtonRelease-1>", self._on_splitter_release)
+        self.splitter.bind("<Enter>", lambda _e: self._hover_splitter(True))
+        self.splitter.bind("<Leave>", lambda _e: self._hover_splitter(False))
+
         self.content = ttk.Frame(body)
         self.content.pack(side="left", fill="both", expand=True)
+
+    # -- 侧栏宽度 ---------------------------------------------------------
+    def _on_splitter_press(self, event):
+        """记住按下时的指针位置与侧栏宽度, 后续按位移换算。"""
+        self._splitter_origin = (event.x_root, self.sidebar.winfo_width())
+
+    def _on_splitter_drag(self, event):
+        if self._splitter_origin is None:
+            return
+        start_x, start_width = self._splitter_origin
+        self.sidebar.set_width(start_width + (event.x_root - start_x))
+
+    def _on_splitter_release(self, _event):
+        self._splitter_origin = None
+
+    def _hover_splitter(self, hovering):
+        if self._splitter_origin is not None:
+            return
+        try:
+            self.splitter.configure(
+                style="DragHover.TFrame" if hovering else "Drag.TFrame"
+            )
+        except tk.TclError:
+            pass
 
     def _build_pages(self):
         """一次性创建所有页面, 但只有当前页面会被 pack 到内容区。

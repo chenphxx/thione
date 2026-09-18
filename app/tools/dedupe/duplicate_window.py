@@ -2,13 +2,14 @@
 
 import os
 import shutil
-import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import ImageTk
 
-from .constants import DUP_SUBFOLDER_NAME
-from .scanner import make_placeholder, make_thumbnail
+from ...errors import open_path
+from ...imaging import load_thumbnail, make_placeholder
+from ...widgets import bind_mousewheel
+from .constants import DUP_SUBFOLDER_NAME, THUMB_SIZE
 
 
 def _short_name(path, limit=16):
@@ -93,37 +94,7 @@ class DuplicateGroupWindow(tk.Toplevel):
         # 窗口尺寸变化 -> 内层宽度跟随 + 防抖重排
         self.canvas.bind("<Configure>", self._on_canvas_configure)
 
-        # 鼠标滚轮绑定
-        self.inner_frame.bind("<Enter>", self._bind_mousewheel)
-        self.inner_frame.bind("<Leave>", self._unbind_mousewheel)
-        self.canvas.bind("<Enter>", self._bind_mousewheel)
-        self.canvas.bind("<Leave>", self._unbind_mousewheel)
-
-    def _bind_mousewheel(self, event=None):
-        self.bind_all("<MouseWheel>", self._on_mousewheel)
-        self.bind_all("<Button-4>", self._on_mousewheel)
-        self.bind_all("<Button-5>", self._on_mousewheel)
-
-    def _unbind_mousewheel(self, event=None):
-        self.unbind_all("<MouseWheel>")
-        self.unbind_all("<Button-4>")
-        self.unbind_all("<Button-5>")
-
-    def _on_mousewheel(self, event):
-        bbox = self.canvas.bbox("all")
-        if bbox is None:
-            return
-        canvas_height = self.canvas.winfo_height()
-        scrollable_height = bbox[3] - canvas_height
-        if scrollable_height <= 0:
-            return
-        if hasattr(event, "delta"):
-            self.canvas.yview_scroll(-1 * (event.delta // 120), "units")
-        else:
-            if event.num == 4:
-                self.canvas.yview_scroll(-1, "units")
-            elif event.num == 5:
-                self.canvas.yview_scroll(1, "units")
+        bind_mousewheel((self.inner_frame, self.canvas), self.canvas)
 
     # -------------------------- 响应式布局 --------------------------
     def _on_canvas_configure(self, event):
@@ -190,9 +161,10 @@ class DuplicateGroupWindow(tk.Toplevel):
 
         img = self.thumb_pil_cache.get(path)
         if img is None:
-            img = make_thumbnail(path, size=(512, 512))
+            img = load_thumbnail(path, (512, 512))
             if img is None:
-                img = make_placeholder(color=self.theme.palette["placeholder"])
+                img = make_placeholder(THUMB_SIZE,
+                                       self.theme.palette["placeholder"])
             self.thumb_pil_cache[path] = img
         fit = img.copy()
         fit.thumbnail((thumb_side, thumb_side))
@@ -209,8 +181,9 @@ class DuplicateGroupWindow(tk.Toplevel):
         chk.path = path
         chk.group_idx = group_idx
         chk.config(command=lambda c=chk: self.on_check(c))
-        chk.bind("<Double-1>", lambda e, p=path: self._open_file(p))
-        chk.bind("<Button-3>", lambda e, p=path: self._open_file_location(p))
+        chk.bind("<Double-1>", lambda e, p=path: open_path(p, parent=self))
+        chk.bind("<Button-3>",
+                 lambda e, p=path: open_path(p, parent=self, reveal=True))
 
         btn_del = ttk.Button(slot, text="删除", style="Danger.TButton",
                              command=lambda p=path, cb=chk:
@@ -313,25 +286,6 @@ class DuplicateGroupWindow(tk.Toplevel):
                 messagebox.showerror("错误", f"删除失败: {e}")
 
     # -------------------------- 打开文件 --------------------------
-    def _open_file(self, path):
-        try:
-            os.startfile(path)
-        except AttributeError:
-            try:
-                subprocess.Popen(["xdg-open", path])
-            except Exception as e:
-                messagebox.showerror("错误", f"无法打开文件: {e}")
-
-    def _open_file_location(self, path):
-        folder = os.path.dirname(path)
-        try:
-            subprocess.Popen(f'explorer /select,"{path}"')
-        except Exception:
-            try:
-                subprocess.Popen(["xdg-open", folder])
-            except Exception as e:
-                messagebox.showerror("错误", f"无法打开文件夹: {e}")
-
     # -------------------------- 保存 --------------------------
     def save_selected(self):
         if not self.target_folder:

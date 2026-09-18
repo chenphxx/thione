@@ -1,10 +1,11 @@
-"""文件夹扫描、图片识别与缩略图工具。"""
+"""文件夹扫描与图片识别。
+
+缩略图与占位图已收进 app/imaging.py, 文件预览面板也在用同一份。
+"""
 
 import os
 
-from PIL import Image
-
-from .constants import SUPPORTED_IMAGE_EXTS, THUMB_SIZE
+from .constants import SUPPORTED_IMAGE_EXTS
 
 
 def scan_folder(folder):
@@ -24,18 +25,3 @@ def scan_folder(folder):
 def is_image_file(path):
     """根据扩展名判断是否为支持的图片文件。"""
     return os.path.splitext(path)[1].lower() in SUPPORTED_IMAGE_EXTS
-
-
-def make_thumbnail(path, size=THUMB_SIZE):
-    """生成缩略图; 读取失败时返回 None。"""
-    try:
-        img = Image.open(path)
-        img.thumbnail(size)
-        return img
-    except Exception:
-        return None
-
-
-def make_placeholder(size=THUMB_SIZE, color=(54, 57, 63)):
-    """生成用于占位的纯色缩略图。"""
-    return Image.new("RGB", size, color)

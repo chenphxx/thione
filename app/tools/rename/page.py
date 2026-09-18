@@ -1,20 +1,28 @@
-"""批量重命名页面: 工具栏、文件夹卡片列表、预览面板与重命名流程。"""
+"""批量重命名页面: 图标视图 预览窗格与重命名流程。
+
+按 Windows 资源管理器的方式组织: 主区是文件夹卡片的滚动列表 (每张卡片内部
+是缩略图网格), 右侧是可收起的预览窗格, 底部是可收起的详细信息窗格
+"""
 
 import os
-import shutil
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from ...browser import DetailsPane, PaneToggles, PreviewPane, ViewSwitch
+from ...browser.constants import DEFAULT_TIER, DEFAULT_VIEW
+from ...errors import open_path
 from ...shell.page import ToolPage
-from .constants import APP_TITLE
-from .file_ops import clear_files_in_folder, open_folder
+from ...widgets import bind_mousewheel, unbind_mousewheel
+from .constants import PAGE_TITLE
+from .file_ops import clear_files_in_folder
 from .folder_card import FolderCard
-from .preview_panel import PreviewPanel
 from .renamer import (
+    CancelledError,
+    TaskError,
     build_tasks,
     prepare_inplace_temps,
-    restore_inplace_temp,
     restore_inplace_temps,
+    run_tasks,
 )
 
 
@@ -33,18 +41,25 @@ class RenamePage(ToolPage):
         self._next_folder_id = 1
         self.global_action = None  # None / "overwrite" / "skip"
         self.cancel_flag = False
+        self.tier = DEFAULT_TIER
+        self.view = DEFAULT_VIEW
+        self.preview_visible = False
+        self.details_visible = False
 
         self._build_toolbar()
         self.add_divider()
-        self._build_stats()
         self._build_main_area()
         self._build_statusbar()
+        self._build_details()
+
+        # 卡片列表会刷新状态栏上的计数, 因此放在状态栏之后再建
+        self.add_folder()
 
     # ---------------- 界面构建 ----------------
     def _build_toolbar(self):
         bar, head, actions = self.build_toolbar()
 
-        ttk.Label(head, text=APP_TITLE, style="PanelHeader.TLabel").pack(side="left")
+        ttk.Label(head, text=PAGE_TITLE, style="PanelHeader.TLabel").pack(side="left")
         ttk.Label(head, text="按前缀与起始序号批量改名, 可在原文件夹内直接改",
                   style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
 
@@ -53,18 +68,30 @@ class RenamePage(ToolPage):
                                      command=self.rename_and_save)
         self.btn_rename.pack(side="right")
 
+        self.btn_preview = ttk.Button(actions, text="预览",
+                                      style="Secondary.TButton",
+                                      command=self.toggle_preview)
+        self.btn_preview.pack(side="right", padx=(0, 8))
+
         row = ttk.Frame(bar, style="Panel.TFrame")
         row.pack(side="top", fill="x", pady=(10, 0))
+
+        # 先 pack 右侧控件, 再 pack 左侧的伸缩项
+        self.view_switch = ViewSwitch(row, self._on_view_change,
+                                      self._on_tier_change, self.view,
+                                      self.tier)
+        self.view_switch.pack(side="right", padx=(0, 16))
+        ttk.Label(row, text="视图", style="Panel.TLabel").pack(
+            side="right", padx=(0, 6))
 
         self.btn_add_folder = ttk.Button(row, text="+ 添加文件夹",
                                          style="Secondary.TButton",
                                          command=self.add_folder)
-        self.btn_add_folder.pack(side="left")
+        self.btn_add_folder.pack(side="left", padx=(0, 16))
 
-        ttk.Label(row, text="文件名前缀", style="Panel.TLabel").pack(
-            side="left", padx=(16, 6))
+        ttk.Label(row, text="文件名前缀", style="Panel.TLabel").pack(side="left")
         self.entry_prefix = ttk.Entry(row, width=18)
-        self.entry_prefix.pack(side="left")
+        self.entry_prefix.pack(side="left", padx=(6, 0))
 
         ttk.Label(row, text="起始数字", style="Panel.TLabel").pack(
             side="left", padx=(14, 6))
@@ -72,23 +99,12 @@ class RenamePage(ToolPage):
         self.entry_start.insert(0, "1")
         self.entry_start.pack(side="left")
 
-    def _build_stats(self):
-        stats = ttk.Frame(self, padding=(16, 10))
-        stats.pack(side="top", fill="x")
-
-        self.lbl_folders = ttk.Label(stats, text="文件夹: 0", style="Muted.TLabel")
-        self.lbl_folders.pack(side="left", padx=(0, 16))
-        self.lbl_total = ttk.Label(stats, text="总文件数: 0", style="Muted.TLabel")
-        self.lbl_total.pack(side="left")
-        ttk.Label(stats, text="保存位置选原文件夹即原地重命名",
-                  style="Muted.TLabel").pack(side="right")
-
     def _build_main_area(self):
         main = ttk.Frame(self)
         main.pack(side="top", fill="both", expand=True)
 
-        # 可拖拽分隔的垂直分栏: 上方文件夹卡片列表, 下方文件预览
-        self.paned = ttk.Panedwindow(main, orient="vertical")
+        # 可拖拽分隔的水平分栏: 左侧文件夹卡片, 右侧预览窗格
+        self.paned = ttk.Panedwindow(main, orient="horizontal")
         self.paned.pack(side="top", fill="both", expand=True)
 
         cards_container = ttk.Frame(self.paned, padding=(16, 12))
@@ -102,93 +118,153 @@ class RenamePage(ToolPage):
         self.v_scroll.pack(side="right", fill="y")
 
         self.blocks_frame = ttk.Frame(self.canvas)
-        self.canvas_window = self.canvas.create_window((0, 0), window=self.blocks_frame,
-                                                       anchor="nw")
-        self.blocks_frame.bind("<Configure>",
-                               lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.bind("<Configure>",
-                         lambda e: self.canvas.itemconfig(self.canvas_window, width=e.width))
-        self.canvas.bind("<Enter>", lambda e: self._bind_mousewheel())
-        self.canvas.bind("<Leave>", lambda e: self._unbind_mousewheel())
+        self.canvas_window = self.canvas.create_window(
+            (0, 0), window=self.blocks_frame, anchor="nw")
+        self.blocks_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(
+                scrollregion=self.canvas.bbox("all")))
+        self.canvas.bind("<Configure>", self._on_cards_resize)
+        bind_mousewheel(self.canvas, self.canvas)
 
-        self.preview = PreviewPanel(self.paned, self.theme)
+        self.preview = PreviewPane(self.paned, self.theme)
         self.paned.add(self.preview, weight=0)
-
-        self.add_folder()
+        self.paned.forget(self.preview)  # 默认收起
 
     def _build_statusbar(self):
         status = ttk.Frame(self, style="Panel.TFrame", padding=(16, 8))
         status.pack(side="bottom", fill="x")
 
-        self.progress = ttk.Progressbar(status, orient="horizontal", mode="determinate")
+        # 右下角的窗格开关, 与 Windows 资源管理器的位置一致
+        self.toggles = PaneToggles(status, self.toggle_details,
+                                   self.toggle_preview)
+        self.toggles.pack(side="right")
+
+        self.btn_cancel = ttk.Button(status, text="终止", style="Danger.TButton",
+                                     command=self.cancel_process,
+                                     state="disabled")
+        self.btn_cancel.pack(side="right", padx=(8, 12))
+
+        self.lbl_counts = ttk.Label(status, text="文件夹: 0 · 总文件数: 0",
+                                    style="PanelMuted.TLabel")
+        self.lbl_counts.pack(side="left", padx=(0, 12))
+
+        self.progress = ttk.Progressbar(status, orient="horizontal",
+                                        mode="determinate")
         self.progress.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
         self.lbl_progress_text = ttk.Label(status, text="已处理 0 / 0 (0%)",
                                            style="Panel.TLabel")
-        self.lbl_progress_text.pack(side="left", padx=(0, 8))
+        self.lbl_progress_text.pack(side="left")
 
-        self.btn_cancel = ttk.Button(status, text="终止", style="Danger.TButton",
-                                     command=self.cancel_process, state="disabled")
-        self.btn_cancel.pack(side="left")
+    def _build_details(self):
+        """底部详细信息窗格; 在状态栏之后构建, 因此排在状态栏上方。"""
+        self.details = DetailsPane(self, self.theme)
 
-    # ---------------- 主题切换 ----------------
+    # ---------------- 视图切换 ----------------
+    def toggle_preview(self):
+        """显示或收起右侧预览窗格。"""
+        self.preview_visible = not self.preview_visible
+        if self.preview_visible:
+            self.paned.add(self.preview, weight=0)
+        else:
+            self.paned.forget(self.preview)
+        self._sync_view_controls()
+
+    def toggle_details(self):
+        """显示或收起底部详细信息窗格。"""
+        self.details_visible = not self.details_visible
+        if self.details_visible:
+            self.details.pack(side="bottom", fill="x")
+        else:
+            self.details.pack_forget()
+        self._sync_view_controls()
+
+    def _sync_view_controls(self):
+        """把两个窗格的开关状态同步到右下角与工具条上的按钮。"""
+        self.toggles.set_state(self.details_visible, self.preview_visible)
+        self.btn_preview.configure(
+            style="SegmentOn.TButton" if self.preview_visible
+            else "Secondary.TButton")
+
+    def _on_view_change(self, view):
+        """切换列表与缩略图展示, 并同步到每一张文件夹卡片。"""
+        if view == self.view:
+            return
+        self.view = view
+        for card in self.folder_blocks:
+            card.set_view(view)
+        self.view_switch.set_state(self.view, self.tier)
+
+    def _on_tier_change(self, tier):
+        """切换缩略图档位; 在列表展示下点档位即切回缩略图展示。"""
+        changed = tier != self.tier
+        self.tier = tier
+        for card in self.folder_blocks:
+            card.set_tier(tier)
+        if self.view != "icons":
+            self.view = "icons"
+            for card in self.folder_blocks:
+                card.set_view("icons")
+        elif not changed:
+            return
+        self.view_switch.set_state(self.view, self.tier)
+
+    def on_file_selected(self, path):
+        """任意卡片里的选中项变化时, 同步右侧预览与底部详细信息。"""
+        self.details.show(path)
+        self.preview.show(path)
+
+    # ---------------- 主题与页面生命周期 ----------------
     def on_theme_changed(self):
-        """主题切换后, 列表行标签色与已渲染的预览需要重刷。"""
-        self._refresh_tree_tags()
+        """主题切换后, 网格里自绘的文字与选中框, 以及已渲染的预览需要重刷。"""
+        for card in self.folder_blocks:
+            card.apply_palette()
         self.preview.refresh()
 
     def on_hide(self):
         """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动。"""
-        self._unbind_mousewheel()
-
-    def _refresh_tree_tags(self):
-        p = self.theme.palette
+        unbind_mousewheel(self.canvas)
         for card in self.folder_blocks:
-            card.tree.tag_configure("oddrow", background=p["card"])
-            card.tree.tag_configure("evenrow", background=p["hover"])
+            unbind_mousewheel(card.grid.canvas)
 
     # ---------------- 文件夹卡片管理 ----------------
+    def _on_cards_resize(self, event):
+        """卡片区随窗口变化: 宽度跟窗口走, 高度至少铺满可视区。"""
+        self.canvas.itemconfigure(self.canvas_window, width=event.width)
+        self._fit_cards_height(event.height)
+
+    def _fit_cards_height(self, height):
+        """把卡片区撑到可视高度; 卡片的最小高度之和更大时保留原高度并滚动。"""
+        needed = self.blocks_frame.winfo_reqheight()
+        self.canvas.itemconfigure(self.canvas_window,
+                                  height=max(height, needed))
+
     def add_folder(self):
         idx = self._next_folder_id
         self._next_folder_id += 1
         card = FolderCard(self.blocks_frame, self, idx)
-        card.tree.tag_configure("oddrow", background=self.theme.palette["card"])
-        card.tree.tag_configure("evenrow", background=self.theme.palette["hover"])
         self.folder_blocks.append(card)
         self.refresh_overall_counts()
-        self.root.after(50, lambda: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self._queue_card_layout()
 
     def remove_folder(self, card):
         if card in self.folder_blocks:
             self.folder_blocks.remove(card)
         self.refresh_overall_counts()
-        self.root.after(50, lambda: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self._queue_card_layout()
+
+    def _queue_card_layout(self):
+        """卡片增删后等一轮布局完成, 再按新的最小高度重新贴合可视区。"""
+        def fit():
+            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+            self._fit_cards_height(self.canvas.winfo_height())
+        self.root.after(50, fit)
 
     def refresh_overall_counts(self):
         folders = len([b for b in self.folder_blocks if b.folder_path])
         total = sum(len(b.files) for b in self.folder_blocks if b.folder_path)
-        self.lbl_folders.config(text=f"文件夹: {folders}")
-        self.lbl_total.config(text=f"总文件数: {total}")
-
-    # ---------------- 鼠标滚轮 ----------------
-    def _bind_mousewheel(self):
-        self.root.bind_all("<MouseWheel>", self._on_mousewheel)
-
-    def _unbind_mousewheel(self):
-        self.root.unbind_all("<MouseWheel>")
-
-    def _on_mousewheel(self, event):
-        bbox = self.canvas.bbox("all")
-        if bbox is None:
-            return
-        canvas_h = self.canvas.winfo_height()
-        content_h = bbox[3] - bbox[1]
-        if content_h <= canvas_h:
-            return
-        if os.name == "nt":
-            self.canvas.yview_scroll(-1 * (event.delta // 120), "units")
-        else:
-            self.canvas.yview_scroll(-1 * event.delta, "units")
+        self.lbl_counts.config(text=f"文件夹: {folders} · 总文件数: {total}")
 
     # ---------------- 取消处理 ----------------
     def cancel_process(self):
@@ -242,7 +318,6 @@ class RenamePage(ToolPage):
         self.global_action = None
 
         total = len(tasks)
-        processed = 0
         moved = {}
 
         # 初始化进度条 UI
@@ -266,69 +341,29 @@ class RenamePage(ToolPage):
         else:
             folder = save_folder
 
-        # 逐项处理
+        finished = True
         try:
-            for src, dst, inplace, src_name in tasks:
-                if self.cancel_flag:
-                    restore_inplace_temps(folder, moved)
-                    messagebox.showinfo("已取消", "操作已取消")
-                    self._update_progress(processed, total)
-                    self.btn_cancel.config(state="disabled")
-                    return
-
-                # 原位重命名：文件已是指定名称则跳过
-                if inplace and os.path.normcase(os.path.normpath(src)) == os.path.normcase(os.path.normpath(dst)):
-                    processed += 1
-                    self._update_progress(processed, total)
-                    continue
-
-                cur_src = moved.get(src_name) if inplace else None
-                if cur_src is None:
-                    cur_src = src
-
-                # 处理冲突
-                if os.path.exists(dst):
-                    action = self._conflict_dialog(os.path.basename(dst))
-                    if action == "cancel":
-                        restore_inplace_temp(folder, src_name, cur_src)
-                        restore_inplace_temps(folder, moved)
-                        messagebox.showinfo("已取消", "操作已取消")
-                        self._update_progress(processed, total)
-                        self.btn_cancel.config(state="disabled")
-                        return
-                    if action == "skip":
-                        # 若文件已被挪到临时名，则还原为原名
-                        restore_inplace_temp(folder, src_name, cur_src)
-                        moved.pop(src_name, None)
-                        processed += 1
-                        self._update_progress(processed, total)
-                        continue
-                    # 覆盖 => 继续处理
-
-                if inplace:
-                    os.replace(cur_src, dst)
-                    moved.pop(src_name, None)
-                else:
-                    shutil.copy2(cur_src, dst)
-
-                processed += 1
-                self._update_progress(processed, total)
-        except Exception as e:
+            run_tasks(tasks, folder, moved, self._conflict_dialog,
+                      self._update_progress, lambda: self.cancel_flag)
+        except CancelledError:
             restore_inplace_temps(folder, moved)
-            messagebox.showerror("错误", f"处理失败: {src}\n{e}")
-            self._update_progress(processed, total)
+            messagebox.showinfo("已取消", "操作已取消")
+            finished = False
+        except TaskError as e:
+            restore_inplace_temps(folder, moved)
+            messagebox.showerror("错误", f"处理失败: {e.src}\n{e}")
+            finished = False
+        finally:
             self.btn_cancel.config(state="disabled")
+
+        if not finished:
             return
 
         # 处理完成
-        self.btn_cancel.config(state="disabled")
         self.lbl_progress_text.config(text="处理完成")
         self.progress["value"] = 0
         if messagebox.askyesno("完成", "文件处理完成，是否现在打开目标文件夹？"):
-            try:
-                open_folder(save_folder)
-            except Exception:
-                pass
+            open_path(save_folder, parent=self.window)
 
     def _conflict_dialog(self, filename):
         """返回 'overwrite'、'skip' 或 'cancel'。支持全局应用。"""

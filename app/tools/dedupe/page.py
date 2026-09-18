@@ -1,18 +1,29 @@
-"""图片查重页面: 文件夹浏览、缩略图预览与重复查找入口。"""
+"""图片查重页面: 图标视图浏览文件夹, 预览窗格与重复查找入口。
 
-import os
+列表按 Windows 资源管理器的方式组织: 主区是缩略图网格, 右侧是可收起的
+预览窗格, 底部是可收起的详细信息窗格, 缩略图大小分小 中 大三档
+"""
+
 import queue
-import subprocess
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from PIL import ImageTk
 
+from ...browser import (
+    DetailsPane,
+    FileGrid,
+    PaneToggles,
+    PreviewPane,
+    ViewSwitch,
+)
+from ...browser.constants import DEFAULT_TIER, DEFAULT_VIEW
+from ...errors import open_path
 from ...shell.page import ToolPage
-from .constants import APP_TITLE
+from ...widgets import unbind_mousewheel
+from .constants import PAGE_TITLE
 from .dedupe import dedupe_worker
 from .duplicate_window import DuplicateGroupWindow
-from .scanner import is_image_file, make_placeholder, make_thumbnail, scan_folder
+from .scanner import is_image_file, scan_folder
 
 
 class DedupePage(ToolPage):
@@ -30,25 +41,20 @@ class DedupePage(ToolPage):
         self.all_files = []
         self.filtered_files = []
         self.extensions = []
-        self.thumb_cache = {}
-        self.thumb_pil_cache = {}
-        self.thumb_box = (180, 180)
-        self.thumb_queue = queue.Queue()
-        self.thumb_loading = False
-        self._preview_h = 200
-        self._restoring_preview = False
-        self._thumb_resize_job = None
+        self.tier = DEFAULT_TIER
+        self.view = DEFAULT_VIEW
+        self.preview_visible = False
+        self.details_visible = False
         self.dedupe_thread = None
         self.dedupe_stop_event = None
         self.progress_queue = queue.Queue()
-        self.thumb_visible = False
         self.duplicates = []
 
         self._build_toolbar()
         self.add_divider()
-        self._build_stats()
         self._build_main_area()
         self._build_statusbar()
+        self._build_details()
 
         self.root.after(200, self._poll_progress_queue)
 
@@ -56,22 +62,36 @@ class DedupePage(ToolPage):
     def _build_toolbar(self):
         bar, head, actions = self.build_toolbar()
 
-        ttk.Label(head, text=APP_TITLE, style="PanelHeader.TLabel").pack(side="left")
+        ttk.Label(head, text=PAGE_TITLE, style="PanelHeader.TLabel").pack(side="left")
         ttk.Label(head, text="扫描文件夹, 找出视觉上重复的图片",
                   style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
 
         ttk.Button(actions, text="查找重复项", style="Accent.TButton",
                    command=self.on_find_duplicates).pack(side="right")
-        self.btn_thumbs = ttk.Button(actions, text="显示缩略图",
-                                     style="Secondary.TButton",
-                                     command=self.on_show_thumbnails)
-        self.btn_thumbs.pack(side="right", padx=(0, 8))
         ttk.Button(actions, text="刷新扫描", style="Secondary.TButton",
                    command=self._rescan_current_folder).pack(side="right",
                                                              padx=(0, 8))
+        self.btn_preview = ttk.Button(actions, text="预览",
+                                      style="Secondary.TButton",
+                                      command=self.toggle_preview)
+        self.btn_preview.pack(side="right", padx=(0, 8))
 
         row = ttk.Frame(bar, style="Panel.TFrame")
         row.pack(side="top", fill="x", pady=(10, 0))
+
+        # 先 pack 右侧控件再 pack 左侧的伸缩项, 否则右侧会被挤到可视区之外
+        self.view_switch = ViewSwitch(row, self._on_view_change,
+                                      self._on_tier_change, self.view,
+                                      self.tier)
+        self.view_switch.pack(side="right", padx=(0, 16))
+        ttk.Label(row, text="视图", style="Panel.TLabel").pack(
+            side="right", padx=(0, 6))
+
+        self.combo_ext = ttk.Combobox(row, state="readonly", width=10)
+        self.combo_ext.pack(side="right", padx=(6, 16))
+        self.combo_ext.bind("<<ComboboxSelected>>",
+                            lambda e: self.apply_filter_and_show_list())
+        ttk.Label(row, text="筛选类型", style="Panel.TLabel").pack(side="right")
 
         ttk.Button(row, text="选择文件夹", style="Secondary.TButton",
                    command=self.on_select_folder).pack(side="left")
@@ -79,90 +99,44 @@ class DedupePage(ToolPage):
                                     style="PanelMuted.TLabel", anchor="w")
         self.lbl_folder.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
-        ttk.Label(row, text="筛选类型", style="Panel.TLabel").pack(side="left")
-        self.combo_ext = ttk.Combobox(row, state="readonly", width=10)
-        self.combo_ext.pack(side="left", padx=(6, 0))
-        self.combo_ext.bind("<<ComboboxSelected>>",
-                            lambda e: self.apply_filter_and_show_list())
-
-    def _build_stats(self):
-        stats = ttk.Frame(self, padding=(16, 10))
-        stats.pack(side="top", fill="x")
-        self.lbl_total = ttk.Label(stats, text="总文件数: 0", style="Muted.TLabel")
-        self.lbl_total.pack(side="left", padx=(0, 16))
-        self.lbl_filtered = ttk.Label(stats, text="筛选后文件数: 0",
-                                      style="Muted.TLabel")
-        self.lbl_filtered.pack(side="left")
-
     def _build_main_area(self):
         main = ttk.Frame(self)
         main.pack(side="top", fill="both", expand=True)
 
-        # 可拖拽分隔的垂直分栏: 上方文件列表, 下方缩略图预览
-        self.paned = ttk.Panedwindow(main, orient="vertical")
+        # 可拖拽分隔的水平分栏: 左侧文件网格, 右侧预览窗格
+        self.paned = ttk.Panedwindow(main, orient="horizontal")
         self.paned.pack(side="top", fill="both", expand=True)
 
         list_frame = ttk.Frame(self.paned, padding=(16, 12))
         self.paned.add(list_frame, weight=1)
 
-        # 文件列表与空状态占位块共用同一块区域, 按需要显示其中之一
-        self.tree_box = ttk.Frame(list_frame)
-        self.tree_box.pack(side="top", fill="both", expand=True)
-        self.tree = ttk.Treeview(self.tree_box, columns=("name", "ext", "path"),
-                                 show="headings")
-        self.tree.heading("name", text="文件名")
-        self.tree.heading("ext", text="后缀")
-        self.tree.heading("path", text="路径")
-        self.tree.column("name", width=400, anchor="w")
-        self.tree.column("ext", width=80, anchor="center")
-        self.tree.column("path", width=600, anchor="w")
-        self.tree.pack(side="left", fill="both", expand=True)
-        self.tree_scroll = ttk.Scrollbar(self.tree_box, orient="vertical",
-                                         command=self.tree.yview)
-        self.tree.configure(yscrollcommand=self.tree_scroll.set)
-        self.tree_scroll.pack(side="left", fill="y", padx=(8, 0))
+        # 文件网格与空状态占位块共用同一块区域, 按需要显示其中之一
+        self.grid_box = ttk.Frame(list_frame)
+        self.grid_box.pack(side="top", fill="both", expand=True)
+        self.grid = FileGrid(self.grid_box, self.theme,
+                             on_select=self._on_select_file,
+                             on_activate=self._open_file,
+                             on_context=self._on_context_menu,
+                             on_progress=self._on_thumb_progress,
+                             tier=self.tier, view=self.view)
+        self.grid.pack(fill="both", expand=True)
 
         self.empty_state = self._build_empty_state(list_frame)
         self._update_empty_state()
-        self.tree.bind("<Double-1>", self.on_tree_double_click)
-        self.tree.bind("<Button-3>", self.on_tree_right_click)
 
         self.menu = tk.Menu(self, tearoff=0)
-        self.menu.add_command(label="打开文件", command=self.open_selected_file)
+        self.menu.add_command(label="打开文件", command=self._open_selected_file)
         self.menu.add_command(label="打开所在文件夹",
-                              command=self.open_file_location)
+                              command=self._open_file_location)
 
-        # 缩略图展示区 (默认隐藏)
-        self.thumb_canvas_container = ttk.Frame(self.paned)
-        self.thumb_canvas = tk.Canvas(self.thumb_canvas_container, height=200,
-                                      bg=self.theme.palette["bg"],
-                                      highlightthickness=0)
-        self.thumb_canvas.pack(side="left", fill="both", expand=True)
-        self.thumb_scroll = ttk.Scrollbar(self.thumb_canvas_container,
-                                          orient="horizontal",
-                                          command=self.thumb_canvas.xview)
-        self.thumb_scroll.pack(side="bottom", fill="x")
-        self.thumb_canvas.configure(xscrollcommand=self.thumb_scroll.set)
-        self.thumb_frame = ttk.Frame(self.thumb_canvas)
-        self.thumb_canvas.create_window((0, 0), window=self.thumb_frame,
-                                        anchor="nw")
-        self.thumb_frame.bind(
-            "<Configure>",
-            lambda e: self.thumb_canvas.configure(
-                scrollregion=self.thumb_canvas.bbox("all")))
-        self.thumb_canvas.bind("<Enter>", self._bind_thumb_mousewheel)
-        self.thumb_canvas.bind("<Leave>", self._unbind_thumb_mousewheel)
-        self.thumb_frame.bind("<Enter>", self._bind_thumb_mousewheel)
-        self.thumb_frame.bind("<Leave>", self._unbind_thumb_mousewheel)
-        self.paned.add(self.thumb_canvas_container, weight=0)
-        self.paned.forget(self.thumb_canvas_container)  # 默认隐藏
-        self.thumb_canvas_container.bind("<Configure>",
-                                         self._on_thumb_pane_configure)
+        self.preview = PreviewPane(self.paned, self.theme)
+        self.paned.add(self.preview, weight=0)
+        self.paned.forget(self.preview)  # 默认收起
 
     def _build_empty_state(self, parent):
-        """建立文件列表的空状态占位块。
+        """建立文件网格的空状态占位块。
 
-        没有可显示的文件时用它顶替列表, 给出下一步该做什么, 而不是留一块白屏。
+        没有可显示的文件时用它顶替网格, 给出下一步该做什么, 而不是留一块白屏。
 
         @param parent: 承载占位块的父容器
         @return: 占位块 Frame (默认不显示)
@@ -178,10 +152,10 @@ class DedupePage(ToolPage):
         return box
 
     def _update_empty_state(self):
-        """按当前是否有可显示的文件, 在列表与空状态之间切换。"""
+        """按当前是否有可显示的文件, 在网格与空状态之间切换。"""
         if self.filtered_files:
             self.empty_state.pack_forget()
-            self.tree_box.pack(side="top", fill="both", expand=True)
+            self.grid_box.pack(side="top", fill="both", expand=True)
             return
         if self.current_folder:
             self.empty_title.config(text="这个文件夹里没有可显示的图片")
@@ -189,63 +163,116 @@ class DedupePage(ToolPage):
         else:
             self.empty_title.config(text="还没有选择文件夹")
             self.empty_hint.config(text="点击左上角的「选择文件夹」开始扫描")
-        self.tree_box.pack_forget()
+        self.grid_box.pack_forget()
         self.empty_state.pack(side="top", fill="both", expand=True)
 
     def _build_statusbar(self):
         status = ttk.Frame(self, style="Panel.TFrame", padding=(16, 8))
         status.pack(side="bottom", fill="x")
+
+        # 右下角的窗格开关, 与 Windows 资源管理器的位置一致
+        self.toggles = PaneToggles(status, self.toggle_details,
+                                   self.toggle_preview)
+        self.toggles.pack(side="right")
+
+        self.btn_stop = ttk.Button(status, text="终止", style="Danger.TButton",
+                                   command=self.on_stop, state="disabled")
+        self.btn_stop.pack(side="right", padx=(8, 12))
+
+        self.lbl_counts = ttk.Label(status, text="0 个项目",
+                                    style="PanelMuted.TLabel")
+        self.lbl_counts.pack(side="left", padx=(0, 12))
+
         self.progress = ttk.Progressbar(status, orient="horizontal",
                                         mode="determinate")
         self.progress.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        self.lbl_progress_text = ttk.Label(status, text="进度: 0% (0/0)",
-                                           style="Panel.TLabel")
-        self.lbl_progress_text.pack(side="left", padx=(0, 8))
-        self.btn_stop = ttk.Button(status, text="终止", style="Danger.TButton",
-                                   command=self.on_stop, state="disabled")
-        self.btn_stop.pack(side="left")
+        self.lbl_progress_text = ttk.Label(status, text="", style="Panel.TLabel")
+        self.lbl_progress_text.pack(side="left")
 
-    # -------------------------- 文件打开 --------------------------
+    def _build_details(self):
+        """底部详细信息窗格; 在状态栏之后构建, 因此排在状态栏上方。"""
+        self.details = DetailsPane(self, self.theme)
+
+    # -------------------------- 视图切换 --------------------------
+    def toggle_preview(self):
+        """显示或收起右侧预览窗格。"""
+        self.preview_visible = not self.preview_visible
+        if self.preview_visible:
+            self.paned.add(self.preview, weight=0)
+        else:
+            self.paned.forget(self.preview)
+        self._sync_view_controls()
+
+    def toggle_details(self):
+        """显示或收起底部详细信息窗格。"""
+        self.details_visible = not self.details_visible
+        if self.details_visible:
+            self.details.pack(side="bottom", fill="x")
+        else:
+            self.details.pack_forget()
+        self._sync_view_controls()
+
+    def _sync_view_controls(self):
+        """把两个窗格的开关状态同步到右下角与工具条上的按钮。"""
+        self.toggles.set_state(self.details_visible, self.preview_visible)
+        self.btn_preview.configure(
+            style="SegmentOn.TButton" if self.preview_visible
+            else "Secondary.TButton")
+
+    def _on_view_change(self, view):
+        """切换列表与缩略图展示; 同一展示方式会被忽略。"""
+        if view == self.view:
+            return
+        self.view = view
+        self.grid.set_view(view)
+        self.view_switch.set_state(self.view, self.tier)
+
+    def _on_tier_change(self, tier):
+        """切换缩略图档位; 在列表展示下点档位即切回缩略图展示。"""
+        changed = tier != self.tier
+        self.tier = tier
+        self.grid.set_tier(tier)
+        if self.view != "icons":
+            self.view = "icons"
+            self.grid.set_view("icons")
+        elif not changed:
+            return
+        self.view_switch.set_state(self.view, self.tier)
+
+    # -------------------------- 主题切换 --------------------------
+    def on_theme_changed(self):
+        """主题切换后, 网格里自绘的文字与选中框, 以及已渲染的预览需要重刷。"""
+        self.grid.apply_palette()
+        self.preview.refresh()
+
+    def on_hide(self):
+        """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动。"""
+        unbind_mousewheel(self.grid.canvas)
+
+    # -------------------------- 文件操作 --------------------------
+    def _on_select_file(self, path):
+        """选中项变化时同步右侧预览与底部详细信息。"""
+        self.details.show(path)
+        self.preview.show(path)
+
     def _open_file(self, path):
+        open_path(path, parent=self.window)
+
+    def _on_context_menu(self, path, event):
         try:
-            os.startfile(path)
-        except AttributeError:
-            try:
-                subprocess.Popen(["xdg-open", path])
-            except Exception as e:
-                messagebox.showerror("错误", f"无法打开文件: {e}")
+            self.menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.menu.grab_release()
 
-    def _open_file_location(self, path):
-        folder = os.path.dirname(path)
-        try:
-            subprocess.Popen(f'explorer /select,"{path}"')
-        except Exception:
-            try:
-                subprocess.Popen(["xdg-open", folder])
-            except Exception as e:
-                messagebox.showerror("错误", f"无法打开文件夹: {e}")
+    def _open_selected_file(self):
+        path = self.grid.selected_path()
+        if path:
+            open_path(path, parent=self.window)
 
-    # -------------------------- Tree 操作 --------------------------
-    def on_tree_double_click(self, event):
-        self.open_selected_file()
-
-    def on_tree_right_click(self, event):
-        iid = self.tree.identify_row(event.y)
-        if iid:
-            self.tree.selection_set(iid)
-            self.menu.post(event.x_root, event.y_root)
-
-    def open_selected_file(self):
-        selection = self.tree.selection()
-        if selection:
-            path = self.tree.item(selection[0])["values"][2]
-            self._open_file(path)
-
-    def open_file_location(self):
-        selection = self.tree.selection()
-        if selection:
-            path = self.tree.item(selection[0])["values"][2]
-            self._open_file_location(path)
+    def _open_file_location(self):
+        path = self.grid.selected_path()
+        if path:
+            open_path(path, parent=self.window, reveal=True)
 
     # -------------------------- 文件夹选择 / 扫描 --------------------------
     def on_select_folder(self):
@@ -266,7 +293,7 @@ class DedupePage(ToolPage):
         self.combo_ext.current(0)
         self.apply_filter_and_show_list()
 
-    # -------------------------- 筛选 / 列表显示 --------------------------
+    # -------------------------- 筛选 / 网格显示 --------------------------
     def apply_filter_and_show_list(self):
         selected_ext = self.combo_ext.get()
         if selected_ext == "全部":
@@ -274,180 +301,23 @@ class DedupePage(ToolPage):
         else:
             self.filtered_files = [f for f in self.all_files
                                    if f.lower().endswith(selected_ext)]
-        self.tree.delete(*self.tree.get_children())
-        for f in self.filtered_files:
-            self.tree.insert("", "end", values=(
-                os.path.basename(f), os.path.splitext(f)[1].lower(), f))
-        self.lbl_total.config(text=f"总文件数: {len(self.all_files)}")
-        self.lbl_filtered.config(
-            text=f"筛选后文件数: {len(self.filtered_files)}")
+        self.grid.set_files(self.filtered_files)
+        self.lbl_counts.config(text=self._counts_text())
         self._update_empty_state()
+        self._on_select_file(None)
 
-    # -------------------------- 缩略图 --------------------------
-    def on_show_thumbnails(self):
-        if self.thumb_visible:
-            self.paned.forget(self.thumb_canvas_container)
-            self.thumb_visible = False
-            self.thumb_loading = False
-            self.btn_thumbs.configure(text="显示缩略图")
-            self._restoring_preview = False
+    def _counts_text(self):
+        text = f"{len(self.all_files)} 个项目"
+        if len(self.filtered_files) != len(self.all_files):
+            text += f" · 已筛选 {len(self.filtered_files)} 个"
+        return text
+
+    def _on_thumb_progress(self, done, total):
+        """缩略图加载进度写进状态栏。"""
+        if total and done >= total:
+            self.lbl_progress_text.config(text="缩略图加载完成")
         else:
-            self.thumb_box = self._current_thumb_box()
-            self._restoring_preview = True
-            self.paned.add(self.thumb_canvas_container, weight=0)
-            self.root.after_idle(self._apply_preview_height)
-            self.thumb_visible = True
-            self.thumb_loading = True
-            self.thumb_queue = queue.Queue()
-            for widget in self.thumb_frame.winfo_children():
-                widget.destroy()
-            self.progress["maximum"] = len(self.filtered_files)
-            self.progress["value"] = 0
-            threading.Thread(target=self._load_thumbnails_thread,
-                             daemon=True).start()
-            self.root.after(60, self._poll_thumb_queue)
-            self.btn_thumbs.configure(text="隐藏缩略图")
-
-    def _load_thumbnails_thread(self):
-        """后台线程: 只做 PIL 缩略图计算, 结果经队列交给主线程渲染。"""
-        for f in self.filtered_files:
-            if f not in self.thumb_pil_cache:
-                img = make_thumbnail(f, size=(512, 512))
-                if img is None:
-                    img = make_placeholder(
-                        color=self.theme.palette["placeholder"])
-                self.thumb_pil_cache[f] = img
-            self.thumb_queue.put(f)
-        self.thumb_queue.put(None)
-
-    def _poll_thumb_queue(self):
-        """主线程轮询缩略图队列并渲染。"""
-        processed = 0
-        while processed < 25:
-            try:
-                item = self.thumb_queue.get_nowait()
-            except queue.Empty:
-                break
-            processed += 1
-            if item is None:
-                self.thumb_loading = False
-                self.progress["value"] = 0
-                self.lbl_progress_text.config(text="缩略图加载完成")
-                self._rerender_thumbnails()
-                return
-            f = item
-            img = self.thumb_pil_cache.get(f)
-            if img is not None:
-                tkimg = self._make_thumb_photo(img, f)
-                self.thumb_cache[f] = tkimg
-                lbl = tk.Label(self.thumb_frame, image=tkimg,
-                               bg=self.theme.palette["bg"])
-                lbl.image = tkimg
-                lbl.path = f
-                lbl.pack(side="left", padx=4, pady=4)
-                lbl.bind("<Double-1>", lambda e, p=f: self._open_file(p))
-                lbl.bind("<Button-3>",
-                         lambda e, p=f: self._open_file_location(p))
-            self.progress["value"] += 1
-            self.lbl_progress_text.config(
-                text=f"加载缩略图: {self.progress['value']}/"
-                     f"{len(self.filtered_files)}")
-        if self.thumb_visible and self.thumb_loading:
-            self.root.after(60, self._poll_thumb_queue)
-
-    def _bind_thumb_mousewheel(self, event=None):
-        self.thumb_canvas.bind_all("<MouseWheel>", self._on_thumb_mousewheel)
-
-    def _unbind_thumb_mousewheel(self, event=None):
-        self.thumb_canvas.unbind_all("<MouseWheel>")
-
-    def _on_thumb_mousewheel(self, event):
-        self.thumb_canvas.xview_scroll(-1 * (event.delta // 120), "units")
-
-    # -------------------------- 预览区拖拽调整高度 --------------------------
-    def _on_thumb_pane_configure(self, event):
-        if self._restoring_preview:
-            return
-        if event.height >= 10:
-            self._preview_h = event.height
-            self._schedule_thumb_rerender()
-
-    def _apply_preview_height(self, retries=40):
-        """把预览区高度调整到上次拖拽后的数值, 未生效则重试直至稳定。"""
-        try:
-            total = self.paned.winfo_height()
-            desired = max(40, min(self._preview_h, total - 40))
-            if total > desired + 20:
-                self.paned.sashpos(0, total - desired)
-            # 窗格未映射时 winfo_height 返回的是请求高度, 不可作准
-            mapped = self.thumb_canvas_container.winfo_ismapped()
-            current = self.thumb_canvas_container.winfo_height()
-            if mapped and abs(current - desired) <= 8:
-                self._restoring_preview = False
-                self._schedule_thumb_rerender()
-                return
-            if mapped and abs(current - desired) > 30:
-                # 用户已手动拖动分隔条, 停止恢复并采用当前高度
-                self._restoring_preview = False
-                self._preview_h = current
-                self._schedule_thumb_rerender()
-                return
-            if retries > 0:
-                self.root.after(
-                    100, lambda: self._apply_preview_height(retries - 1))
-            else:
-                self._restoring_preview = False
-        except tk.TclError:
-            self._restoring_preview = False
-
-    def _current_thumb_box(self):
-        h = self._preview_h or 200
-        side = max(48, min(720, h - 16))
-        return (side, side)
-
-    def _make_thumb_photo(self, img, path=None):
-        # 目标尺寸超过缓存源图时, 从磁盘重新读取更大的版本
-        if path is not None and max(self.thumb_box) > max(img.size):
-            big = make_thumbnail(path, size=self.thumb_box)
-            if big is not None:
-                img = big
-        fit = img.copy()
-        fit.thumbnail(self.thumb_box)
-        return ImageTk.PhotoImage(fit)
-
-    def _schedule_thumb_rerender(self):
-        if self._thumb_resize_job is not None:
-            try:
-                self.root.after_cancel(self._thumb_resize_job)
-            except Exception:
-                pass
-        self._thumb_resize_job = self.root.after(80, self._rerender_thumbnails)
-
-    def _rerender_thumbnails(self):
-        self._thumb_resize_job = None
-        if not self.thumb_visible or self.thumb_loading:
-            return
-        self.thumb_box = self._current_thumb_box()
-        for child in self.thumb_frame.winfo_children():
-            child.destroy()
-        for f in self.filtered_files:
-            img = self.thumb_pil_cache.get(f)
-            if img is None:
-                img = make_thumbnail(f)
-                if img is None:
-                    img = make_placeholder(
-                        color=self.theme.palette["placeholder"])
-                self.thumb_pil_cache[f] = img
-            tkimg = self._make_thumb_photo(img, f)
-            self.thumb_cache[f] = tkimg
-            lbl = tk.Label(self.thumb_frame, image=tkimg,
-                           bg=self.theme.palette["bg"])
-            lbl.image = tkimg
-            lbl.path = f
-            lbl.pack(side="left", padx=4, pady=4)
-            lbl.bind("<Double-1>", lambda e, p=f: self._open_file(p))
-            lbl.bind("<Button-3>",
-                     lambda e, p=f: self._open_file_location(p))
+            self.lbl_progress_text.config(text=f"正在加载缩略图: {done}/{total}")
 
     # -------------------------- 重复查找 --------------------------
     def on_find_duplicates(self):

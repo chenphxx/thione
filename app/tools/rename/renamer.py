@@ -1,6 +1,11 @@
-"""重命名核心逻辑：任务构建与原地重命名辅助。"""
+"""重命名核心逻辑: 任务构建, 任务执行与原地重命名辅助。
+
+执行过程中需要与界面交互的地方 (冲突选择, 进度上报, 中止判断) 一律用回调
+表达, 因此这里不依赖 tkinter。
+"""
 
 import os
+import shutil
 import uuid
 
 
@@ -66,3 +71,79 @@ def restore_inplace_temps(folder, moved):
     """还原所有仍处于临时名的文件。"""
     for src_name, tmp in list(moved.items()):
         restore_inplace_temp(folder, src_name, tmp)
+
+
+class CancelledError(Exception):
+    """用户在任务执行过程中终止了操作。"""
+
+
+class TaskError(RuntimeError):
+    """单项任务执行失败。
+
+    @ivar src: 出错时正在处理的源文件路径
+    """
+
+    def __init__(self, src, cause):
+        super().__init__(str(cause))
+        self.src = src
+
+
+def run_tasks(tasks, folder, moved, on_conflict, on_progress, is_cancelled):
+    """逐项执行 build_tasks 生成的任务。
+
+    @param tasks: build_tasks 的返回值
+    @param folder: 原地重命名所在的目录 (非原地任务时传保存目录)
+    @param moved: prepare_inplace_temps 的返回值, 执行过程中就地更新
+    @param on_conflict: callable(目标文件名) -> "overwrite" | "skip" | "cancel"
+    @param on_progress: callable(processed, total), 每处理完一项调用一次
+    @param is_cancelled: callable() -> bool, 返回 True 时中止
+    @return: 完成的项数
+    @raise CancelledError: 用户中止, 或冲突对话框选了取消
+    @raise TaskError: 某项执行失败; 调用方应调用 restore_inplace_temps 收尾
+    """
+    total = len(tasks)
+    processed = 0
+    for src, dst, inplace, src_name in tasks:
+        if is_cancelled():
+            raise CancelledError()
+
+        # 原地重命名: 文件已是指定名称, 无需处理
+        if inplace and _same_path(src, dst):
+            processed += 1
+            on_progress(processed, total)
+            continue
+
+        # 冲突文件可能已被挪到临时名, 优先用临时名作为当前源
+        cur_src = moved.get(src_name) or src
+        try:
+            if os.path.exists(dst):
+                action = on_conflict(os.path.basename(dst))
+                if action == "cancel":
+                    raise CancelledError()
+                if action == "skip":
+                    restore_inplace_temp(folder, src_name, cur_src)
+                    moved.pop(src_name, None)
+                    processed += 1
+                    on_progress(processed, total)
+                    continue
+                # overwrite: 继续往下走
+
+            if inplace:
+                os.replace(cur_src, dst)
+                moved.pop(src_name, None)
+            else:
+                shutil.copy2(cur_src, dst)
+        except CancelledError:
+            raise
+        except Exception as e:
+            raise TaskError(src, e) from e
+
+        processed += 1
+        on_progress(processed, total)
+    return processed
+
+
+def _same_path(path_a, path_b):
+    """判断两个路径是否指向同一个文件。"""
+    return (os.path.normcase(os.path.normpath(path_a))
+            == os.path.normcase(os.path.normpath(path_b)))

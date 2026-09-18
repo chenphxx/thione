@@ -14,7 +14,7 @@ from ...errors import show_error
 from ...shell.page import ToolPage
 from . import storage
 from .config import Config
-from .constants import APP_TITLE, REGION
+from .constants import PAGE_TITLE, REGION
 from .service import TranslateService
 from .translator import Translator
 
@@ -77,7 +77,7 @@ class TranslatePage(ToolPage):
     def _build_toolbar(self):
         bar, head, actions = self.build_toolbar()
 
-        ttk.Label(head, text=APP_TITLE, style="PanelHeader.TLabel").pack(
+        ttk.Label(head, text=PAGE_TITLE, style="PanelHeader.TLabel").pack(
             side="left"
         )
         ttk.Label(head, text="启动后选中文本, 连续按两次 Ctrl 即可翻译",

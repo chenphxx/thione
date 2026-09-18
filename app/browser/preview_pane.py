@@ -1,28 +1,32 @@
-"""文件预览面板：图片 / 文本 / 表格，未知类型尝试以文本模式预览。"""
+"""右侧预览窗格: 图片 / 文本 / 表格, 未知类型尝试以文本模式预览。
+
+原本只属于批量重命名, 图片查重也需要同一份预览逻辑, 因此移到共享层
+可预览的类型见 constants, 与 Windows 资源管理器的预览窗格覆盖范围一致
+"""
 
 import csv
 import os
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
+from ..errors import open_path
+from ..theme import mono
 from .constants import (
     IMAGE_EXTS,
     MAX_PREVIEW_BYTES,
     MAX_PREVIEW_ROWS,
-    MONO_FONT,
-    PREVIEW_HEIGHT,
+    PREVIEW_WIDTH,
     TABLE_EXTS,
     TEXT_EXTS,
 )
-from .file_ops import open_file
 
 
-class PreviewPanel(ttk.Frame):
-    """底部预览区。通过 show(path) 展示文件内容，随预览区大小自适应。"""
+class PreviewPane(ttk.Frame):
+    """文件预览窗格; 通过 show(path) 展示内容, 随窗格大小自适应。"""
 
     def __init__(self, master, theme):
         super().__init__(master, style="Panel.TFrame", padding=(12, 8))
-        self.configure(height=PREVIEW_HEIGHT)
+        self.configure(width=PREVIEW_WIDTH)
         self.pack_propagate(False)
         self.theme = theme
 
@@ -32,11 +36,11 @@ class PreviewPanel(ttk.Frame):
 
         header = ttk.Frame(self, style="Panel.TFrame")
         header.pack(fill="x")
-        self.lbl_title = ttk.Label(header, text="文件预览", style="PanelHeader.TLabel")
-        self.lbl_title.pack(side="left")
-        self.lbl_info = ttk.Label(header, text="点击文件列表中的文件查看预览",
+        self.lbl_title = ttk.Label(header, text="预览", style="PanelHeader.TLabel")
+        self.lbl_title.pack(anchor="w")
+        self.lbl_info = ttk.Label(header, text="选中文件后在这里查看",
                                   style="PanelMuted.TLabel")
-        self.lbl_info.pack(side="left", padx=(14, 0))
+        self.lbl_info.pack(anchor="w", pady=(2, 0))
 
         self.body = ttk.Frame(self)
         self.body.pack(fill="both", expand=True, pady=(8, 0))
@@ -45,23 +49,27 @@ class PreviewPanel(ttk.Frame):
         self.show(None)
 
     # ---------------- 对外接口 ----------------
+    @property
+    def path(self):
+        """当前预览的文件路径。"""
+        return self._preview_path
+
     def show(self, path):
-        """根据文件路径刷新预览；path 为空时显示占位提示。"""
-        p = self.theme.palette
+        """根据文件路径刷新预览; path 为空时显示占位提示。"""
         self._preview_path = path
         self._clear_body()
         self._preview_img = None
         self._preview_rendered_size = None
 
         if not path or not os.path.isfile(path):
-            self.lbl_title.config(text="文件预览")
-            self.lbl_info.config(text="点击文件列表中的文件查看预览")
-            self._placeholder("在文件列表中点击文件，即可在这里查看预览")
+            self.lbl_title.config(text="预览")
+            self.lbl_info.config(text="选中文件后在这里查看")
+            self._placeholder("在左侧选中文件, 即可在这里查看预览")
             return
 
         name = os.path.basename(path)
         ext = os.path.splitext(name)[1].lower()
-        self.lbl_title.config(text=name[:80])
+        self.lbl_title.config(text=_shorten(name))
         try:
             size = os.path.getsize(path)
         except OSError:
@@ -89,30 +97,31 @@ class PreviewPanel(ttk.Frame):
 
     def _placeholder(self, message):
         ttk.Label(self.body, text=message, style="Muted.TLabel",
-                  anchor="center").pack(fill="both", expand=True)
+                  anchor="center", wraplength=PREVIEW_WIDTH - 40,
+                  justify="center").pack(fill="both", expand=True)
 
     def _preview_image(self, path):
         p = self.theme.palette
         try:
-            from PIL import Image, ImageTk
+            from PIL import ImageTk
+
+            from ..imaging import load_thumbnail
         except ImportError:
-            self._placeholder("未安装 Pillow，无法预览图片\npip install pillow")
+            self._placeholder("未安装 Pillow, 无法预览图片\npip install pillow")
             return
         self.winfo_toplevel().update_idletasks()
         max_w = max(self.body.winfo_width() - 24, 100)
         max_h = max(self.body.winfo_height() - 16, 60)
         if self._preview_rendered_size == (max_w, max_h):
-            return  # 尺寸未变化，避免重复渲染
+            return  # 尺寸未变化, 避免重复渲染
         self._preview_rendered_size = (max_w, max_h)
-        try:
-            img = Image.open(path)
-            img.thumbnail((max_w, max_h))
-            self._preview_img = ImageTk.PhotoImage(img)
-        except Exception:
+        img = load_thumbnail(path, (max_w, max_h))
+        if img is None:
             self._preview_img = None
             self._preview_rendered_size = None
             self._try_text_fallback(path, "图片加载失败")
             return
+        self._preview_img = ImageTk.PhotoImage(img)
         self._clear_body()
         label = tk.Label(self.body, image=self._preview_img, bg=p["bg"])
         label.pack(padx=8, pady=6)
@@ -123,10 +132,7 @@ class PreviewPanel(ttk.Frame):
             self.lbl_info.config(text=f"{current} · 双击打开")
 
     def _open_preview_file(self, path):
-        try:
-            open_file(path)
-        except Exception as e:
-            messagebox.showerror("错误", f"无法打开文件: {e}")
+        open_path(path, parent=self.winfo_toplevel())
 
     def _preview_text(self, path):
         try:
@@ -144,7 +150,7 @@ class PreviewPanel(ttk.Frame):
 
         text = tk.Text(
             frame, wrap="none", bg=p["preview"], fg=p["text"],
-            insertbackground=p["text"], font=MONO_FONT,
+            insertbackground=p["text"], font=mono(),
             relief="flat", borderwidth=0, padx=10, pady=8,
         )
         v_scroll = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
@@ -153,7 +159,7 @@ class PreviewPanel(ttk.Frame):
 
         text.insert("1.0", content)
         if len(content) >= MAX_PREVIEW_BYTES:
-            text.insert("end", "\n\n… 文件较大，仅预览前 200KB")
+            text.insert("end", "\n\n... 文件较大, 仅预览前 200KB")
         text.configure(state="disabled")
 
         v_scroll.pack(side="right", fill="y")
@@ -161,7 +167,7 @@ class PreviewPanel(ttk.Frame):
         text.pack(side="left", fill="both", expand=True)
 
     def _try_text_fallback(self, path, fail_message):
-        """无法按原类型预览时，尝试把文件当作文本读取。"""
+        """无法按原类型预览时, 尝试把文件当作文本读取。"""
         try:
             with open(path, "rb") as f:
                 data = f.read(MAX_PREVIEW_BYTES)
@@ -209,7 +215,7 @@ class PreviewPanel(ttk.Frame):
         try:
             from openpyxl import load_workbook
         except ImportError:
-            self._placeholder("未安装 openpyxl，无法预览 Excel 表格\npip install openpyxl")
+            self._placeholder("未安装 openpyxl, 无法预览 Excel 表格\npip install openpyxl")
             return None
         try:
             wb = load_workbook(path, read_only=True, data_only=True)
@@ -243,7 +249,7 @@ class PreviewPanel(ttk.Frame):
         tree.tag_configure("even", background=p["hover"])
         for i in range(cols):
             tree.heading(f"c{i}", text=f"列 {i + 1}")
-            tree.column(f"c{i}", width=130, anchor="w", stretch=True)
+            tree.column(f"c{i}", width=110, anchor="w", stretch=True)
 
         for idx, row in enumerate(rows):
             values = [""] * cols
@@ -280,3 +286,8 @@ class PreviewPanel(ttk.Frame):
         if size < 1024 * 1024:
             return f"{size / 1024:.1f} KB"
         return f"{size / 1024 / 1024:.1f} MB"
+
+
+def _shorten(name, limit=32):
+    """标题一行放不下时保留尾部, 便于看出真实文件名。"""
+    return name if len(name) <= limit else "..." + name[-(limit - 3):]

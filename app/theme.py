@@ -282,6 +282,8 @@ class ThemeManager:
         约定: 页面底用 bg, 侧栏与工具条用 panel, 卡片用 card。整体是扁平风格,
         只用 1 像素描边和留白分层, 不画渐变与阴影; lightcolor/darkcolor 必须
         跟着背景色一起映射, 否则 clam 会画出立体高光。
+
+        按控件族拆成若干段, 改动某一类控件时只需看对应的方法。
         """
         s = self.style
         s.configure(
@@ -295,8 +297,18 @@ class ThemeManager:
             selectforeground=p["on_accent"],
             font=sans(),
         )
+        self._style_surfaces(p)
+        self._style_labels(p)
+        self._style_buttons(p)
+        self._style_checkbuttons(p)
+        self._style_inputs(p)
+        self._style_treeviews(p)
+        self._style_scrollbars(p)
+        self._style_labelframes(p)
 
-        # 表面与分隔
+    def _style_surfaces(self, p):
+        """表面与分隔: 页面底用 bg, 侧栏与工具条用 panel, 卡片用 card。"""
+        s = self.style
         s.configure("TFrame", background=p["bg"])
         s.configure("Panel.TFrame", background=p["panel"])
         s.configure("Card.TFrame", background=p["card"])
@@ -307,7 +319,9 @@ class ThemeManager:
                     sashrelief="flat")
         s.configure("TSeparator", background=p["border"])
 
-        # 文字
+    def _style_labels(self, p):
+        """文字与空状态占位块的标签。"""
+        s = self.style
         s.configure("TLabel", background=p["bg"], foreground=p["text"])
         s.configure("Panel.TLabel", background=p["panel"], foreground=p["text"])
         s.configure("Muted.TLabel", background=p["bg"], foreground=p["muted"])
@@ -323,8 +337,6 @@ class ThemeManager:
                     foreground=p["muted"], font=sans(10))
         s.configure("CardTitle.TLabel", background=p["card"],
                     foreground=p["header"], font=sans(11, bold=True))
-        s.configure("Brand.TLabel", background=p["panel"],
-                    foreground=p["header"], font=sans(16, bold=True))
         s.configure("SidebarMuted.TLabel", background=p["panel"],
                     foreground=p["muted"], font=sans(9))
 
@@ -336,7 +348,9 @@ class ThemeManager:
         s.configure("EmptyHint.TLabel", background=p["card"],
                     foreground=p["muted"], font=sans(10))
 
-        # 按钮: 默认次级, 白底加 1 像素描边; 悬停与按下只改底色
+    def _style_buttons(self, p):
+        """按钮: 默认次级 白底加 1 像素描边, 悬停与按下只改底色。"""
+        s = self.style
         s.configure("TButton", background=p["card"], foreground=p["text"],
                     bordercolor=p["border_strong"], lightcolor=p["card"],
                     darkcolor=p["card"], borderwidth=1, relief="solid",
@@ -404,6 +418,20 @@ class ThemeManager:
               bordercolor=[("focus", p["ring"]), ("disabled", p["border"])],
               foreground=[("disabled", p["muted"])])
 
+        # 视图控件: 缩略图档位与窗格开关。打开态只改底色与描边,
+        # 字体与内边距与 Secondary.TButton 一致, 切换时按钮尺寸不会跳
+        s.configure("SegmentOn.TButton", background=p["accent_weak"],
+                    foreground=p["link"], bordercolor=p["accent"],
+                    lightcolor=p["accent_weak"], darkcolor=p["accent_weak"],
+                    borderwidth=1, relief="solid", padding=(14, 7),
+                    focusthickness=0, font=sans())
+        s.map("SegmentOn.TButton",
+              background=[("pressed", p["active"]), ("active", p["hover"])],
+              lightcolor=[("pressed", p["active"]), ("active", p["hover"])],
+              darkcolor=[("pressed", p["active"]), ("active", p["hover"])],
+              bordercolor=[("focus", p["ring"])],
+              foreground=[("disabled", p["muted"])])
+
         # 侧栏底部的主题按钮
         s.configure("Chip.TButton", background=p["panel"], foreground=p["text"],
                     bordercolor=p["border"], lightcolor=p["panel"],
@@ -415,7 +443,9 @@ class ThemeManager:
               darkcolor=[("pressed", p["active"]), ("active", p["hover"])],
               bordercolor=[("focus", p["ring"]), ("active", p["accent"])])
 
-        # 勾选框
+    def _style_checkbuttons(self, p):
+        """勾选框。"""
+        s = self.style
         s.configure("TCheckbutton", background=p["bg"], foreground=p["text"],
                     focuscolor=p["bg"], indicatorbackground=p["input"],
                     indicatorforeground=p["on_accent"], padding=(4, 2),
@@ -436,7 +466,9 @@ class ThemeManager:
                                    ("pressed", p["active"])],
               foreground=[("disabled", p["muted"])])
 
-        # 输入框与下拉框
+    def _style_inputs(self, p):
+        """输入框与下拉框。"""
+        s = self.style
         s.configure("TEntry", fieldbackground=p["input"], foreground=p["text"],
                     insertcolor=p["text"], bordercolor=p["border_strong"],
                     lightcolor=p["border_strong"], darkcolor=p["border_strong"],
@@ -461,7 +493,9 @@ class ThemeManager:
               bordercolor=[("focus", p["accent"])],
               arrowcolor=[("active", p["text"])])
 
-        # 树形列表: 选中态用主色的浅底配主色文字, 比整行实心更轻
+    def _style_treeviews(self, p):
+        """树形列表: 选中态用主色的浅底配主色文字, 比整行实心更轻。"""
+        s = self.style
         s.configure("Treeview", background=p["bg"], fieldbackground=p["bg"],
                     foreground=p["text"], bordercolor=p["border"], borderwidth=0,
                     relief="flat", rowheight=28, font=sans())
@@ -485,7 +519,9 @@ class ThemeManager:
               background=[("selected", p["accent_weak"])],
               foreground=[("selected", p["link"])])
 
-        # 滚动条与进度条 (进度用琥珀色, 和主色形成一冷一暖的层次)
+    def _style_scrollbars(self, p):
+        """滚动条与进度条 进度用琥珀色, 和主色形成一冷一暖的层次。"""
+        s = self.style
         for orient in ("Vertical", "Horizontal"):
             name = "%s.TScrollbar" % orient
             s.configure(name, background=p["scroll"], troughcolor=p["trough"],
@@ -499,7 +535,9 @@ class ThemeManager:
                     lightcolor=p["accent_alt"], darkcolor=p["accent_alt"],
                     borderwidth=0, thickness=6)
 
-        # 分组卡片
+    def _style_labelframes(self, p):
+        """分组卡片 TLabelframe。"""
+        s = self.style
         s.configure("TLabelframe", background=p["card"],
                     bordercolor=p["border"], lightcolor=p["card"],
                     darkcolor=p["card"], borderwidth=1, relief="solid")

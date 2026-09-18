@@ -4,7 +4,7 @@
 涉密信息由 storage 单独加载, 不会写入版本库。
 """
 
-APP_TITLE = "划词翻译"
+PAGE_TITLE = "划词翻译"
 APP_TIP = "thione 运行中 · 双击 Ctrl 翻译"
 
 # 华为云自然语言处理 (NLP) 服务区域。区域标识并非机密信息。

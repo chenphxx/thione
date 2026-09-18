@@ -7,7 +7,6 @@
 from . import __version__
 
 APP_TITLE = "thione"
-APP_TAGLINE = "图片查重 · 批量重命名 · 划词翻译"
 APP_VERSION = __version__
 
 # 主窗口尺寸

@@ -1,13 +1,14 @@
 """Windows 平台相关的原生调用。
 
-单实例、任务栏图标分组与「第二个实例唤起已有实例」都属于进程级行为,
-因此放在外壳层而不是某个工具里。
+单实例 任务栏图标分组 第二个实例唤起已有实例都属于进程级行为, 打开文件 打开
+目录 定位文件三个工具都要用, 因此统一放在外壳层而不是某个工具里
 """
 
 import ctypes
 import logging
 import os
 import socket
+import subprocess
 import sys
 
 logger = logging.getLogger(__name__)
@@ -138,25 +139,58 @@ def notify_existing_instance(timeout=1.0):
 
 
 # ---------------------------------------------------------------------------
-# 其它
+# 打开文件与目录
 # ---------------------------------------------------------------------------
 
-def is_windows():
-    return _IS_WINDOWS
+def _open_with_default(path):
+    """交给系统默认程序打开文件或目录 失败时抛出异常"""
+    if os.name == "nt":
+        os.startfile(path)  # noqa: S606 - 打开的是用户自己选中的本地路径
+    elif sys.platform == "darwin":
+        subprocess.call(["open", path])
+    else:
+        subprocess.call(["xdg-open", path])
 
 
-def ctrl_alt_shortcut_hint():
-    """返回一个不依赖托盘图标的退出方式说明, 用于托盘不可用时提示用户。"""
-    return "程序在后台运行中。若找不到托盘图标, 请在任务管理器中结束 thione.exe。"
+def open_file(path):
+    """用系统默认程序打开文件
+
+    @param path: 文件的完整路径
+    @return: 是否成功 失败只记录日志 由调用方决定怎么提示用户
+    """
+    try:
+        _open_with_default(path)
+        return True
+    except Exception:
+        logger.debug("打开文件失败: %s", path, exc_info=True)
+        return False
 
 
 def open_folder(path):
-    """用资源管理器打开目录。"""
-    if not _IS_WINDOWS:
-        return False
+    """打开一个目录
+
+    @param path: 目录的完整路径
+    @return: 是否成功
+    """
     try:
-        os.startfile(path)  # noqa: S606 - 仅打开本地已知目录
+        _open_with_default(path)
         return True
     except Exception:
         logger.debug("打开目录失败: %s", path, exc_info=True)
+        return False
+
+
+def reveal_file(path):
+    """打开文件所在目录并选中该文件
+
+    @param path: 文件的完整路径
+    @return: 是否成功
+    """
+    if os.name != "nt":
+        return open_folder(os.path.dirname(path))
+    try:
+        subprocess.Popen(["explorer", f"/select,{path}"])
+        return True
+    except Exception:
+        logger.debug("定位文件失败: %s", path, exc_info=True)
         return False

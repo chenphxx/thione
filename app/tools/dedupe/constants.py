@@ -1,6 +1,9 @@
-"""重复图片查找的专属常量。"""
+"""重复图片查找的专属常量。
 
-APP_TITLE = "图片查重"
+PAGE_TITLE 是页面标题, 与外壳的 APP_TITLE (程序名) 不是同一个东西。
+"""
+
+PAGE_TITLE = "图片查重"
 
 THUMB_SIZE = (150, 150)
 HASH_THRESHOLD = 5

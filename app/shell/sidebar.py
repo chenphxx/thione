@@ -8,13 +8,15 @@
 import tkinter as tk
 from tkinter import ttk
 
-from ..constants import APP_TAGLINE, APP_VERSION
+from ..constants import APP_VERSION
 from ..motion import Tween, ease_out_cubic
 from ..palettes import mix
 from ..theme import sans
 
-#: 侧栏固定宽度
+#: 侧栏默认宽度, 以及拖动时的上下限
 NAV_WIDTH = 208
+NAV_MIN_WIDTH = 148
+NAV_MAX_WIDTH = 360
 
 #: 导航项高度, 间距与左右留白
 ITEM_HEIGHT = 40
@@ -25,9 +27,6 @@ ITEM_PAD = 8
 INDICATOR_WIDTH = 3
 INDICATOR_HEIGHT = 18
 INDICATOR_INSET = 6
-
-#: 品牌标记尺寸
-MARK_SIZE = 32
 
 #: 悬停淡入与指示条滑动的时长 (毫秒), 都控制在 200 毫秒以内
 HOVER_MS = 110
@@ -57,7 +56,7 @@ def _draw_round_rect(canvas, x1, y1, x2, y2, radius, **kwargs):
 
 
 class Sidebar(ttk.Frame):
-    """固定宽度的工具导航栏。
+    """工具导航栏, 宽度可由内容区侧的拖动手柄调整。
 
     参数:
         theme:           ThemeManager, 提供调色板并负责在切换时回调
@@ -76,11 +75,11 @@ class Sidebar(ttk.Frame):
         self._items = list(items)
         self._rows = {}
         self._active_key = None
+        self._width = NAV_WIDTH
         self._indicator = None
         self._indicator_y = 0.0
         self._indicator_tween = None
 
-        self._build_brand()
         self._build_nav()
         self._build_footer(on_toggle_theme)
 
@@ -106,37 +105,13 @@ class Sidebar(ttk.Frame):
         return None
 
     # -- 构建 -------------------------------------------------------------
-    def _build_brand(self):
-        brand = ttk.Frame(self, style="Panel.TFrame", padding=(16, 16, 16, 12))
-        brand.pack(side="top", fill="x")
-
-        top = ttk.Frame(brand, style="Panel.TFrame")
-        top.pack(anchor="w")
-
-        self.mark = tk.Canvas(top, width=MARK_SIZE, height=MARK_SIZE,
-                              highlightthickness=0, bd=0)
-        self.mark._thione_surface = "panel"
-        self.mark.pack(side="left")
-
-        ttk.Label(top, text="thione", style="Brand.TLabel").pack(
-            side="left", padx=(10, 0)
-        )
-
-        ttk.Label(
-            brand,
-            text=APP_TAGLINE,
-            style="SidebarMuted.TLabel",
-            wraplength=NAV_WIDTH - 34,
-            justify="left",
-        ).pack(anchor="w", pady=(8, 0))
-
     def _build_nav(self):
         self.nav = tk.Canvas(
-            self, width=NAV_WIDTH, height=self._nav_height(),
+            self, width=self._width, height=self._nav_height(),
             highlightthickness=0, bd=0,
         )
         self.nav._thione_surface = "panel"
-        self.nav.pack(side="top", fill="x")
+        self.nav.pack(side="top", fill="x", pady=(12, 0))
 
         for index, (key, icon, title) in enumerate(self._items):
             top = self._row_top(index)
@@ -144,7 +119,7 @@ class Sidebar(ttk.Frame):
                 "index": index,
                 "top": top,
                 "pill": _draw_round_rect(
-                    self.nav, ITEM_PAD, top, NAV_WIDTH - ITEM_PAD,
+                    self.nav, ITEM_PAD, top, self._width - ITEM_PAD,
                     top + ITEM_HEIGHT, 8,
                 ),
                 "label": self.nav.create_text(
@@ -164,6 +139,29 @@ class Sidebar(ttk.Frame):
         self.nav.bind("<Leave>", self._on_leave)
         self.nav.bind("<Button-1>", self._on_click)
 
+    def _layout(self):
+        """按当前宽度重排导航项; 拖动侧栏宽度时调用。"""
+        for row in self._rows.values():
+            top = row["top"]
+            self.nav.coords(
+                row["pill"],
+                *_round_points(ITEM_PAD, top, self._width - ITEM_PAD,
+                               top + ITEM_HEIGHT, 8)
+            )
+            self.nav.coords(row["label"], ITEM_PAD + 30, top + ITEM_HEIGHT / 2)
+
+    def set_width(self, width):
+        """调整侧栏宽度, 超出范围时夹到上下限。
+
+        @param width: 目标宽度 (像素)
+        """
+        width = max(NAV_MIN_WIDTH, min(int(width), NAV_MAX_WIDTH))
+        if width == self._width:
+            return
+        self._width = width
+        self.configure(width=width)
+        self._layout()
+
     def _build_footer(self, on_toggle_theme):
         footer = ttk.Frame(self, style="Panel.TFrame", padding=(12, 12))
         footer.pack(side="bottom", fill="x")
@@ -179,24 +177,11 @@ class Sidebar(ttk.Frame):
 
     # -- 绘制 -------------------------------------------------------------
     def _on_palette_change(self):
-        """调色板变化时重画品牌标记与导航; 过渡动画中每帧都会调用。"""
+        """调色板变化时重画导航; 过渡动画中每帧都会调用。"""
         try:
-            self._paint_mark()
             self._paint_rows()
         except tk.TclError:
             pass
-
-    def _paint_mark(self):
-        """画品牌标记: 一个实心主色的圆角方块, 中间放品牌首字母。"""
-        p = self.theme.palette
-        self.mark.delete("all")
-        size = MARK_SIZE
-        _draw_round_rect(self.mark, 1, 1, size - 1, size - 1, 9,
-                         fill=p["accent"], outline="")
-        self.mark.create_text(
-            size / 2, size / 2, text="t", fill=p["on_accent"],
-            font=sans(14, bold=True),
-        )
 
     def _paint_rows(self):
         """按当前状态刷新每一行导航的底色与文字色。"""

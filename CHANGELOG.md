@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026.9.18
+
+- 页面展示调整 
+
 ## 2026.9.15
 
 - 项目更名为 thione 用户配置目录迁移到 `%APPDATA%\thione` 日志目录迁移到 `%LOCALAPPDATA%\thione\logs` 

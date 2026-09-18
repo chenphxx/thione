@@ -24,17 +24,6 @@ def ease_out_cubic(progress):
     return 1 - (1 - progress) ** 3
 
 
-def ease_in_out_cubic(progress):
-    """缓入缓出曲线, 适合需要「走一段再停下」的位移。
-
-    @param progress: 0-1 的线性进度
-    @return: 缓动后的进度
-    """
-    if progress < 0.5:
-        return 4 * progress ** 3
-    return 1 - (-2 * progress + 2) ** 3 / 2
-
-
 class Tween:
     """一段可取消的补间。
 
