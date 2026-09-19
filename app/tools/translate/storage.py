@@ -3,6 +3,10 @@
 配置主落点是 `%APPDATA%\\thione\\config.ini`, 用户无需关心程序被装在哪里,
 也不需要手工编辑文件 —— 在划词翻译页面填好保存即可。
 
+文件里有两个段: `[translate]` 记录用哪个翻译服务, `[huawei]` 记录华为云的
+凭据。两者分开存放, 因此切换服务时不必动凭据, 删除凭据也不会丢掉服务选择。
+使用 uapipro 免费接口时不需要凭据, 缺凭据不算错误。
+
 读取优先级 (高 -> 低):
     1. 环境变量 HUAWEI_AK / HUAWEI_SK / HUAWEI_PROJECT_ID / HUAWEI_REGION
     2. %APPDATA%\\thione\\config.ini           (界面保存, 主要落点)
@@ -31,7 +35,12 @@ from ...paths import (
 
 logger = logging.getLogger(__name__)
 
+#: 华为云凭据所在的段
 SECTION = "huawei"
+#: 服务选择所在的段
+PROVIDER_SECTION = "translate"
+#: 服务选择在段里的键名
+PROVIDER_KEY = "PROVIDER"
 LEGACY_APP_DIR_NAME = "transpy"
 
 
@@ -70,8 +79,13 @@ def renamed_config_path():
     return os.path.join(legacy_user_data_dir(), constants.CONFIG_FILE_NAME)
 
 
-def _read_ini(path):
-    """读取 config.ini, 返回 {key: value}; 文件不存在或损坏时返回 {}。"""
+def _read_ini(path, section=SECTION):
+    """读取 config.ini 里某一段, 返回 {key: value}; 文件不存在或损坏时返回 {}。
+
+    @param path: 配置文件路径
+    @param section: 段名, 默认是存放华为云凭据的那一段
+    @return: 键名大写、值去空白的字典
+    """
     if not os.path.isfile(path):
         return {}
     parser = configparser.ConfigParser()
@@ -81,9 +95,9 @@ def _read_ini(path):
     except (configparser.Error, OSError, UnicodeDecodeError):
         # 配置损坏不应让程序无法启动, 走后续兜底来源
         return {}
-    if not parser.has_section(SECTION):
+    if not parser.has_section(section):
         return {}
-    return {k.upper(): (v or "").strip() for k, v in parser.items(SECTION)}
+    return {k.upper(): (v or "").strip() for k, v in parser.items(section)}
 
 
 def _read_env_file(path):
@@ -119,6 +133,36 @@ def _read_access_key_csv(path):
     except (OSError, csv.Error, UnicodeDecodeError):
         return None, None
     return None, None
+
+
+def _normalize_provider(value):
+    """把配置里的服务名收敛到已知取值, 未知值回落到华为云。
+
+    @param value: 配置文件里读到的原始字符串
+    @return: constants.PROVIDERS 中的一个
+    """
+    value = (value or "").strip().lower()
+    if value in constants.PROVIDERS:
+        return value
+    if value:
+        logger.warning("未知的翻译服务 %r, 回落到 %s",
+                       value, constants.PROVIDER_HUAWEI)
+    return constants.PROVIDER_HUAWEI
+
+
+def current_provider():
+    """返回当前选择的翻译服务, 从未配置过时返回默认值。
+
+    兼容来源与新配置一样参与查找: 更名前 (thpy) 与独立版 (transpy) 留下的
+    文件里如果写了服务选择, 同样会被读到。
+
+    @return: constants.PROVIDERS 中的一个
+    """
+    for path in (config_path(), renamed_config_path(), legacy_config_path()):
+        value = _read_ini(path, PROVIDER_SECTION).get(PROVIDER_KEY)
+        if value:
+            return _normalize_provider(value)
+    return constants.PROVIDER_HUAWEI
 
 
 def legacy_dirs():
@@ -184,6 +228,14 @@ def load():
                 csv_path = candidate
                 break
 
+    provider = current_provider()
+    if provider == constants.PROVIDER_UAPI:
+        # 免费接口不需要凭据, 因此不去校验; 已保存的凭据仍然读出来,
+        # 用户切回华为云时不用重新填
+        logger.info("翻译服务: uapipro 免费接口, 不需要凭据")
+        return Config(ak=ak or "", sk=sk or "", project_id=project_id or "",
+                      region=region, provider=provider)
+
     # 记录凭据来源, 便于排查"为什么又要我配置"这类问题
     if ak and sk and project_id:
         logger.info(
@@ -212,7 +264,8 @@ def load():
             searched=searched,
         )
 
-    return Config(ak=ak, sk=sk, project_id=project_id, region=region)
+    return Config(ak=ak, sk=sk, project_id=project_id, region=region,
+                  provider=provider)
 
 
 def save(config):
@@ -221,6 +274,9 @@ def save(config):
     ensure_dir(os.path.dirname(path))
 
     parser = configparser.ConfigParser()
+    parser[PROVIDER_SECTION] = {
+        PROVIDER_KEY: _normalize_provider(config.provider),
+    }
     parser[SECTION] = {
         "AK": config.ak or "",
         "SK": config.sk or "",
@@ -238,7 +294,7 @@ def save(config):
 
 
 def current_values():
-    """返回当前可用的凭据取值, 缺项时留空 (供界面预填, 不抛异常)。
+    """返回当前可用的服务选择与凭据取值, 缺项时留空 (供界面预填, 不抛异常)。
 
     与 load() 的区别只有一点: 这里不要求各项齐全, 目的是让用户在已有部分
     来源 (环境变量 / 旧版配置 / .env / csv) 的基础上补齐剩余字段。
@@ -270,6 +326,7 @@ def current_values():
         "sk": pick("SK"),
         "project_id": pick("PROJECT_ID"),
         "region": pick("REGION") or constants.REGION,
+        "provider": current_provider(),
     }
 
     # CSV 只提供 AK/SK, 且优先级最低

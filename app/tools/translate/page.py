@@ -1,6 +1,6 @@
-"""划词翻译页面: 凭据配置、启动开关与最近一次翻译结果。
+"""划词翻译页面: 服务选择与凭据配置、启动开关与最近一次翻译结果。
 
-翻译功能默认不启动: 打开 thione 只是把凭据读进来, 全局热键与托盘图标都要等
+翻译功能默认不启动: 打开 thione 只是把服务选择与凭据读进来, 热键与托盘图标都要等
 用户在本页面点「启动翻译」之后才建立, 避免一开程序就挂上全局键盘钩子。
 """
 
@@ -14,9 +14,18 @@ from ...errors import show_error
 from ...shell.page import ToolPage
 from . import storage
 from .config import Config
-from .constants import PAGE_TITLE, REGION
+from .constants import (
+    MAX_TEXT_LENGTH,
+    PAGE_TITLE,
+    PROVIDER_HUAWEI,
+    PROVIDER_LABELS,
+    PROVIDER_UAPI,
+    PROVIDERS,
+    REGION,
+    UAPI_MAX_TEXT_LENGTH,
+)
 from .service import TranslateService
-from .translator import Translator
+from .translator import build_translator
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +35,15 @@ FIELDS = (
     ("project_id", "Project ID"),
     ("region", "Region"),
 )
+
+#: 服务选择区里服务名一列的宽度, 让两行的说明文案左对齐
+PROVIDER_LABEL_WIDTH = 140
+
+#: 服务选择区里每一项的说明文案
+PROVIDER_HINTS = {
+    PROVIDER_HUAWEI: f"需要 AK / SK / Project ID, 单次最多 {MAX_TEXT_LENGTH} 字符",
+    PROVIDER_UAPI: f"公共免费接口, 无需凭据, 单次最多 {UAPI_MAX_TEXT_LENGTH} 字符",
+}
 
 #: 测试连接用的短文本, 只要能走通一次真实翻译即可
 SKIP_TEST_TEXT = "Hello"
@@ -38,17 +56,19 @@ EMPTY_RESULT_HINT = "还没有翻译记录 启动翻译后选中任意文本 连
 
 
 class TranslatePage(ToolPage):
-    """配置华为云 NLP 凭据并常驻划词翻译热键的工具页面。"""
+    """选择翻译服务与凭据并常驻划词翻译热键的工具页面。"""
 
     key = "translate"
     title = "划词翻译"
     icon = "🌐"
-    subtitle = "配置华为云凭据并启动, 之后选中文本连续按两次 Ctrl 即可翻译"
+    subtitle = "选择翻译服务并启动, 之后选中文本连续按两次 Ctrl 即可翻译"
 
     def __init__(self, master, shell):
         super().__init__(master, shell)
 
         self._vars = {key: tk.StringVar() for key, _ in FIELDS}
+        self._provider_var = tk.StringVar(value=PROVIDER_HUAWEI)
+        self._cred_hint_var = tk.StringVar(value="")
         self._status_var = tk.StringVar(value="")
         self._result_var = tk.StringVar(value=EMPTY_RESULT_HINT)
         self._test_queue = queue.Queue()
@@ -70,10 +90,34 @@ class TranslatePage(ToolPage):
         self._build_report()
 
         self._prefill()
+        self._sync_provider_ui()
         self._load_config()
         self._refresh_state()
 
     # ---------------- 界面构建 ----------------
+    def _build_provider_card(self, body):
+        """翻译服务二选一; 换服务后不必重启, 下一次翻译就用新的服务。
+
+        @param body: 放置卡片的容器
+        """
+        card = ttk.LabelFrame(body, text="翻译服务", padding=16)
+        card.pack(side="top", fill="x", pady=(0, 12))
+
+        for provider in PROVIDERS:
+            row = ttk.Frame(card, style="Card.TFrame")
+            row.pack(side="top", fill="x", pady=2)
+            # 第一列固定宽度, 两行的说明文案才会对齐
+            row.columnconfigure(0, minsize=PROVIDER_LABEL_WIDTH)
+            ttk.Radiobutton(
+                row, text=PROVIDER_LABELS[provider], value=provider,
+                variable=self._provider_var, style="Card.TRadiobutton",
+                command=self._on_provider_change,
+            ).grid(row=0, column=0, sticky="w")
+            ttk.Label(row, text=PROVIDER_HINTS[provider],
+                      style="CardMuted.TLabel").grid(
+                row=0, column=1, sticky="w", padx=(12, 0)
+            )
+
     def _build_toolbar(self):
         bar, head, actions = self.build_toolbar()
 
@@ -100,13 +144,15 @@ class TranslatePage(ToolPage):
         body = ttk.Frame(self, padding=(16, 14))
         body.pack(side="top", fill="x")
 
+        self._build_provider_card(body)
+
         card = ttk.LabelFrame(body, text="华为云 NLP 凭据", padding=16)
         card.pack(side="top", fill="x")
         card.columnconfigure(1, weight=1)
 
         ttk.Label(
             card,
-            text="填写后点击「保存凭据」或「启动翻译」都会写入用户配置目录。",
+            textvariable=self._cred_hint_var,
             style="CardMuted.TLabel",
         ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
@@ -147,7 +193,7 @@ class TranslatePage(ToolPage):
 
     # ---------------- 初始数据 ----------------
     def _prefill(self):
-        """把已有来源 (环境变量 / 旧版配置 / .env / csv) 的值预填进表单。"""
+        """把已有来源 (环境变量 / 旧版配置 / .env / csv) 的选择与凭据预填进表单。"""
         try:
             values = storage.current_values()
         except Exception:
@@ -155,18 +201,21 @@ class TranslatePage(ToolPage):
             values = {}
         for key, _ in FIELDS:
             self._vars[key].set(values.get(key, "") or "")
+        self._provider_var.set(values.get("provider") or PROVIDER_HUAWEI)
 
     def _load_config(self):
-        """启动时只装载已有凭据, 翻译功能默认不开启, 等用户点启动。"""
+        """启动时只装载已有配置, 翻译功能默认不开启, 等用户点启动。"""
         try:
             config = storage.load()
         except Exception as exc:
-            logger.info("尚无完整凭据, 划词翻译待配置: %s", exc)
+            logger.info("翻译服务尚未就绪, 划词翻译待配置: %s", exc)
             return
         self.service.set_config(config)
 
     def _values(self):
-        return {key: var.get().strip() for key, var in self._vars.items()}
+        values = {key: var.get().strip() for key, var in self._vars.items()}
+        values["provider"] = self._provider_var.get()
+        return values
 
     def _build_config(self, values):
         return Config(
@@ -174,9 +223,54 @@ class TranslatePage(ToolPage):
             sk=values["sk"],
             project_id=values["project_id"],
             region=values["region"] or REGION,
+            provider=values.get("provider") or PROVIDER_HUAWEI,
         )
 
+    @staticmethod
+    def _ready_to_run(values):
+        """是否具备翻译条件: 免费接口不需要凭据, 华为云要求三项填全。
+
+        @param values: _values() 的结果
+        @return: 当前服务是否可以直接使用
+        """
+        if values["provider"] != PROVIDER_HUAWEI:
+            return True
+        return all(values[key] for key in ("ak", "sk", "project_id"))
+
+    def _apply_config(self, values):
+        """把表单里的选择交给服务, 换服务与换凭据都会立即生效。
+
+        @param values: _values() 的结果
+        @return: 是否已经装载 (华为云凭据不全时不装载)
+        """
+        if not self._ready_to_run(values):
+            return False
+        self.service.set_config(self._build_config(values))
+        return True
+
     # ---------------- 状态刷新 ----------------
+    def _sync_provider_ui(self):
+        """按当前服务刷新凭据卡片的提示文案。"""
+        if self._provider_var.get() == PROVIDER_UAPI:
+            self._cred_hint_var.set(
+                "当前使用 uapipro 免费接口, 下面的凭据不会被使用, 切回华为云时再填。"
+            )
+        else:
+            self._cred_hint_var.set(
+                "填写后点击「保存凭据」或「启动翻译」都会写入用户配置目录。"
+            )
+
+    def _service_detail(self):
+        """状态行里的服务说明: 华为云带上区域, 免费接口只有名字。"""
+        config = self.service.config
+        provider = (config.provider if config is not None
+                    else self._provider_var.get())
+        label = PROVIDER_LABELS.get(provider, provider)
+        if provider != PROVIDER_HUAWEI:
+            return label
+        region = config.region if config is not None else REGION
+        return f"{label} · region={region}"
+
     def on_show(self):
         self._refresh_state()
 
@@ -184,6 +278,8 @@ class TranslatePage(ToolPage):
         running = self.service.running
         ready = self.service.ready
         paused = self.service.paused
+
+        self._sync_provider_ui()
 
         self.btn_toggle.configure(
             text="停止翻译" if running else "启动翻译",
@@ -200,13 +296,15 @@ class TranslatePage(ToolPage):
             )
             indicator = "翻译热键: 已暂停"
         elif running:
-            region = self.service.config.region if self.service.config else REGION
             self._status_var.set(
-                f"运行中: 选中文本后连续按两次 Ctrl 触发翻译 (region={region})"
+                "运行中: 选中文本后连续按两次 Ctrl 触发翻译 "
+                f"({self._service_detail()})"
             )
             indicator = "翻译热键: 已启用"
         elif ready:
-            self._status_var.set("未启动: 点击「启动翻译」开始划词翻译")
+            self._status_var.set(
+                f"未启动 ({self._service_detail()}): 点击「启动翻译」开始划词翻译"
+            )
             indicator = ""
         else:
             self._status_var.set(
@@ -230,14 +328,19 @@ class TranslatePage(ToolPage):
     def _toggle_pause(self):
         self.service.toggle_paused()
 
+    def _on_provider_change(self):
+        """换服务: 立即生效, 不必先停止翻译; 华为云凭据不全时只记下选择。"""
+        self._apply_config(self._values())
+        self._refresh_state()
+
     def _toggle_running(self):
-        """启动或停止翻译; 启动前先把表单里的凭据落盘。"""
+        """启动或停止翻译; 启动前先把表单里的选择与凭据落盘。"""
         if self.service.running:
             self.service.stop()
             return
 
         values = self._values()
-        if not (values["ak"] and values["sk"] and values["project_id"]):
+        if not self._ready_to_run(values):
             self._status_var.set("AK / SK / Project ID 都不能为空")
             return
         if not self._store_config(values):
@@ -245,7 +348,7 @@ class TranslatePage(ToolPage):
         self.service.start()
 
     def _store_config(self, values):
-        """把凭据写入用户配置目录并交给服务; 失败返回 False。"""
+        """把服务选择与凭据写入用户配置目录并交给服务; 失败返回 False。"""
         config = self._build_config(values)
         try:
             path = storage.save(config)
@@ -255,34 +358,36 @@ class TranslatePage(ToolPage):
             return False
 
         self._saved_path = path
-        logger.info("凭据已保存: %s", path)
-        self.service.set_config(config)
+        logger.info("配置已保存: %s", path)
+        self._apply_config(values)
         return True
 
     def _save(self):
         values = self._values()
-        if not (values["ak"] and values["sk"] and values["project_id"]):
+        if not self._ready_to_run(values):
             self._status_var.set("AK / SK / Project ID 都不能为空")
             return
         if not self._store_config(values):
             return
-        self._status_var.set(f"凭据已保存: {self._saved_path}")
+        label = PROVIDER_LABELS[values["provider"]]
+        self._status_var.set(f"已保存 ({label}): {self._saved_path}")
 
     def _test_connection(self):
         if self._testing:
             return
         values = self._values()
-        if not (values["ak"] and values["sk"] and values["project_id"]):
+        if not self._ready_to_run(values):
             self._status_var.set("AK / SK / Project ID 都不能为空")
             return
 
-        self._set_testing(True, "正在测试连接 ...")
+        label = PROVIDER_LABELS[values["provider"]]
+        self._set_testing(True, f"正在测试连接 ({label}) ...")
         config = self._build_config(values)
 
         def worker():
             try:
-                Translator(config).translate(SKIP_TEST_TEXT)
-                self._test_queue.put((True, "连接成功, 凭据可用"))
+                build_translator(config).translate(SKIP_TEST_TEXT)
+                self._test_queue.put((True, f"{label} 连接成功"))
             except Exception as exc:  # 网络/鉴权错误都要展示给用户
                 logger.warning("测试连接失败: %s", exc)
                 self._test_queue.put((False, f"连接失败: {exc}"))

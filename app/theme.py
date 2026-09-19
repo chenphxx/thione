@@ -444,7 +444,7 @@ class ThemeManager:
               bordercolor=[("focus", p["ring"]), ("active", p["accent"])])
 
     def _style_checkbuttons(self, p):
-        """勾选框。"""
+        """勾选框与单选按钮。"""
         s = self.style
         s.configure("TCheckbutton", background=p["bg"], foreground=p["text"],
                     focuscolor=p["bg"], indicatorbackground=p["input"],
@@ -461,6 +461,17 @@ class ThemeManager:
                     indicatorforeground=p["on_accent"], padding=(4, 2),
                     font=sans())
         s.map("Card.TCheckbutton",
+              background=[("active", p["hover"])],
+              indicatorbackground=[("selected", p["accent"]),
+                                   ("pressed", p["active"])],
+              foreground=[("disabled", p["muted"])])
+        # 单选按钮: 用于卡片内的二选一, 配色与勾选框保持一致
+        s.configure("Card.TRadiobutton", background=p["card"],
+                    foreground=p["text"], focuscolor=p["card"],
+                    indicatorbackground=p["input"],
+                    indicatorforeground=p["on_accent"], padding=(4, 2),
+                    font=sans())
+        s.map("Card.TRadiobutton",
               background=[("active", p["hover"])],
               indicatorbackground=[("selected", p["accent"]),
                                    ("pressed", p["active"])],

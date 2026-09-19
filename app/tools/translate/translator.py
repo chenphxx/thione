@@ -1,15 +1,38 @@
-"""华为云 NLP 文本翻译服务封装。"""
+"""华为云 NLP 文本翻译服务封装, 以及翻译实现的统一入口。
+
+本模块对外提供三样东西:
+
+- `TranslationError`: 各翻译实现共用的异常, uapi_translator 也复用它;
+- `Translator`: 华为云 NLP 的实现;
+- `build_translator()`: 按配置里的服务名挑一个实现, 调用方不必关心细节。
+"""
 
 from huaweicloudsdknlp.v2.model import RunTextTranslationRequest, TextTranslationReq
 
 from .auth import build_client
 from .config import Config
-from .constants import MAX_TEXT_LENGTH
+from .constants import MAX_TEXT_LENGTH, PROVIDER_UAPI
 from .language import detect_language, pick_direction
 
 
 class TranslationError(RuntimeError):
     """翻译调用失败。"""
+
+
+def build_translator(config: Config):
+    """按配置里选定的服务构建翻译实现。
+
+    免费接口的实现延迟到真正要用时才导入 SDK, 因此这里不会因为缺少
+    uapi-sdk-python 而失败。
+
+    @param config: 运行配置, 其中 provider 决定使用哪个服务
+    @return: 具有 translate(text) 方法的翻译实现
+    """
+    if config.provider == PROVIDER_UAPI:
+        from .uapi_translator import UapiTranslator
+
+        return UapiTranslator()
+    return Translator(config)
 
 
 class Translator:

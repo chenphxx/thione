@@ -21,7 +21,7 @@ from ...errors import show_error
 from .constants import UI_POLL_INTERVAL_MS
 from .hotkey import DoubleCtrlListener
 from .result_window import ResultWindow
-from .translator import Translator
+from .translator import build_translator
 
 logger = logging.getLogger(__name__)
 
@@ -138,19 +138,26 @@ class TranslateService:
     # -- 配置 -------------------------------------------------------------
     @property
     def ready(self):
-        """凭据是否已就绪, 即是否具备启动翻译的条件。"""
+        """翻译服务是否已就绪, 即是否具备启动翻译的条件。
+
+        华为云缺凭据时为 False; 免费接口不需要凭据, 装载好即为 True
+        """
         return self.translator is not None
 
     def set_config(self, config):
-        """记住凭据并重建翻译客户端, 不改变运行状态。"""
+        """记住配置并重建翻译客户端, 不改变运行状态。
+
+        运行中换服务或换凭据都能立即生效: 热键监听下一次触发就会用上
+        新的客户端, 不必先停止再启动
+        """
         self.config = config
-        self.translator = Translator(config)
+        self.translator = build_translator(config)
 
         if self._listener is not None:
             # 运行中改凭据: 热键监听下一次调用就会用上新的客户端
             self._listener.translator = self.translator
 
-        logger.info("凭据已装载 (region=%s)", config.region)
+        logger.info("翻译服务已装载 (provider=%s)", config.provider)
         self._notify_state()
 
     # -- 热键开关 ---------------------------------------------------------

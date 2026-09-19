@@ -7,11 +7,12 @@ ImageHash>=4.3.1
 # 批量重命名: Excel 预览 (缺失时该功能降级, 不影响其它功能)
 openpyxl>=3.1.0
 
-# 划词翻译: 热键、剪贴板与华为云 NLP
+# 划词翻译: 热键、剪贴板与翻译服务 (华为云 NLP / uapipro 免费接口)
 pynput>=1.7.6
 pyperclip>=1.8.2
 huaweicloudsdkcore>=3.1.211
 huaweicloudsdknlp>=3.1.211
+uapi-sdk-python==0.1.18
 
 # 托盘图标
 # 注意: 打包时不能在 excludes 中排除 PIL, 否则托盘图标与缩略图都会失效
@@ -19,3 +20,12 @@ pystray>=0.19.5
 
 # 打包 (可选)
 pyinstaller>=6.0.0
+
+# 其他
+anyio==4.15.1
+certifi==2026.7.22
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.20
+typing_extensions==4.16.0
