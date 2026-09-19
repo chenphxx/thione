@@ -117,7 +117,6 @@ class DedupePage(ToolPage):
                              on_select=self._on_select_file,
                              on_activate=self._open_file,
                              on_context=self._on_context_menu,
-                             on_progress=self._on_thumb_progress,
                              tier=self.tier, view=self.view)
         self.grid.pack(fill="both", expand=True)
 
@@ -301,6 +300,8 @@ class DedupePage(ToolPage):
         else:
             self.filtered_files = [f for f in self.all_files
                                    if f.lower().endswith(selected_ext)]
+        # 换文件夹或换筛选后, 上一次查找重复项的进度提示不再适用
+        self.lbl_progress_text.config(text="")
         self.grid.set_files(self.filtered_files)
         self.lbl_counts.config(text=self._counts_text())
         self._update_empty_state()
@@ -311,13 +312,6 @@ class DedupePage(ToolPage):
         if len(self.filtered_files) != len(self.all_files):
             text += f" · 已筛选 {len(self.filtered_files)} 个"
         return text
-
-    def _on_thumb_progress(self, done, total):
-        """缩略图加载进度写进状态栏。"""
-        if total and done >= total:
-            self.lbl_progress_text.config(text="缩略图加载完成")
-        else:
-            self.lbl_progress_text.config(text=f"正在加载缩略图: {done}/{total}")
 
     # -------------------------- 重复查找 --------------------------
     def on_find_duplicates(self):

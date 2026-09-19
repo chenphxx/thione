@@ -1,7 +1,8 @@
 """资源管理器风格的文件视图, 支持列表与缩略图两种展示方式。
 
-一次要贴几百张缩略图, 因此磁盘读取与 PIL 缩放放在后台线程, 主线程只把结果
-变成 PhotoImage 贴到画布上; 换档 换展示方式或改宽度时直接用缓存重画, 不回磁盘
+缩略图只读当前视口里的那几行 (上下各多留 OVERSCAN_ROWS 行), 滚动时再补读, 因此
+打开大文件夹不会为了滚动条下方几千张图一次性读盘; 读取与 PIL 缩放放在后台线程,
+主线程只把结果变成 PhotoImage 贴到画布上, 换档 换展示方式或改宽度时用缓存重画
 
 命中测试一律先把控件坐标换算成画布坐标, 否则画布滚动后点中的是另一项
 
@@ -23,6 +24,7 @@ from ..theme import sans
 from ..widgets import bind_mousewheel, unbind_mousewheel
 from .constants import (
     BATCH,
+    CACHE_LIMIT,
     CACHE_SIZE,
     DEFAULT_TIER,
     DEFAULT_VIEW,
@@ -32,8 +34,10 @@ from .constants import (
     LIST_FONT_SIZE,
     LIST_ICON,
     LIST_ROW_HEIGHT,
+    OVERSCAN_ROWS,
     POLL_MS,
     RELAYOUT_MS,
+    SCROLL_MS,
     TIER_SPECS,
     VIEWS,
 )
@@ -71,14 +75,13 @@ class FileGrid(ttk.Frame):
         on_select:   callable(path), 选中项变化时调用, 未选中时 path 为 None
         on_activate: callable(path), 双击某一项时调用
         on_context:  callable(path, event), 右键某一项时调用
-        on_progress: callable(done, total), 缩略图加载进度
         tier:        初始档位, 见 constants.TIERS
         view:        初始展示方式, 见 constants.VIEWS
         surface:     所在的表面层, bg 表示页面底色, card 表示卡片
     """
 
     def __init__(self, master, theme, on_select=None, on_activate=None,
-                 on_context=None, on_progress=None, tier=DEFAULT_TIER,
+                 on_context=None, tier=DEFAULT_TIER,
                  view=DEFAULT_VIEW, surface="bg"):
         super().__init__(master,
                          style="Card.TFrame" if surface == "card" else "TFrame")
@@ -87,7 +90,6 @@ class FileGrid(ttk.Frame):
         self._on_select = on_select
         self._on_activate = on_activate
         self._on_context = on_context
-        self._on_progress = on_progress
 
         self._paths = []
         self._cells = {}
@@ -101,11 +103,13 @@ class FileGrid(ttk.Frame):
         self._font = None
         self._cols = 1
 
+        #: 已经排给后台线程但还没拿到结果的路径
+        self._requested = set()
         self._queue = queue.Queue()
         self._loading = False
-        self._done = 0
         self._pump_job = None
         self._layout_job = None
+        self._visible_job = None
 
         self.canvas = tk.Canvas(self, highlightthickness=0, bd=0)
         self.canvas._thione_surface = surface
@@ -113,7 +117,7 @@ class FileGrid(ttk.Frame):
         self.scroll = ttk.Scrollbar(self, orient="vertical",
                                     command=self.canvas.yview)
         self.scroll.pack(side="right", fill="y")
-        self.canvas.configure(yscrollcommand=self.scroll.set)
+        self.canvas.configure(yscrollcommand=self._on_yscroll)
 
         bind_mousewheel(self.canvas, self.canvas)
         self.canvas.bind("<Button-1>", self._on_click)
@@ -150,15 +154,8 @@ class FileGrid(ttk.Frame):
         self._pil_cache.clear()
         self._photo_cache.clear()
         self._selected = None
-        self._done = 0
+        self._requested.clear()
         self._rebuild_cells()
-        if not self._paths:
-            return
-        self._queue = queue.Queue()
-        self._loading = True
-        threading.Thread(target=self._load_worker,
-                         args=(list(self._paths),), daemon=True).start()
-        self._pump_job = self.after(POLL_MS, self._pump)
 
     def clear(self):
         """清空内容。"""
@@ -175,7 +172,6 @@ class FileGrid(ttk.Frame):
         self._font = None
         self._photo_cache.clear()
         self._rebuild_cells()
-        self._repaint_cached()
 
     def set_view(self, view):
         """切换列表视图与缩略图视图; 已缓存的图片直接按新布局重画。"""
@@ -187,7 +183,6 @@ class FileGrid(ttk.Frame):
         self._font = None
         self._photo_cache.clear()
         self._rebuild_cells()
-        self._repaint_cached()
 
     def select(self, path):
         """设置选中项并触发 on_select; path 为 None 表示取消选中。"""
@@ -246,6 +241,7 @@ class FileGrid(ttk.Frame):
             self._relayout_list()
         else:
             self._relayout_icons()
+        self._ensure_visible()
 
     def _relayout_icons(self):
         icon, _, pad = TIER_SPECS[self._tier]
@@ -337,27 +333,54 @@ class FileGrid(ttk.Frame):
                 finished = True
                 break
             path, img = item
-            self._done += 1
             self._pil_cache[path] = img
             self._paint(path)
-            self._report_progress()
 
         if finished:
             self._loading = False
-            self._repaint_cached()
-            self._report_progress()
+            self._requested.clear()
+            self._prune_cache()
+            self._ensure_visible()  # 读取期间可能又滚到了别处
             return
         if self._loading:
             self._pump_job = self.after(POLL_MS, self._pump)
 
-    def _repaint_cached(self):
-        """用已有缓存重画; 缺少 PIL 图的重新排一次后台加载。"""
-        missing = [p for p in self._paths if p not in self._pil_cache]
-        for path in self._paths:
+    def _visible_range(self):
+        """当前视口覆盖到的下标范围, 上下各多留 OVERSCAN_ROWS 行。
+
+        @return: (起始下标, 结束下标), 结束下标不包含在内
+        """
+        if not self._paths:
+            return 0, 0
+        if self._view == "list":
+            row_height, cols = LIST_ROW_HEIGHT, 1
+        else:
+            _, cell_height = self._cell_size()
+            row_height, cols = cell_height, self._cols
+        top = self.canvas.canvasy(0)
+        bottom = top + max(1, self.canvas.winfo_height())
+        first_row = max(0, int((top - GRID_PAD) // row_height) - OVERSCAN_ROWS)
+        last_row = int((bottom - GRID_PAD) // row_height) + OVERSCAN_ROWS
+        return (min(first_row * cols, len(self._paths)),
+                min((last_row + 1) * cols, len(self._paths)))
+
+    def _ensure_visible(self):
+        """补齐视口内的缩略图: 已缓存的直接贴, 没读过的排给后台线程。
+
+        滚动 换档 换展示方式与容器尺寸变化都走这里, 因此只有看得见的图会去读盘;
+        已经有一批在读取时先不急, 等它读完会再走一次本方法
+        """
+        first, last = self._visible_range()
+        missing = []
+        for path in self._paths[first:last]:
             if path in self._pil_cache:
-                self._paint(path)
-        if not missing:
+                if path not in self._photo_cache:
+                    self._paint(path)
+            elif path not in self._requested:
+                missing.append(path)
+        if not missing or self._loading:
             return
+        self._requested.update(missing)
         self._queue = queue.Queue()
         self._loading = True
         threading.Thread(target=self._load_worker, args=(missing,),
@@ -365,14 +388,46 @@ class FileGrid(ttk.Frame):
         if self._pump_job is None:
             self._pump_job = self.after(POLL_MS, self._pump)
 
+    def _schedule_visible(self):
+        """把补载推迟到滚动停下来之后, 连续滚动时不必反复算可见范围。"""
+        if self._visible_job is not None:
+            try:
+                self.after_cancel(self._visible_job)
+            except tk.TclError:
+                pass
+        self._visible_job = self.after(SCROLL_MS, self._do_ensure_visible)
+
+    def _do_ensure_visible(self):
+        self._visible_job = None
+        self._ensure_visible()
+
+    def _prune_cache(self):
+        """缓存超出上限时丢掉视口之外最久没贴过的缩略图, 免得内存一直涨。
+
+        视口内的不淘汰: 否则刚贴上的图会被丢掉又立刻重排一次, 来回读盘
+        """
+        first, last = self._visible_range()
+        keep = set(self._paths[first:last])
+        limit = max(CACHE_LIMIT, len(keep))
+        for path in list(self._pil_cache):
+            if len(self._pil_cache) <= limit:
+                break
+            if path in keep:
+                continue
+            del self._pil_cache[path]
+            self._photo_cache.pop(path, None)
+
     def _paint(self, path):
+        """把缩略图贴到格子; 用到就重新插到缓存尾部, 字典顺序即最近使用顺序。"""
         cell = self._cells.get(path)
         if cell is None:
             return
-        photo = self._photo_cache.get(path)
+        photo = self._photo_cache.pop(path, None)
         if photo is None:
             photo = self._make_photo(path)
-            self._photo_cache[path] = photo
+        self._photo_cache[path] = photo
+        if path in self._pil_cache:
+            self._pil_cache[path] = self._pil_cache.pop(path)
         self.canvas.itemconfigure(cell["image"], image=photo)
 
     def _make_photo(self, path):
@@ -384,10 +439,6 @@ class FileGrid(ttk.Frame):
             img = img.copy()
             img.thumbnail((self._icon, self._icon))
         return ImageTk.PhotoImage(img)
-
-    def _report_progress(self):
-        if self._on_progress is not None:
-            self._on_progress(self._done, len(self._paths))
 
     def _stop_pump(self):
         if self._pump_job is not None:
@@ -402,6 +453,12 @@ class FileGrid(ttk.Frame):
             except tk.TclError:
                 pass
             self._layout_job = None
+        if self._visible_job is not None:
+            try:
+                self.after_cancel(self._visible_job)
+            except tk.TclError:
+                pass
+            self._visible_job = None
         self._loading = False
 
     # ---------------- 交互 ----------------
@@ -450,6 +507,11 @@ class FileGrid(ttk.Frame):
         self.select(path)
         if self._on_context is not None:
             self._on_context(path, event)
+
+    def _on_yscroll(self, first, last):
+        """滚动条位置变化时同步滑块, 并安排补载新进入视口的缩略图。"""
+        self.scroll.set(first, last)
+        self._schedule_visible()
 
     def _on_resize(self, _event):
         if self._layout_job is not None:
