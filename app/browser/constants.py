@@ -65,7 +65,8 @@ PREVIEW_WIDTH = 360
 DETAILS_HEIGHT = 88
 
 #: 预览支持的文件类型, 与 Windows 资源管理器能直接预览的范围一致
-IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".tif", ".tiff"}
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".jfif", ".gif", ".bmp", ".webp",
+              ".ico", ".tif", ".tiff"}
 TEXT_EXTS = {".txt", ".md", ".log", ".py", ".json", ".xml", ".yml", ".yaml", ".ini", ".cfg", ".conf", ".html", ".css", ".js", ".srt"}
 TABLE_EXTS = {".csv", ".tsv", ".xlsx"}
 MAX_PREVIEW_ROWS = 100
