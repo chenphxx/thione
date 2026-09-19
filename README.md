@@ -45,11 +45,11 @@ pyinstaller --noconfirm --clean thione.spec
 
 ## 数据目录
 
-| 用途 | 路径 |
-| --- | --- |
-| 华为云凭据 | `%APPDATA%\thione\config.ini` |
-| 界面偏好 | `%APPDATA%\thione\settings.ini` |
-| 运行日志 | `%LOCALAPPDATA%\thione\logs\thione.log` |
+| 用途    | 路径                                      |
+| ----- | --------------------------------------- |
+| 华为云凭据 | `%APPDATA%\thione\config.ini`           |
+| 界面偏好  | `%APPDATA%\thione\settings.ini`         |
+| 运行日志  | `%LOCALAPPDATA%\thione\logs\thione.log` |
 
 从更名前或独立版迁移无需任何操作 程序会自动读取旧位置的 `%APPDATA%\thpy\config.ini` 与 `%APPDATA%\transpy\config.ini` 
 
