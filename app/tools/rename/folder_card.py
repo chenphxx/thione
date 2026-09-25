@@ -125,11 +125,6 @@ class FolderCard(ttk.LabelFrame):
     def set_view(self, view):
         """切换展示方式; 由页面统一驱动, 保证各卡片一致。"""
         self.grid.set_view(view)
-
-    def apply_palette(self):
-        """主题切换后重刷网格里的自绘文字与选中框。"""
-        self.grid.apply_palette()
-
     def delete_block(self):
         # 按要求直接删除, 不提示
         self.destroy()

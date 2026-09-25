@@ -32,14 +32,6 @@ class ToolPage(ttk.Frame):
 
     def on_hide(self):
         """页面被切换到后台时调用。"""
-
-    def on_theme_changed(self):
-        """主题切换后调用。
-
-        绝大多数控件由 ThemeManager 统一刷新, 这里只处理那些把颜色写进了
-        数据而非控件选项的场景 (例如 Treeview 的行标签色、已渲染的预览图)。
-        """
-
     def on_close(self):
         """主窗口关闭前调用; 返回 False 可以阻止退出。"""
         return True
@@ -54,7 +46,7 @@ class ToolPage(ttk.Frame):
 
         @return: (bar, head, actions) 三个 ttk.Frame
         """
-        bar = ttk.Frame(self, style="Panel.TFrame", padding=(16, 12))
+        bar = ttk.Frame(self, style="Panel.TFrame", padding=(20, 16))
         bar.pack(side="top", fill="x")
         head = ttk.Frame(bar, style="Panel.TFrame")
         head.pack(side="top", fill="x")

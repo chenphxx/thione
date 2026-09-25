@@ -237,13 +237,6 @@ class DedupePage(ToolPage):
         elif not changed:
             return
         self.view_switch.set_state(self.view, self.tier)
-
-    # -------------------------- 主题切换 --------------------------
-    def on_theme_changed(self):
-        """主题切换后, 网格里自绘的文字与选中框, 以及已渲染的预览需要重刷。"""
-        self.grid.apply_palette()
-        self.preview.refresh()
-
     def on_hide(self):
         """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动。"""
         unbind_mousewheel(self.grid.canvas)

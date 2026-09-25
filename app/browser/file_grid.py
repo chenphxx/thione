@@ -1,13 +1,6 @@
-"""资源管理器风格的文件视图, 支持列表与缩略图两种展示方式。
+"""提供虚拟滚动和后台缩略图加载的文件视图。
 
-缩略图只读当前视口里的那几行 (上下各多留 OVERSCAN_ROWS 行), 滚动时再补读, 因此
-打开大文件夹不会为了滚动条下方几千张图一次性读盘; 读取与 PIL 缩放放在后台线程,
-主线程只把结果变成 PhotoImage 贴到画布上, 换档 换展示方式或改宽度时用缓存重画
-
-命中测试一律先把控件坐标换算成画布坐标, 否则画布滚动后点中的是另一项
-
-画布上几百个图元的文字与选中框颜色不随主题过渡逐帧刷新 (那样会拖慢动画),
-改由页面在 on_theme_changed() 里调用 apply_palette() 统一刷新
+仅读取和解码可见文件, 用户切换视图或缩放档位时仍可复用已缓存的缩略图。
 """
 
 import os
@@ -125,7 +118,7 @@ class FileGrid(ttk.Frame):
         self.canvas.bind("<Button-3>", self._on_right_click)
         self.canvas.bind("<Configure>", self._on_resize)
         self.bind("<Destroy>", self._on_destroy)
-        self.apply_palette()
+        self._apply_palette()
 
     # ---------------- 对外接口 ----------------
     @property
@@ -194,8 +187,8 @@ class FileGrid(ttk.Frame):
         if self._on_select is not None:
             self._on_select(path)
 
-    def apply_palette(self):
-        """主题色调变化后重刷文字与选中框颜色, 由页面在主题切换后调用。"""
+    def _apply_palette(self):
+        """初始化画布背景和选中项颜色。"""
         p = self.theme.palette
         try:
             self.canvas.configure(bg=p[self._surface])

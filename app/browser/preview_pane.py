@@ -85,12 +85,6 @@ class PreviewPane(ttk.Frame):
         else:
             message = f"暂不支持预览 {ext} 文件" if ext else "暂不支持预览该文件"
             self._try_text_fallback(path, message)
-
-    def refresh(self):
-        """主题切换或尺寸变化后重新渲染当前预览。"""
-        self.show(self._preview_path)
-
-    # ---------------- 预览内容 ----------------
     def _clear_body(self):
         for child in self.body.winfo_children():
             child.destroy()

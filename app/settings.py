@@ -1,9 +1,4 @@
-"""外壳级界面设置的读写。
-
-只保存界面偏好 (主题、上次停留的页面), 与华为云凭据等业务配置分开存放:
-文件位于 %APPDATA%\\thione\\settings.ini。设置损坏或缺失时回落到默认值,
-不影响程序启动。更名前位于 %APPDATA%\\thpy 的设置只作为兼容读取来源。
-"""
+"""读取和保存上次选择的工具页面偏好。"""
 
 import configparser
 import logging
@@ -15,9 +10,7 @@ logger = logging.getLogger(__name__)
 
 SECTION = "ui"
 SETTINGS_FILE = "settings.ini"
-DEFAULT_THEME = "dark"
 DEFAULT_PAGE = ""
-THEMES = ("dark", "light")
 
 
 def config_path():
@@ -51,8 +44,7 @@ def _read_section(path):
 class AppSettings:
     """界面偏好的内存表示, 修改属性后调用 save() 落盘。"""
 
-    def __init__(self, theme=DEFAULT_THEME, page=DEFAULT_PAGE):
-        self.theme = theme
+    def __init__(self, page=DEFAULT_PAGE):
         self.page = page
 
     @classmethod
@@ -68,16 +60,14 @@ class AppSettings:
                 values = found
                 break
 
-        theme = values.get("theme") or DEFAULT_THEME
-        if theme not in THEMES:
-            theme = DEFAULT_THEME
-        return cls(theme=theme, page=values.get("page", DEFAULT_PAGE))
+        # 旧版本保存过可选主题设置; 新界面统一使用浅色主题。
+        return cls(page=values.get("page", DEFAULT_PAGE))
 
     def save(self):
         """写入设置文件; 失败只记日志, 不打断退出流程。"""
         path = config_path()
         parser = configparser.ConfigParser()
-        parser[SECTION] = {"theme": self.theme, "page": self.page or ""}
+        parser[SECTION] = {"page": self.page or ""}
         try:
             paths.ensure_dir(os.path.dirname(path))
             # 先写临时文件再替换, 避免写一半留下损坏的设置

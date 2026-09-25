@@ -39,7 +39,7 @@ class RenamePage(ToolPage):
 
         self.folder_blocks = []
         self._next_folder_id = 1
-        self.global_action = None  # None / "overwrite" / "skip"
+        self.global_action = None  # None 表示未指定, overwrite 表示覆盖, skip 表示跳过
         self.cancel_flag = False
         self.tier = DEFAULT_TIER
         self.view = DEFAULT_VIEW
@@ -220,14 +220,6 @@ class RenamePage(ToolPage):
         """任意卡片里的选中项变化时, 同步右侧预览与底部详细信息。"""
         self.details.show(path)
         self.preview.show(path)
-
-    # ---------------- 主题与页面生命周期 ----------------
-    def on_theme_changed(self):
-        """主题切换后, 网格里自绘的文字与选中框, 以及已渲染的预览需要重刷。"""
-        for card in self.folder_blocks:
-            card.apply_palette()
-        self.preview.refresh()
-
     def on_hide(self):
         """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动。"""
         unbind_mousewheel(self.canvas)
