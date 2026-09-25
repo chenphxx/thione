@@ -9,7 +9,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from ..constants import APP_VERSION
-from ..motion import Tween, ease_out_cubic
+from ..motion import (DURATION_FAST, DURATION_GENTLE, Tween,
+                      ease_decelerate, ease_standard)
 from ..palettes import mix
 from ..theme import sans
 
@@ -28,9 +29,9 @@ INDICATOR_WIDTH = 3
 INDICATOR_HEIGHT = 18
 INDICATOR_INSET = 6
 
-#: 悬停淡入与指示条滑动的时长 (毫秒), 都控制在 200 毫秒以内
-HOVER_MS = 110
-SLIDE_MS = 160
+#: 悬停淡入与指示条滑动的时长 (毫秒), 取 Fluent 2 的快档与平缓档
+HOVER_MS = DURATION_FAST
+SLIDE_MS = DURATION_GENTLE
 
 
 def _round_points(x1, y1, x2, y2, radius):
@@ -120,7 +121,7 @@ class Sidebar(ttk.Frame):
                 "top": top,
                 "pill": _draw_round_rect(
                     self.nav, ITEM_PAD, top, self._width - ITEM_PAD,
-                    top + ITEM_HEIGHT, 8,
+                    top + ITEM_HEIGHT, self.theme.palette["radius"],
                 ),
                 "label": self.nav.create_text(
                     ITEM_PAD + 30, top + ITEM_HEIGHT / 2,
@@ -146,7 +147,7 @@ class Sidebar(ttk.Frame):
             self.nav.coords(
                 row["pill"],
                 *_round_points(ITEM_PAD, top, self._width - ITEM_PAD,
-                               top + ITEM_HEIGHT, 8)
+                               top + ITEM_HEIGHT, self.theme.palette["radius"])
             )
             self.nav.coords(row["label"], ITEM_PAD + 30, top + ITEM_HEIGHT / 2)
 
@@ -258,7 +259,7 @@ class Sidebar(ttk.Frame):
         row["tween"] = Tween(
             self.nav, HOVER_MS,
             on_frame=lambda progress: self._apply_hover(row, start, target, progress),
-            easing=ease_out_cubic,
+            easing=ease_standard,
         ).start()
 
     def _apply_hover(self, row, start, target, progress):
@@ -289,7 +290,7 @@ class Sidebar(ttk.Frame):
         self._indicator_tween = Tween(
             self.nav, SLIDE_MS,
             on_frame=lambda progress: self._slide(start, float(target), progress),
-            easing=ease_out_cubic,
+            easing=ease_decelerate,
         ).start()
 
     def _slide(self, start, target, progress):

@@ -1,6 +1,6 @@
 """主题管理。
 
-配色令牌来自 palettes.py (Flat Design 设计系统), 这里只做三件事:
+配色令牌来自 palettes.py (Fluent 2 设计系统), 这里只做三件事:
 
 1. 把令牌翻译成 ttk 样式, 并通过 option database 与递归遍历覆盖 tk 原生控件;
 2. 维护当前深浅模式, 切换时按帧插值做颜色过渡, 过渡结束后通知监听者;
@@ -14,7 +14,8 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
 
-from .motion import Tween, ease_out_cubic
+from . import roundrect
+from .motion import DURATION_NORMAL, Tween, ease_standard
 from .palettes import MODE_NAMES, blend_palette, build_palette
 
 logger = logging.getLogger(__name__)
@@ -23,16 +24,68 @@ logger = logging.getLogger(__name__)
 FONT_SIZE = 10
 
 #: 字体候选: 取系统里第一个装了的; 中文字形由 Windows 的字体链接回退
-SANS_STACK = ("Plus Jakarta Sans", "Inter", "Segoe UI Variable Text",
-              "Segoe UI", "Microsoft YaHei UI", "Tahoma")
+SANS_STACK = ("Segoe UI Variable Text", "Segoe UI Variable Display",
+              "Segoe UI", "Microsoft YaHei UI", "Plus Jakarta Sans",
+              "Inter", "Tahoma")
 MONO_STACK = ("Cascadia Code", "Cascadia Mono", "Consolas", "Courier New")
 
 #: 解析后的字体族, 由 _resolve_fonts() 在拿到根窗口后写入
 FONT_SANS = "Segoe UI"
 FONT_MONO = MONO_STACK[2]
 
-#: 主题过渡时长 (毫秒), 扁平风格的过渡控制在 150-200 毫秒之间
-TRANSITION_MS = 180
+#: 主题过渡时长 (毫秒), 取 Fluent 2 的标准档位
+TRANSITION_MS = DURATION_NORMAL
+
+
+#: 按钮底图的配色: 每个状态给出 (填充令牌, 描边令牌, 描边宽度)
+#: normal 必填, 其余状态缺省时回落到 normal; focus 用更粗的描边表达焦点
+BUTTON_ART = {
+    "Neutral": {
+        "normal": ("card", "border_strong", 1),
+        "hover": ("hover", "border_strong", 1),
+        "pressed": ("active", "border_strong", 1),
+        "disabled": ("disabled", "border", 1),
+        "focus": ("card", "ring", 2),
+    },
+    "Accent": {
+        "normal": ("accent", "accent", 1),
+        "hover": ("accent_hover", "accent_hover", 1),
+        "pressed": ("accent_pressed", "accent_pressed", 1),
+        "disabled": ("disabled", "border", 1),
+        "focus": ("accent", "on_accent", 2),
+    },
+    "Danger": {
+        "normal": ("card", "danger", 1),
+        "hover": ("danger_weak", "danger", 1),
+        "pressed": ("danger_weak_pressed", "danger", 1),
+        "disabled": ("disabled", "border", 1),
+        "focus": ("card", "ring", 2),
+    },
+    "Selected": {
+        "normal": ("accent_weak", "accent", 1),
+        "hover": ("accent_soft_hover", "accent", 1),
+        "pressed": ("accent_soft_hover", "accent", 1),
+        "disabled": ("disabled", "border", 1),
+        "focus": ("accent_weak", "ring", 2),
+    },
+    "Chip": {
+        "normal": ("panel", "border", 1),
+        "hover": ("hover", "border", 1),
+        "pressed": ("active", "border", 1),
+        "disabled": ("disabled", "border", 1),
+        "focus": ("panel", "ring", 2),
+    },
+}
+
+#: 样式名到按钮底图族名的映射; 仅 TButton 与 Secondary 共用一个族, 其余各用各的
+BUTTON_STYLES = {
+    "TButton": "Neutral",
+    "Secondary.TButton": "Neutral",
+    "Accent.TButton": "Accent",
+    "Danger.TButton": "Danger",
+    "SegmentOn.TButton": "Selected",
+    "Chip.TButton": "Chip",
+}
 
 
 def _font_tuple(family, size, bold, italic):
@@ -100,6 +153,8 @@ class ThemeManager:
         self._transition = None
         self._target = None
         self._target_mode = None
+        self._button_art = []
+        self._button_mode = None
 
         _resolve_fonts(root)
         # 供 option database 引用的具名字体; 每次切换都重建会不断占用 Tcl 字体资源
@@ -107,6 +162,7 @@ class ThemeManager:
 
         self.mode = mode if mode in MODE_NAMES else "dark"
         self.palette = build_palette(self.mode)
+        self._build_button_art()
         self._apply_palette(self.palette)
 
     # ------------------------------------------------------------------
@@ -203,7 +259,7 @@ class ThemeManager:
                 blend_palette(start, target, progress)
             ),
             on_done=self._finish_transition,
-            easing=ease_out_cubic,
+            easing=ease_standard,
         ).start()
 
     def _finish_transition(self):
@@ -279,9 +335,9 @@ class ThemeManager:
     def _configure_styles(self, p):
         """把调色板写进 ttk 样式。
 
-        约定: 页面底用 bg, 侧栏与工具条用 panel, 卡片用 card。整体是扁平风格,
-        只用 1 像素描边和留白分层, 不画渐变与阴影; lightcolor/darkcolor 必须
-        跟着背景色一起映射, 否则 clam 会画出立体高光。
+        约定: 页面底用 bg, 侧栏与工具条用 panel, 卡片用 card。整体按 Fluent 2
+        落地, 用中性层与 1 像素描边分层, 不画渐变与阴影; lightcolor/darkcolor
+        必须跟着背景色一起映射, 否则 clam 会画出立体高光。
 
         按控件族拆成若干段, 改动某一类控件时只需看对应的方法。
         """
@@ -297,6 +353,7 @@ class ThemeManager:
             selectforeground=p["on_accent"],
             font=sans(),
         )
+        self._apply_button_layout(p)
         self._style_surfaces(p)
         self._style_labels(p)
         self._style_buttons(p)
@@ -349,99 +406,76 @@ class ThemeManager:
                     foreground=p["muted"], font=sans(10))
 
     def _style_buttons(self, p):
-        """按钮: 默认次级 白底加 1 像素描边, 悬停与按下只改底色。"""
+        """按钮: 底色, 描边与焦点环交给圆角底图, 这里只配文字, 内边距与字体。
+
+        悬停与按下的底色由底图的状态切换完成, 因此不再走 style.map 的 background;
+        ttk 的图片元素做不到随主题换图, 换主题时由 _apply_button_layout() 把布局
+        指向另一套元素。
+        """
         s = self.style
-        s.configure("TButton", background=p["card"], foreground=p["text"],
-                    bordercolor=p["border_strong"], lightcolor=p["card"],
-                    darkcolor=p["card"], borderwidth=1, relief="solid",
+        s.configure("TButton", foreground=p["text"], borderwidth=0, relief="flat",
                     padding=(14, 7), focusthickness=0, font=sans())
-        s.map("TButton",
-              background=[("disabled", p["input"]), ("pressed", p["active"]),
-                          ("active", p["hover"])],
-              lightcolor=[("disabled", p["input"]), ("pressed", p["active"]),
-                          ("active", p["hover"])],
-              darkcolor=[("disabled", p["input"]), ("pressed", p["active"]),
-                         ("active", p["hover"])],
-              bordercolor=[("focus", p["ring"]), ("pressed", p["accent"]),
-                           ("active", p["accent"])],
-              foreground=[("disabled", p["muted"])])
+        s.map("TButton", foreground=[("disabled", p["disabled_text"])])
 
         # 次级按钮与 TButton 同款, 单独命名是为了调用处语义清晰
-        s.configure("Secondary.TButton", background=p["card"],
-                    foreground=p["text"], bordercolor=p["border_strong"],
-                    lightcolor=p["card"], darkcolor=p["card"], borderwidth=1,
-                    relief="solid", padding=(14, 7), focusthickness=0, font=sans())
-        s.map("Secondary.TButton",
-              background=[("disabled", p["input"]), ("pressed", p["active"]),
-                          ("active", p["hover"])],
-              lightcolor=[("disabled", p["input"]), ("pressed", p["active"]),
-                          ("active", p["hover"])],
-              darkcolor=[("disabled", p["input"]), ("pressed", p["active"]),
-                         ("active", p["hover"])],
-              bordercolor=[("focus", p["ring"]), ("active", p["accent"])],
-              foreground=[("disabled", p["muted"])])
+        s.configure("Secondary.TButton", foreground=p["text"], borderwidth=0,
+                    relief="flat", padding=(14, 7), focusthickness=0, font=sans())
+        s.map("Secondary.TButton", foreground=[("disabled", p["disabled_text"])])
 
         # 主操作: 实心主色, 每页只出现一个
-        s.configure("Accent.TButton", background=p["accent"],
-                    foreground=p["on_accent"], bordercolor=p["accent"],
-                    lightcolor=p["accent"], darkcolor=p["accent"], borderwidth=1,
-                    relief="solid", padding=(16, 8), focusthickness=0,
+        s.configure("Accent.TButton", foreground=p["on_accent"], borderwidth=0,
+                    relief="flat", padding=(16, 8), focusthickness=0,
                     font=sans(bold=True))
-        s.map("Accent.TButton",
-              background=[("disabled", p["input"]),
-                          ("pressed", p["accent_hover"]),
-                          ("active", p["accent_hover"])],
-              lightcolor=[("disabled", p["input"]),
-                          ("pressed", p["accent_hover"]),
-                          ("active", p["accent_hover"])],
-              darkcolor=[("disabled", p["input"]),
-                         ("pressed", p["accent_hover"]),
-                         ("active", p["accent_hover"])],
-              bordercolor=[("focus", p["ring"]),
-                           ("disabled", p["input"]),
-                           ("pressed", p["accent_hover"]),
-                           ("active", p["accent_hover"])],
-              foreground=[("disabled", p["muted"])])
+        s.map("Accent.TButton", foreground=[("disabled", p["disabled_text"])])
 
         # 危险操作用描边而不是实心红: 两套模式下都不需要另配前景色
-        s.configure("Danger.TButton", background=p["card"],
-                    foreground=p["danger"], bordercolor=p["danger"],
-                    lightcolor=p["card"], darkcolor=p["card"], borderwidth=1,
-                    relief="solid", padding=(14, 7), focusthickness=0, font=sans())
-        s.map("Danger.TButton",
-              background=[("disabled", p["input"]), ("pressed", p["active"]),
-                          ("active", p["hover"])],
-              lightcolor=[("disabled", p["input"]), ("pressed", p["active"]),
-                          ("active", p["hover"])],
-              darkcolor=[("disabled", p["input"]), ("pressed", p["active"]),
-                         ("active", p["hover"])],
-              bordercolor=[("focus", p["ring"]), ("disabled", p["border"])],
-              foreground=[("disabled", p["muted"])])
+        s.configure("Danger.TButton", foreground=p["danger"], borderwidth=0,
+                    relief="flat", padding=(14, 7), focusthickness=0, font=sans())
+        s.map("Danger.TButton", foreground=[("disabled", p["disabled_text"])])
 
-        # 视图控件: 缩略图档位与窗格开关。打开态只改底色与描边,
+        # 视图控件: 缩略图档位与窗格开关。打开态用主色的浅底配描边,
         # 字体与内边距与 Secondary.TButton 一致, 切换时按钮尺寸不会跳
-        s.configure("SegmentOn.TButton", background=p["accent_weak"],
-                    foreground=p["link"], bordercolor=p["accent"],
-                    lightcolor=p["accent_weak"], darkcolor=p["accent_weak"],
-                    borderwidth=1, relief="solid", padding=(14, 7),
-                    focusthickness=0, font=sans())
-        s.map("SegmentOn.TButton",
-              background=[("pressed", p["active"]), ("active", p["hover"])],
-              lightcolor=[("pressed", p["active"]), ("active", p["hover"])],
-              darkcolor=[("pressed", p["active"]), ("active", p["hover"])],
-              bordercolor=[("focus", p["ring"])],
-              foreground=[("disabled", p["muted"])])
+        s.configure("SegmentOn.TButton", foreground=p["link"], borderwidth=0,
+                    relief="flat", padding=(14, 7), focusthickness=0, font=sans())
+        s.map("SegmentOn.TButton", foreground=[("disabled", p["disabled_text"])])
 
         # 侧栏底部的主题按钮
-        s.configure("Chip.TButton", background=p["panel"], foreground=p["text"],
-                    bordercolor=p["border"], lightcolor=p["panel"],
-                    darkcolor=p["panel"], borderwidth=1, relief="solid",
-                    anchor="w", padding=(12, 7), focusthickness=0, font=sans())
-        s.map("Chip.TButton",
-              background=[("pressed", p["active"]), ("active", p["hover"])],
-              lightcolor=[("pressed", p["active"]), ("active", p["hover"])],
-              darkcolor=[("pressed", p["active"]), ("active", p["hover"])],
-              bordercolor=[("focus", p["ring"]), ("active", p["accent"])])
+        s.configure("Chip.TButton", foreground=p["text"], borderwidth=0,
+                    relief="flat", anchor="w", padding=(12, 7),
+                    focusthickness=0, font=sans())
+        s.map("Chip.TButton", foreground=[("disabled", p["disabled_text"])])
+
+    def _apply_button_layout(self, p):
+        """把按钮样式的布局指向当前模式的圆角底图元素。
+
+        布局只在模式变化时重建, 主题过渡的每一帧不会重复调用。
+
+        @param p: 当前调色板
+        """
+        suffix = "Dark" if p["is_dark"] else "Light"
+        if suffix == self._button_mode:
+            return
+        self._button_mode = suffix
+        for style_name, family in BUTTON_STYLES.items():
+            self.style.layout(
+                style_name,
+                roundrect.button_layout("Fluent%s%s" % (family, suffix)),
+            )
+
+    def _build_button_art(self):
+        """为浅色与深色各建一套圆角按钮底图元素。
+
+        ttk 不允许重复创建同名元素, 所以两套元素在这里一次性建好; 图片对象由
+        self._button_art 持有, 否则 Tk 会回收它们, 按钮就会画不出底图。
+        """
+        for mode in MODE_NAMES:
+            palette = build_palette(mode)
+            suffix = "Dark" if palette["is_dark"] else "Light"
+            for family, spec in BUTTON_ART.items():
+                tiles = roundrect.tiles_for(palette, spec)
+                self._button_art.append(roundrect.create_element(
+                    self.style, "Fluent%s%s" % (family, suffix), tiles
+                ))
 
     def _style_checkbuttons(self, p):
         """勾选框与单选按钮。"""
@@ -454,7 +488,7 @@ class ThemeManager:
               background=[("active", p["hover"])],
               indicatorbackground=[("selected", p["accent"]),
                                    ("pressed", p["active"])],
-              foreground=[("disabled", p["muted"])])
+              foreground=[("disabled", p["disabled_text"])])
         s.configure("Card.TCheckbutton", background=p["card"],
                     foreground=p["text"], focuscolor=p["card"],
                     indicatorbackground=p["input"],
@@ -464,7 +498,7 @@ class ThemeManager:
               background=[("active", p["hover"])],
               indicatorbackground=[("selected", p["accent"]),
                                    ("pressed", p["active"])],
-              foreground=[("disabled", p["muted"])])
+              foreground=[("disabled", p["disabled_text"])])
         # 单选按钮: 用于卡片内的二选一, 配色与勾选框保持一致
         s.configure("Card.TRadiobutton", background=p["card"],
                     foreground=p["text"], focuscolor=p["card"],
@@ -475,7 +509,7 @@ class ThemeManager:
               background=[("active", p["hover"])],
               indicatorbackground=[("selected", p["accent"]),
                                    ("pressed", p["active"])],
-              foreground=[("disabled", p["muted"])])
+              foreground=[("disabled", p["disabled_text"])])
 
     def _style_inputs(self, p):
         """输入框与下拉框。"""
@@ -531,20 +565,20 @@ class ThemeManager:
               foreground=[("selected", p["link"])])
 
     def _style_scrollbars(self, p):
-        """滚动条与进度条 进度用琥珀色, 和主色形成一冷一暖的层次。"""
+        """滚动条与进度条: 滑块是中性灰, 进度用品牌色。"""
         s = self.style
         for orient in ("Vertical", "Horizontal"):
             name = "%s.TScrollbar" % orient
             s.configure(name, background=p["scroll"], troughcolor=p["trough"],
                         bordercolor=p["trough"], lightcolor=p["scroll"],
                         darkcolor=p["scroll"], borderwidth=0, relief="flat",
-                        arrowcolor=p["muted"], arrowsize=13)
+                        arrowcolor=p["muted"], arrowsize=12, width=12)
             s.map(name, background=[("active", p["border_strong"])],
                   arrowcolor=[("active", p["text"])])
-        s.configure("Horizontal.TProgressbar", background=p["accent_alt"],
+        s.configure("Horizontal.TProgressbar", background=p["accent"],
                     troughcolor=p["input"], bordercolor=p["input"],
-                    lightcolor=p["accent_alt"], darkcolor=p["accent_alt"],
-                    borderwidth=0, thickness=6)
+                    lightcolor=p["accent"], darkcolor=p["accent"],
+                    borderwidth=0, thickness=4)
 
     def _style_labelframes(self, p):
         """分组卡片 TLabelframe。"""

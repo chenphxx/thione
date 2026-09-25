@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from ..constants import APP_MIN_SIZE, APP_SIZE, APP_TITLE, QUEUE_POLL_MS
-from ..motion import Tween, ease_out_cubic
+from ..motion import DURATION_NORMAL, Tween, ease_decelerate
 from ..theme import ThemeManager
 from .sidebar import Sidebar
 
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 ACCENT_LINE_HEIGHT = 2
 
 #: 页面切换时内容上移到位: 起始偏移与时长 (毫秒)
-REVEAL_OFFSET = 8
-REVEAL_MS = 140
+REVEAL_OFFSET = 10
+REVEAL_MS = DURATION_NORMAL
 
 #: 侧栏与内容区之间拖动手柄的宽度
 SPLITTER_WIDTH = 5
@@ -204,7 +204,7 @@ class ShellWindow:
             REVEAL_MS,
             on_frame=lambda progress: self._apply_reveal(page, progress),
             on_done=lambda: self._apply_reveal(page, 1.0),
-            easing=ease_out_cubic,
+            easing=ease_decelerate,
         ).start()
 
     def _apply_reveal(self, page, progress):
