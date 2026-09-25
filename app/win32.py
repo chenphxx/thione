@@ -183,13 +183,19 @@ def open_folder(path):
 def reveal_file(path):
     """打开文件所在目录并选中该文件
 
+    explorer 的 `/select,` 对参数写法挑剔: 只认反斜杠形式的完整路径, 引号也只能
+    加在路径本身。传正斜杠 (文件对话框给出的就是这种路径) 或把整个开关一起加引号
+    (子进程按参数列表拼命令行时会这样) 都会退回到默认目录, 因此这里先规范化
+    路径, 再用字符串命令行只给路径加引号。
+
     @param path: 文件的完整路径
     @return: 是否成功
     """
     if os.name != "nt":
         return open_folder(os.path.dirname(path))
+    target = os.path.normpath(path)
     try:
-        subprocess.Popen(["explorer", f"/select,{path}"])
+        subprocess.Popen(f'explorer /select,"{target}"')
         return True
     except Exception:
         logger.debug("定位文件失败: %s", path, exc_info=True)

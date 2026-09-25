@@ -68,6 +68,12 @@ class RenamePage(ToolPage):
                                      command=self.rename_and_save)
         self.btn_rename.pack(side="right")
 
+        # 与图片查重页一致: 刷新扫描 夹在 预览 与主操作之间
+        self.btn_rescan = ttk.Button(actions, text="刷新扫描",
+                                     style="Secondary.TButton",
+                                     command=self.rescan_folders)
+        self.btn_rescan.pack(side="right", padx=(0, 8))
+
         self.btn_preview = ttk.Button(actions, text="预览",
                                       style="Secondary.TButton",
                                       command=self.toggle_preview)
@@ -265,6 +271,13 @@ class RenamePage(ToolPage):
         folders = len([b for b in self.folder_blocks if b.folder_path])
         total = sum(len(b.files) for b in self.folder_blocks if b.folder_path)
         self.lbl_counts.config(text=f"文件夹: {folders} · 总文件数: {total}")
+
+    def rescan_folders(self):
+        """重新读取各文件夹里的文件, 与图片查重页的「刷新扫描」一致。"""
+        for card in self.folder_blocks:
+            if card.folder_path:
+                card.load_files()
+        self.refresh_overall_counts()
 
     # ---------------- 取消处理 ----------------
     def cancel_process(self):
