@@ -4,6 +4,7 @@ IAM_*-accessKeys.csv
 
 # 本地测试文件 
 test.py
+AGENTS.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

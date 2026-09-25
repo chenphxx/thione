@@ -8,8 +8,8 @@
 
 VSVersionInfo(
     ffi=FixedFileInfo(
-        filevers=(0, 1, 3, 0),
-        prodvers=(0, 1, 3, 0),
+        filevers=(0, 26, 4, 0),
+        prodvers=(0, 26, 4, 0),
         mask=0x3F,
         flags=0x0,
         OS=0x40004,
@@ -24,13 +24,13 @@ VSVersionInfo(
                     "080404b0",
                     [
                         StringStruct("CompanyName", "thione"),
-                        StringStruct("FileDescription", "thione 桌面工具箱"),
-                        StringStruct("FileVersion", "0.1.3"),
+                        StringStruct("FileDescription", "thione"),
+                        StringStruct("FileVersion", "0.26.4"),
                         StringStruct("InternalName", "thione"),
                         StringStruct("LegalCopyright", ""),
                         StringStruct("OriginalFilename", "thione.exe"),
                         StringStruct("ProductName", "thione"),
-                        StringStruct("ProductVersion", "0.1.3"),
+                        StringStruct("ProductVersion", "0.26.4"),
                     ],
                 )
             ]

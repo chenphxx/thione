@@ -12,6 +12,7 @@ from tkinter import ttk
 
 from ...errors import show_error
 from ...shell.page import ToolPage
+from ...widgets import bind_mousewheel, unbind_mousewheel
 from . import storage
 from .config import Config
 from .constants import PAGE_TITLE, REGION
@@ -21,6 +22,7 @@ from .language import (
     DEFAULT_TARGET_LANG,
     LANGUAGE_LABELS,
     language_label,
+    preferred_target,
     resolve_direction,
 )
 from .providers import (
@@ -43,8 +45,9 @@ FIELDS = (
 #: 服务选择区里服务名一列的宽度, 让两行的说明文案左对齐
 PROVIDER_LABEL_WIDTH = 140
 
-#: 语言下拉框的宽度, 容得下最长的一项显示名
-LANGUAGE_COMBO_WIDTH = 26
+#: 语言下拉框的宽度 (字符数), 容得下最长的一项显示名
+SOURCE_COMBO_WIDTH = 18
+TARGET_COMBO_WIDTH = 26
 
 #: 测试连接用的短文本, 只要能走通一次真实翻译即可
 SKIP_TEST_TEXT = "Hello"
@@ -93,8 +96,9 @@ class TranslatePage(ToolPage):
 
         self._build_toolbar()
         self.add_divider()
-        self._build_form()
+        # 结果区先 pack 并贴住底部, 窗口变矮时挤压的是上面的表单而不是它
         self._build_report()
+        self._build_form()
 
         self._prefill()
         self._sync_provider_ui()
@@ -107,8 +111,8 @@ class TranslatePage(ToolPage):
 
         @param body: 放置卡片的容器
         """
-        card = ttk.LabelFrame(body, text="翻译服务", padding=16)
-        card.pack(side="top", fill="x", pady=(0, 12))
+        card = ttk.LabelFrame(body, text="翻译服务", padding=(16, 12))
+        card.pack(side="top", fill="x", pady=(0, 10))
 
         for spec in PROVIDER_SPECS:
             row = ttk.Frame(card, style="Card.TFrame")
@@ -151,8 +155,8 @@ class TranslatePage(ToolPage):
 
         @param body: 放置卡片的容器
         """
-        card = ttk.LabelFrame(body, text="翻译语言", padding=16)
-        card.pack(side="top", fill="x", pady=(0, 12))
+        card = ttk.LabelFrame(body, text="翻译语言", padding=(16, 12))
+        card.pack(side="top", fill="x", pady=(0, 10))
 
         row = ttk.Frame(card, style="Card.TFrame")
         row.pack(side="top", fill="x")
@@ -161,9 +165,9 @@ class TranslatePage(ToolPage):
             row=0, column=0, sticky="w"
         )
         self.combo_source = ttk.Combobox(
-            row, state="readonly", width=LANGUAGE_COMBO_WIDTH
+            row, state="readonly", width=SOURCE_COMBO_WIDTH
         )
-        self.combo_source.grid(row=0, column=1, sticky="w", padx=(10, 28))
+        self.combo_source.grid(row=0, column=1, sticky="w", padx=(10, 20))
         self.combo_source.bind("<<ComboboxSelected>>",
                                lambda e: self._on_language_change())
 
@@ -171,25 +175,47 @@ class TranslatePage(ToolPage):
             row=0, column=2, sticky="w"
         )
         self.combo_target = ttk.Combobox(
-            row, state="readonly", width=LANGUAGE_COMBO_WIDTH
+            row, state="readonly", width=TARGET_COMBO_WIDTH
         )
         self.combo_target.grid(row=0, column=3, sticky="w", padx=(10, 0))
         self.combo_target.bind("<<ComboboxSelected>>",
                                lambda e: self._on_language_change())
 
-        ttk.Label(card, textvariable=self._lang_hint_var,
-                  style="CardMuted.TLabel").pack(
-            side="top", anchor="w", pady=(10, 0)
+        # 提示跟在两个下拉框右边, 少占一行高度
+        ttk.Label(row, textvariable=self._lang_hint_var,
+                  style="CardMuted.TLabel").grid(
+            row=0, column=4, sticky="w", padx=(16, 0)
         )
 
     def _build_form(self):
-        body = ttk.Frame(self, padding=(16, 14))
-        body.pack(side="top", fill="x")
+        """服务选择 语言选择与凭据表单。
+
+        表单放在可滚动的画布里: 窗口高度不足时滚动条才出现, 表单不会被裁掉,
+        也不会把下面的结果区挤出可视区。
+        """
+        outer = ttk.Frame(self)
+        outer.pack(side="top", fill="both", expand=True)
+
+        self.form_canvas = tk.Canvas(outer, highlightthickness=0, bd=0)
+        self.form_canvas._thione_surface = "bg"
+        self.form_scroll = ttk.Scrollbar(
+            outer, orient="vertical", command=self.form_canvas.yview
+        )
+        self.form_canvas.configure(yscrollcommand=self.form_scroll.set)
+        self.form_canvas.pack(side="left", fill="both", expand=True)
+
+        body = ttk.Frame(self.form_canvas, padding=(16, 14))
+        self._form_window = self.form_canvas.create_window(
+            (0, 0), window=body, anchor="nw"
+        )
+        body.bind("<Configure>", self._on_form_content_configure)
+        self.form_canvas.bind("<Configure>", self._on_form_canvas_configure)
+        bind_mousewheel((body, self.form_canvas), self.form_canvas)
 
         self._build_provider_card(body)
         self._build_language_card(body)
 
-        card = ttk.LabelFrame(body, text="华为云 NLP 凭据", padding=16)
+        card = ttk.LabelFrame(body, text="华为云 NLP 凭据", padding=(16, 12))
         card.pack(side="top", fill="x")
         card.columnconfigure(1, weight=1)
 
@@ -221,18 +247,54 @@ class TranslatePage(ToolPage):
                    command=self._save).pack(side="left")
 
     def _build_report(self):
-        body = ttk.Frame(self, padding=(16, 0))
-        body.pack(side="top", fill="both", expand=True)
+        """运行状态与最近一次翻译, 固定贴住页面底部。"""
+        body = ttk.Frame(self, padding=(16, 10))
+        body.pack(side="bottom", fill="x")
 
         ttk.Label(body, textvariable=self._status_var,
                   style="Muted.TLabel").pack(anchor="w")
 
         card = ttk.LabelFrame(body, text="最近一次翻译", padding=16)
-        card.pack(side="top", fill="both", expand=True, pady=(12, 16))
-        ttk.Label(
+        card.pack(side="top", fill="x", pady=(8, 0))
+        self.result_label = ttk.Label(
             card, textvariable=self._result_var, style="Card.TLabel",
-            wraplength=820, justify="left", anchor="nw",
-        ).pack(anchor="w", fill="both", expand=True)
+            justify="left", anchor="nw",
+        )
+        self.result_label.pack(anchor="w", fill="both", expand=True)
+        # 结果文本可能很长, 换行宽度跟着卡片宽度走, 窄窗口下不会被横向裁掉
+        card.bind("<Configure>", self._on_result_card_configure)
+
+    def _on_result_card_configure(self, event):
+        """结果文本按卡片实际宽度换行。
+
+        @param event: Tk 的 Configure 事件, width 为卡片宽度
+        """
+        self.result_label.configure(wraplength=max(event.width - 32, 200))
+
+    # ---------------- 表单滚动 ----------------
+    def _on_form_content_configure(self, _event=None):
+        """表单高度变化时刷新滚动范围, 并同步滚动条的显隐。"""
+        self.form_canvas.configure(scrollregion=self.form_canvas.bbox("all"))
+        self._sync_form_scrollbar()
+
+    def _on_form_canvas_configure(self, event):
+        """画布尺寸变化时让表单跟着变宽, 并重新判断是否需要滚动条。"""
+        self.form_canvas.itemconfigure(self._form_window, width=event.width)
+        self._sync_form_scrollbar()
+
+    def _sync_form_scrollbar(self):
+        """表单装得下就不显示滚动条, 装不下时才显示并允许滚动。"""
+        bbox = self.form_canvas.bbox("all")
+        overflows = (
+            bbox is not None
+            and (bbox[3] - bbox[1]) > self.form_canvas.winfo_height()
+        )
+        if overflows:
+            if not self.form_scroll.winfo_ismapped():
+                self.form_scroll.pack(side="right", fill="y")
+        elif self.form_scroll.winfo_ismapped():
+            self.form_scroll.pack_forget()
+            self.form_canvas.yview_moveto(0)
 
     # ---------------- 初始数据 ----------------
     def _prefill(self):
@@ -336,13 +398,12 @@ class TranslatePage(ToolPage):
         if self._target_lang not in self._target_labels.values():
             self._target_lang = DEFAULT_TARGET_LANG
         self.combo_source.set(language_label(self._source_lang))
-        self.combo_target.set(self._target_label(self._target_lang))
+        self._apply_preferred_target()
 
         if len(self._source_labels) > 1:
-            hint = (f"{spec.label} 可选 {len(spec.languages)} 种目标语言; "
-                    f"选自动识别时由服务端判断源语言")
+            hint = f"可选 {len(spec.languages)} 种目标语言"
         else:
-            hint = f"{spec.label} 由服务端识别源语言, 因此源语言固定为自动识别"
+            hint = "该服务由服务端识别源语言"
         self._lang_hint_var.set(hint)
 
     @staticmethod
@@ -359,6 +420,14 @@ class TranslatePage(ToolPage):
             self.combo_target.get(), DEFAULT_TARGET_LANG
         )
 
+    def _apply_preferred_target(self):
+        """两边都选了中文时把目标语言换成英文, 并同步下拉框的显示。
+
+        目标语言默认是自动, 因此只有用户明确选了中文才会走到这里。
+        """
+        self._target_lang = preferred_target(self._source_lang, self._target_lang)
+        self.combo_target.set(self._target_label(self._target_lang))
+
     def _service_detail(self):
         """状态行里的服务说明: 服务名, 需要凭据时带上区域, 再跟上翻译方向。"""
         config = self.service.config
@@ -369,12 +438,17 @@ class TranslatePage(ToolPage):
         if spec.requires_credentials:
             region = config.region if config is not None else REGION
             parts.append(f"region={region}")
+        # 目标语言用下拉框里的显示名, 自动项才说清它代表什么方向
         parts.append(f"{language_label(self._source_lang)} → "
-                     f"{language_label(self._target_lang)}")
+                     f"{self._target_label(self._target_lang)}")
         return " · ".join(parts)
 
     def on_show(self):
         self._refresh_state()
+
+    def on_hide(self):
+        """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动。"""
+        unbind_mousewheel(self.form_canvas)
 
     def _refresh_state(self):
         running = self.service.running
@@ -439,6 +513,7 @@ class TranslatePage(ToolPage):
     def _on_language_change(self):
         """换语言: 与换服务一样立即生效, 下一次翻译就用新的方向。"""
         self._read_language_ui()
+        self._apply_preferred_target()
         self._apply_config(self._values())
         self._refresh_state()
 
@@ -538,6 +613,7 @@ class TranslatePage(ToolPage):
     # ---------------- 收尾 ----------------
     def on_close(self):
         """停掉热键与托盘; 主窗口随外壳一起关闭, 因此这里不阻止退出。"""
+        unbind_mousewheel(self.form_canvas)
         if self._test_poll_id is not None:
             try:
                 self.after_cancel(self._test_poll_id)

@@ -14,15 +14,18 @@ import re
 #: 源语言交给服务端识别, 目标语言按规则自动选择
 AUTO_LANG = "auto"
 
-#: 默认译成中文
-DEFAULT_TARGET_LANG = "zh"
+#: 中文的领域语言代码
+ZH_LANG = "zh"
+
+#: 默认不指定目标语言, 交给文本内容决定译成哪种语言
+DEFAULT_TARGET_LANG = AUTO_LANG
 
 #: 目标语言选 auto 时: 中文译成英文, 其它语言译成中文
 TARGET_WHEN_ZH = "en"
 TARGET_OTHERWISE = "zh"
 
 #: 目标语言下拉框里 auto 选项的显示名
-AUTO_TARGET_LABEL = "自动 (中文译为英文, 其它语言译为中文)"
+AUTO_TARGET_LABEL = "自动 (中→英, 其它→中)"
 
 #: 界面上按此顺序给出可选语言: 领域语言代码 -> 中文显示名
 LANGUAGE_LABELS = {
@@ -79,11 +82,27 @@ def detect_language(text: str) -> str:
     return "auto"
 
 
+def preferred_target(source_lang: str, target_lang: str) -> str:
+    """源语言与目标语言都选了中文时, 实际改译英文。
+
+    中文再译成中文没有意义, 因此两者都是中文时按译成英文处理; 目标语言选了
+    中文繁体 (zh-Hant) 或其它语言时不受影响。
+
+    @param source_lang: 源语言的领域语言代码
+    @param target_lang: 目标语言的领域语言代码
+    @return: 实际使用的目标语言领域语言代码
+    """
+    if source_lang == ZH_LANG and target_lang == ZH_LANG:
+        return TARGET_WHEN_ZH
+    return target_lang
+
+
 def resolve_direction(text: str, source_lang: str, target_lang: str):
     """把界面上的语言选择解析成实际交给 Provider 的 (源语言, 目标语言)。
 
-    目标语言选 auto 时沿用老规则: 中文译成英文, 其它语言译成中文; 源语言选
-    auto 或留空时交给服务端识别。
+    默认目标语言是 auto, 此时按文本判断方向: 中文译成英文, 其它语言译成中文;
+    目标语言明确选了中文而源语言本身就是中文时同样改译英文, 避免译出来还是
+    中文; 源语言选 auto 或留空时交给服务端识别。
 
     @param text: 待翻译文本
     @param source_lang: 源语言的领域语言代码
@@ -93,7 +112,12 @@ def resolve_direction(text: str, source_lang: str, target_lang: str):
     source = source_lang or AUTO_LANG
     target = target_lang or DEFAULT_TARGET_LANG
     if target == AUTO_LANG:
+        # 默认方向: 中文译成英文, 其它语言译成中文
         target = (
             TARGET_WHEN_ZH if detect_language(text) == "zh" else TARGET_OTHERWISE
         )
+    elif target == ZH_LANG:
+        # 源语言明确是中文, 或者交给服务端识别出的就是中文
+        source_now = detect_language(text) if source == AUTO_LANG else source
+        target = preferred_target(source_now, target)
     return source, target
