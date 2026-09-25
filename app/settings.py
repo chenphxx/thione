@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 SECTION = "ui"
 SETTINGS_FILE = "settings.ini"
+DEFAULT_THEME = "light"
+THEMES = ("light", "dark")
 DEFAULT_PAGE = ""
 
 
@@ -44,7 +46,8 @@ def _read_section(path):
 class AppSettings:
     """界面偏好的内存表示, 修改属性后调用 save() 落盘。"""
 
-    def __init__(self, page=DEFAULT_PAGE):
+    def __init__(self, theme=DEFAULT_THEME, page=DEFAULT_PAGE):
+        self.theme = theme if theme in THEMES else DEFAULT_THEME
         self.page = page
 
     @classmethod
@@ -60,14 +63,17 @@ class AppSettings:
                 values = found
                 break
 
-        # 旧版本保存过可选主题设置; 新界面统一使用浅色主题。
-        return cls(page=values.get("page", DEFAULT_PAGE))
+        theme = values.get("theme", DEFAULT_THEME)
+        return cls(theme=theme, page=values.get("page", DEFAULT_PAGE))
 
     def save(self):
         """写入设置文件; 失败只记日志, 不打断退出流程。"""
         path = config_path()
         parser = configparser.ConfigParser()
-        parser[SECTION] = {"page": self.page or ""}
+        parser[SECTION] = {
+            "theme": self.theme,
+            "page": self.page or "",
+        }
         try:
             paths.ensure_dir(os.path.dirname(path))
             # 先写临时文件再替换, 避免写一半留下损坏的设置

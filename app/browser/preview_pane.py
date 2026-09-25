@@ -85,6 +85,11 @@ class PreviewPane(ttk.Frame):
         else:
             message = f"暂不支持预览 {ext} 文件" if ext else "暂不支持预览该文件"
             self._try_text_fallback(path, message)
+
+    def refresh(self):
+        """使用当前主题重新绘制正在显示的预览内容。"""
+        self.show(self._preview_path)
+
     def _clear_body(self):
         for child in self.body.winfo_children():
             child.destroy()
@@ -147,6 +152,7 @@ class PreviewPane(ttk.Frame):
             insertbackground=p["text"], font=mono(),
             relief="flat", borderwidth=0, padx=10, pady=8,
         )
+        text._thione_surface = "preview"
         v_scroll = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
         h_scroll = ttk.Scrollbar(frame, orient="horizontal", command=text.xview)
         text.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)

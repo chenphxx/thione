@@ -187,15 +187,20 @@ class FileGrid(ttk.Frame):
         if self._on_select is not None:
             self._on_select(path)
 
-    def _apply_palette(self):
-        """初始化画布背景和选中项颜色。"""
+    def apply_palette(self):
+        """按当前主题刷新画布背景, 文件文字与占位缩略图。"""
         p = self.theme.palette
         try:
             self.canvas.configure(bg=p[self._surface])
         except tk.TclError:
             return
+        self._photo_cache.clear()
         for path in self._cells:
             self._paint_selection(path)
+        self._ensure_visible()
+
+    def _apply_palette(self):
+        self.apply_palette()
 
     # ---------------- 单元格 ----------------
     def _label_size(self):

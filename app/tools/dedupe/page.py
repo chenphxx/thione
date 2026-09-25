@@ -241,6 +241,10 @@ class DedupePage(ToolPage):
         """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动。"""
         unbind_mousewheel(self.grid.canvas)
 
+    def on_theme_changed(self):
+        self.grid.apply_palette()
+        self.preview.refresh()
+
     # -------------------------- 文件操作 --------------------------
     def _on_select_file(self, path):
         """选中项变化时同步右侧预览与底部详细信息。"""

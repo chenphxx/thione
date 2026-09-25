@@ -117,6 +117,12 @@ class DuplicateGroupWindow(tk.Toplevel):
         """重建分组卡片 (重置勾选为每组第一个)。"""
         self._relayout(preserve=False)
 
+    def on_theme_changed(self):
+        """刷新当前主题下的分组窗口与占位缩略图。"""
+        self.thumb_cache.clear()
+        self.thumb_pil_cache.clear()
+        self._relayout(preserve=True)
+
     def _relayout(self, preserve=True):
         """根据当前窗口宽度重算列数与图片大小并重建卡片。"""
         self._layout_job = None

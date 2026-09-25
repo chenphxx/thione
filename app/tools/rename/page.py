@@ -220,6 +220,12 @@ class RenamePage(ToolPage):
         """任意卡片里的选中项变化时, 同步右侧预览与底部详细信息。"""
         self.details.show(path)
         self.preview.show(path)
+
+    def on_theme_changed(self):
+        for card in self.folder_blocks:
+            card.grid.apply_palette()
+        self.preview.refresh()
+
     def on_hide(self):
         """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动。"""
         unbind_mousewheel(self.canvas)

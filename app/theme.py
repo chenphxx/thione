@@ -50,6 +50,50 @@ PALETTE = {
     "is_dark": False,
 }
 
+DARK_PALETTE = {
+    "bg": "#181C23",
+    "panel": "#20252E",
+    "card": "#252B35",
+    "input": "#1C2129",
+    "disabled": "#2A303A",
+    "disabled_text": "#828C9D",
+    "hover": "#2D3440",
+    "active": "#394252",
+    "selected": "#303C5B",
+    "border": "#3A4351",
+    "border_strong": "#4B5769",
+    "text": "#E5E9F0",
+    "muted": "#A0AABA",
+    "header": "#F1F4F8",
+    "accent": "#7185FF",
+    "accent_hover": "#8394FF",
+    "accent_pressed": "#5D70E6",
+    "accent_weak": "#303B5C",
+    "accent_soft_hover": "#39466B",
+    "secondary": "#7185FF",
+    "accent_alt": "#F0A34A",
+    "on_accent": "#FFFFFF",
+    "link": "#AAB8FF",
+    "ring": "#8294FF",
+    "ok": "#4CC39A",
+    "warn": "#F3B35B",
+    "success": "#4CC39A",
+    "danger": "#F27878",
+    "danger_weak": "#462B32",
+    "danger_weak_pressed": "#59343D",
+    "danger_hover": "#FF9696",
+    "scroll": "#596579",
+    "trough": "#2B323E",
+    "preview": "#1C2129",
+    "placeholder": (55, 64, 79),
+    "radius": 8,
+    "mode": "dark",
+    "mode_name": "深色",
+    "is_dark": True,
+}
+
+PALETTES = {"light": PALETTE, "dark": DARK_PALETTE}
+
 
 def sans(size=FONT_SIZE, bold=False, italic=False):
     """返回界面统一使用的无衬线字体配置。"""
@@ -62,14 +106,14 @@ def mono(size=FONT_SIZE, bold=False):
 
 
 class ThemeManager:
-    """将应用固定的浅色配色应用到 ttk 和 Tk 原生控件。"""
+    """管理浅色与深色配色, 并同步更新 ttk 和 Tk 原生控件。"""
 
     def __init__(self, root, mode="light"):
         self.root = root
         self.style = ttk.Style(root)
         self.style.theme_use("clam")
-        self.palette = dict(PALETTE)
-        self.mode = "light"
+        self.mode = mode if mode in PALETTES else "light"
+        self.palette = dict(PALETTES[self.mode])
         self._windows = [root]
         self._configure_fonts(root)
         self._apply_styles()
@@ -77,7 +121,7 @@ class ThemeManager:
         self._default_font = tkfont.Font(
             root=root, family=FONT_SANS, size=FONT_SIZE
         )
-        root.option_add("*Font", self._default_font)
+        self._apply_native_defaults()
 
     @staticmethod
     def _configure_fonts(root):
@@ -235,13 +279,67 @@ class ThemeManager:
         s.configure("TLabelframe.Label", background=p["card"],
                     foreground=p["muted"], font=sans(9, True))
 
+    def _apply_native_defaults(self):
+        p = self.palette
+        self.root.configure(bg=p["bg"])
+        self.root.option_add("*Font", self._default_font)
+        self.root.option_add("*background", p["bg"])
+        self.root.option_add("*foreground", p["text"])
+        self.root.option_add("*insertBackground", p["text"])
+        self.root.option_add("*selectBackground", p["accent"])
+        self.root.option_add("*selectForeground", p["on_accent"])
+        self.root.option_add("*highlightBackground", p["border"])
+        self.root.option_add("*highlightColor", p["accent"])
+        self.root.option_add("*Menu.activeBackground", p["hover"])
+        self.root.option_add("*Menu.activeForeground", p["text"])
+        self.root.option_add("*Listbox.background", p["input"])
+        self.root.option_add("*Listbox.foreground", p["text"])
+        self.root.option_add("*Listbox.selectBackground", p["accent_weak"])
+        self.root.option_add("*Listbox.selectForeground", p["text"])
+        self.root.option_add("*TCombobox*Listbox.background", p["input"])
+        self.root.option_add("*TCombobox*Listbox.foreground", p["text"])
+        self.root.option_add("*TCombobox*Listbox.selectBackground",
+                             p["accent_weak"])
+        self.root.option_add("*TCombobox*Listbox.selectForeground", p["text"])
+
+    def set_mode(self, mode):
+        """切换界面配色并刷新所有已登记窗口。
+
+        @param mode: 配色名称, 支持 light 和 dark
+        @return: 配色发生变化时返回 True, 否则返回 False
+        """
+        if mode not in PALETTES or mode == self.mode:
+            return False
+        self.mode = mode
+        self.palette = dict(PALETTES[mode])
+        self._apply_styles()
+        self._apply_native_defaults()
+        for window in tuple(self._windows):
+            try:
+                if not window.winfo_exists():
+                    self._windows.remove(window)
+                    continue
+            except tk.TclError:
+                self._windows.remove(window)
+                continue
+            self._walk(window)
+            if window is self.root:
+                continue
+            callback = getattr(window, "on_theme_changed", None)
+            if callback is not None:
+                try:
+                    callback()
+                except tk.TclError:
+                    self._windows.remove(window)
+        return True
+
     def register(self, window):
         """登记顶层窗口, 以便应用统一外观。"""
         if window not in self._windows:
             self._windows.append(window)
 
     def apply_theme(self, window):
-        """使用固定的浅色配色刷新窗口中的 Tk 原生表面。"""
+        """使用当前配色刷新窗口中的 Tk 原生表面。"""
         self.register(window)
         self._walk(window)
 
@@ -249,11 +347,32 @@ class ThemeManager:
         surface = getattr(widget, "_thione_surface", "bg")
         color = self.palette.get(surface, self.palette["bg"])
         try:
-            if isinstance(widget, (tk.Canvas, tk.Frame, tk.Label, tk.Menu)):
+            if isinstance(widget, (tk.Toplevel, tk.Canvas, tk.Frame,
+                                   tk.Label, tk.Menu, tk.Text, tk.Listbox)):
                 widget.configure(bg=color)
-                if isinstance(widget, tk.Canvas):
+                if isinstance(widget, tk.Toplevel):
+                    widget.configure(highlightbackground=self.palette["border"])
+                if isinstance(widget, (tk.Label, tk.Text, tk.Listbox)):
+                    widget.configure(fg=self.palette["text"])
+                if isinstance(widget, tk.Text):
+                    widget.configure(
+                        insertbackground=self.palette["text"],
+                        selectbackground=self.palette["accent"],
+                        selectforeground=self.palette["on_accent"],
+                    )
+                if isinstance(widget, tk.Menu):
+                    widget.configure(
+                        fg=self.palette["text"],
+                        activebackground=self.palette["hover"],
+                        activeforeground=self.palette["text"],
+                    )
+                if isinstance(widget, (tk.Canvas, tk.Listbox)):
                     widget.configure(highlightbackground=self.palette["border"])
         except tk.TclError:
             pass
-        for child in widget.winfo_children():
+        try:
+            children = widget.winfo_children()
+        except tk.TclError:
+            return
+        for child in children:
             self._walk(child)

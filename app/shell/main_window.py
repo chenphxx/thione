@@ -32,11 +32,12 @@ class ShellWindow:
         root.geometry(APP_SIZE)
         root.minsize(*APP_MIN_SIZE)
 
-        self.theme = ThemeManager(root)
+        self.theme = ThemeManager(root, settings.theme)
         self._build_statusbar()
         self._build_body()
         self._build_pages()
         root.protocol("WM_DELETE_WINDOW", self.on_close)
+        root.bind_all("<Control-t>", self.toggle_theme)
 
         self.show(self._initial_key())
         self._queue_job = root.after(QUEUE_POLL_MS, self._drain_queue)
@@ -59,6 +60,7 @@ class ShellWindow:
             body,
             [(cls.key, cls.icon, cls.title) for cls in self._page_classes],
             on_select=self.show,
+            on_toggle_theme=self.toggle_theme,
         )
         self.sidebar.pack(side="left", fill="y")
         ttk.Separator(body, orient="vertical").pack(side="left", fill="y")
@@ -115,6 +117,18 @@ class ShellWindow:
         self.settings.page = key
         self.set_status(page.subtitle)
         page.on_show()
+
+    def toggle_theme(self, _event=None):
+        """切换浅色与深色外观并保存用户选择。"""
+        mode = "dark" if self.theme.mode == "light" else "light"
+        if not self.theme.set_mode(mode):
+            return "break"
+        self.settings.theme = mode
+        self.settings.save()
+        self.sidebar.set_theme(mode)
+        for page in self._pages.values():
+            page.on_theme_changed()
+        return "break"
 
     def set_status(self, message):
         self._status_var.set(message or "")

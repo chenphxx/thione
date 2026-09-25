@@ -32,6 +32,10 @@ class ToolPage(ttk.Frame):
 
     def on_hide(self):
         """页面被切换到后台时调用。"""
+
+    def on_theme_changed(self):
+        """主题配色改变后调用, 自绘控件可在此刷新颜色。"""
+
     def on_close(self):
         """主窗口关闭前调用; 返回 False 可以阻止退出。"""
         return True

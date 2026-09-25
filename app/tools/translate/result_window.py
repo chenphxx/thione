@@ -48,6 +48,7 @@ class ResultWindow(tk.Toplevel):
         palette = theme.palette if theme is not None else None
         label_options = {}
         if palette is not None:
+            self._thione_surface = "card"
             self.configure(bg=palette["card"], highlightthickness=1,
                            highlightbackground=palette["border"])
             label_options = {"bg": palette["card"], "fg": palette["text"]}
@@ -56,6 +57,7 @@ class ResultWindow(tk.Toplevel):
             self, text=result, wraplength=WRAP_LENGTH, justify="left",
             font=sans(11), **label_options,
         )
+        self.label._thione_surface = "card"
         self.label.pack(padx=PADDING, pady=(PADDING, 10), fill="both",
                         expand=True)
 
@@ -69,6 +71,9 @@ class ResultWindow(tk.Toplevel):
         self.bind("<Control-c>", lambda _event: self.copy_to_clipboard())
 
         self._place_at_pointer()
+        if self.theme is not None:
+            self.theme.register(self)
+            self.theme.apply_theme(self)
         self.deiconify()
         self.lift()
         try:

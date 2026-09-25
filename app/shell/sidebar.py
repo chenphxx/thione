@@ -12,10 +12,11 @@ NAV_MAX_WIDTH = 320
 class Sidebar(ttk.Frame):
     """显示可用工具和当前选中的导航项。"""
 
-    def __init__(self, master, items, on_select):
+    def __init__(self, master, items, on_select, on_toggle_theme):
         super().__init__(master, style="Panel.TFrame", width=NAV_WIDTH)
         self.pack_propagate(False)
         self._on_select = on_select
+        self._on_toggle_theme = on_toggle_theme
         self._width = NAV_WIDTH
         self._buttons = {}
         self._active_key = None
@@ -35,8 +36,13 @@ class Sidebar(ttk.Frame):
         footer = ttk.Frame(self, style="Panel.TFrame", padding=(22, 14))
         footer.pack(side="bottom", fill="x")
         ttk.Separator(footer).pack(fill="x", pady=(0, 12))
+        self.theme_button = ttk.Button(
+            footer, style="Secondary.TButton", command=self._on_toggle_theme
+        )
+        self.theme_button.pack(fill="x", pady=(0, 10))
         ttk.Label(footer, text=f"thione  ·  v{APP_VERSION}",
                   style="SidebarMuted.TLabel").pack(anchor="w")
+        self.set_theme("light")
 
     def set_width(self, width):
         """将侧栏宽度限制在允许范围内。"""
@@ -54,3 +60,8 @@ class Sidebar(ttk.Frame):
             button.configure(
                 style="NavSelected.TButton" if item_key == key else "Nav.TButton"
             )
+
+    def set_theme(self, mode):
+        """显示切换到另一种配色的按钮文案。"""
+        target = "深色" if mode == "light" else "浅色"
+        self.theme_button.configure(text=f"切换到{target}模式")
