@@ -20,8 +20,9 @@ from ...constants import APP_TITLE
 from ...errors import show_error
 from .constants import UI_POLL_INTERVAL_MS
 from .hotkey import DoubleCtrlListener
+from .language import AUTO_LANG, DEFAULT_TARGET_LANG
+from .providers import build_provider
 from .result_window import ResultWindow
-from .translator import build_translator
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,13 @@ class TranslateService:
 
     # -- 组件开关 ---------------------------------------------------------
     def _start_listener(self):
-        self._listener = DoubleCtrlListener(self.translator, self._on_result)
+        config = self.config
+        self._listener = DoubleCtrlListener(
+            self.translator,
+            self._on_result,
+            source_lang=config.source_lang if config else AUTO_LANG,
+            target_lang=config.target_lang if config else DEFAULT_TARGET_LANG,
+        )
         self._listener.start()
 
     def _stop_listener(self):
@@ -140,7 +147,7 @@ class TranslateService:
     def ready(self):
         """翻译服务是否已就绪, 即是否具备启动翻译的条件。
 
-        华为云缺凭据时为 False; 免费接口不需要凭据, 装载好即为 True
+        需要凭据的服务缺凭据时为 False; 不需要凭据的服务装载好即为 True
         """
         return self.translator is not None
 
@@ -151,11 +158,13 @@ class TranslateService:
         新的客户端, 不必先停止再启动
         """
         self.config = config
-        self.translator = build_translator(config)
+        self.translator = build_provider(config)
 
         if self._listener is not None:
-            # 运行中改凭据: 热键监听下一次调用就会用上新的客户端
+            # 运行中改服务或改语言: 热键监听下一次调用就会用上新的设置
             self._listener.translator = self.translator
+            self._listener.source_lang = config.source_lang
+            self._listener.target_lang = config.target_lang
 
         logger.info("翻译服务已装载 (provider=%s)", config.provider)
         self._notify_state()

@@ -3,9 +3,9 @@
 配置主落点是 `%APPDATA%\\thione\\config.ini`, 用户无需关心程序被装在哪里,
 也不需要手工编辑文件 —— 在划词翻译页面填好保存即可。
 
-文件里有两个段: `[translate]` 记录用哪个翻译服务, `[huawei]` 记录华为云的
-凭据。两者分开存放, 因此切换服务时不必动凭据, 删除凭据也不会丢掉服务选择。
-使用 uapipro 免费接口时不需要凭据, 缺凭据不算错误。
+文件里有两个段: `[translate]` 记录用哪个翻译服务与翻成哪种语言, `[huawei]`
+记录华为云的凭据。两者分开存放, 因此切换服务时不必动凭据, 删除凭据也不会
+丢掉服务选择。使用免费接口时不需要凭据, 缺凭据不算错误。
 
 读取优先级 (高 -> 低):
     1. 环境变量 HUAWEI_AK / HUAWEI_SK / HUAWEI_PROJECT_ID / HUAWEI_REGION
@@ -26,6 +26,8 @@ import os
 
 from . import constants
 from .config import Config
+from .language import AUTO_LANG, DEFAULT_TARGET_LANG
+from .providers import DEFAULT_PROVIDER, PROVIDER_NAMES, spec_for
 from ...paths import (
     app_root,
     ensure_dir,
@@ -41,6 +43,9 @@ SECTION = "huawei"
 PROVIDER_SECTION = "translate"
 #: 服务选择在段里的键名
 PROVIDER_KEY = "PROVIDER"
+#: 源语言与目标语言在段里的键名
+SOURCE_KEY = "SOURCE_LANG"
+TARGET_KEY = "TARGET_LANG"
 LEGACY_APP_DIR_NAME = "transpy"
 
 
@@ -136,18 +141,44 @@ def _read_access_key_csv(path):
 
 
 def _normalize_provider(value):
-    """把配置里的服务名收敛到已知取值, 未知值回落到华为云。
+    """把配置里的服务名收敛到已知取值, 未知值回落到默认服务。
 
     @param value: 配置文件里读到的原始字符串
-    @return: constants.PROVIDERS 中的一个
+    @return: providers.PROVIDER_NAMES 中的一个
     """
     value = (value or "").strip().lower()
-    if value in constants.PROVIDERS:
+    if value in PROVIDER_NAMES:
         return value
     if value:
-        logger.warning("未知的翻译服务 %r, 回落到 %s",
-                       value, constants.PROVIDER_HUAWEI)
-    return constants.PROVIDER_HUAWEI
+        logger.warning("未知的翻译服务 %r, 回落到 %s", value, DEFAULT_PROVIDER)
+    return DEFAULT_PROVIDER
+
+
+def _normalize_languages(provider, source_lang, target_lang):
+    """把语言选择收敛到当前服务支持的范围, 不支持时回落到默认值。
+
+    目标语言的 auto 表示按源语言自动选择, 不属于任何服务的语言代码表,
+    因此单独放行。
+
+    @param provider: 服务名, 决定支持哪些语言
+    @param source_lang: 配置里读到的源语言
+    @param target_lang: 配置里读到的目标语言
+    @return: (源语言, 目标语言) 领域语言代码
+    """
+    spec = spec_for(provider)
+    source = (source_lang or "").strip()
+    if source not in spec.source_languages:
+        if source:
+            logger.warning("服务 %s 不支持源语言 %r, 改用 %s",
+                           provider, source, AUTO_LANG)
+        source = AUTO_LANG
+    target = (target_lang or "").strip()
+    if target != AUTO_LANG and target not in spec.languages:
+        if target:
+            logger.warning("服务 %s 不支持目标语言 %r, 改用 %s",
+                           provider, target, DEFAULT_TARGET_LANG)
+        target = DEFAULT_TARGET_LANG
+    return source, target
 
 
 def current_provider():
@@ -156,13 +187,31 @@ def current_provider():
     兼容来源与新配置一样参与查找: 更名前 (thpy) 与独立版 (transpy) 留下的
     文件里如果写了服务选择, 同样会被读到。
 
-    @return: constants.PROVIDERS 中的一个
+    @return: providers.PROVIDER_NAMES 中的一个
     """
     for path in (config_path(), renamed_config_path(), legacy_config_path()):
         value = _read_ini(path, PROVIDER_SECTION).get(PROVIDER_KEY)
         if value:
             return _normalize_provider(value)
-    return constants.PROVIDER_HUAWEI
+    return DEFAULT_PROVIDER
+
+
+def current_languages():
+    """返回当前保存的源语言与目标语言, 没有配置过时返回默认值。
+
+    与 current_provider() 一样按 新配置 -> 更名前配置 -> 旧版配置 的顺序查找,
+    先配置过的优先; 旧版留下的文件没有这两项, 因此会回落到默认值。
+
+    @return: (源语言, 目标语言) 领域语言代码
+    """
+    provider = current_provider()
+    for path in (config_path(), renamed_config_path(), legacy_config_path()):
+        section = _read_ini(path, PROVIDER_SECTION)
+        source = section.get(SOURCE_KEY)
+        target = section.get(TARGET_KEY)
+        if source or target:
+            return _normalize_languages(provider, source, target)
+    return _normalize_languages(provider, "", "")
 
 
 def legacy_dirs():
@@ -229,12 +278,15 @@ def load():
                 break
 
     provider = current_provider()
-    if provider == constants.PROVIDER_UAPI:
-        # 免费接口不需要凭据, 因此不去校验; 已保存的凭据仍然读出来,
+    source_lang, target_lang = current_languages()
+    spec = spec_for(provider)
+    if not spec.requires_credentials:
+        # 不需要凭据的服务不去校验; 已保存的凭据仍然读出来,
         # 用户切回华为云时不用重新填
-        logger.info("翻译服务: uapipro 免费接口, 不需要凭据")
+        logger.info("翻译服务: %s, 不需要凭据", spec.label)
         return Config(ak=ak or "", sk=sk or "", project_id=project_id or "",
-                      region=region, provider=provider)
+                      region=region, provider=provider,
+                      source_lang=source_lang, target_lang=target_lang)
 
     # 记录凭据来源, 便于排查"为什么又要我配置"这类问题
     if ak and sk and project_id:
@@ -265,7 +317,8 @@ def load():
         )
 
     return Config(ak=ak, sk=sk, project_id=project_id, region=region,
-                  provider=provider)
+                  provider=provider, source_lang=source_lang,
+                  target_lang=target_lang)
 
 
 def save(config):
@@ -273,9 +326,16 @@ def save(config):
     path = config_path()
     ensure_dir(os.path.dirname(path))
 
+    provider = _normalize_provider(config.provider)
+    source_lang, target_lang = _normalize_languages(
+        provider, config.source_lang, config.target_lang
+    )
+
     parser = configparser.ConfigParser()
     parser[PROVIDER_SECTION] = {
-        PROVIDER_KEY: _normalize_provider(config.provider),
+        PROVIDER_KEY: provider,
+        SOURCE_KEY: source_lang,
+        TARGET_KEY: target_lang,
     }
     parser[SECTION] = {
         "AK": config.ak or "",
@@ -328,6 +388,7 @@ def current_values():
         "region": pick("REGION") or constants.REGION,
         "provider": current_provider(),
     }
+    values["source_lang"], values["target_lang"] = current_languages()
 
     # CSV 只提供 AK/SK, 且优先级最低
     if not (values["ak"] and values["sk"]):

@@ -12,16 +12,24 @@ from pynput.keyboard import Controller, Key, Listener
 
 from .clipboard import wait_for_text
 from .constants import COPY_SETTLE_TIME, CTRL_REPEAT_GAP, DOUBLE_PRESS_INTERVAL
+from .language import AUTO_LANG, DEFAULT_TARGET_LANG, resolve_direction
 
 logger = logging.getLogger(__name__)
 
 
 class DoubleCtrlListener:
-    """监听连续两次 Ctrl, 自动复制选中文本, 调用翻译并展示结果。"""
+    """监听连续两次 Ctrl, 自动复制选中文本, 调用翻译并展示结果。
 
-    def __init__(self, translator, result_callback):
+    翻成哪种语言由构造时传入的选择决定, 目标语言为 auto 时按文本内容决定
+    方向; 运行中换服务或换语言时由 TranslateService 直接改写这两个属性。
+    """
+
+    def __init__(self, translator, result_callback,
+                 source_lang=AUTO_LANG, target_lang=DEFAULT_TARGET_LANG):
         self.translator = translator
         self.result_callback = result_callback  # callable(str), 必须线程安全
+        self.source_lang = source_lang
+        self.target_lang = target_lang
         self._first_press = None
         self._ctrl_down = False
         self._ctrl_down_at = 0.0
@@ -122,7 +130,10 @@ class DoubleCtrlListener:
             return
 
         try:
-            result = self.translator.translate(text)
+            source_lang, target_lang = resolve_direction(
+                text, self.source_lang, self.target_lang
+            )
+            result = self.translator.translate(text, source_lang, target_lang)
         except Exception as exc:
             logger.warning("翻译失败: %s", exc)
             self._show(f"翻译失败:\n{exc}")

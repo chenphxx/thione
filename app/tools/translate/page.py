@@ -14,18 +14,22 @@ from ...errors import show_error
 from ...shell.page import ToolPage
 from . import storage
 from .config import Config
-from .constants import (
-    MAX_TEXT_LENGTH,
-    PAGE_TITLE,
-    PROVIDER_HUAWEI,
-    PROVIDER_LABELS,
-    PROVIDER_UAPI,
-    PROVIDERS,
-    REGION,
-    UAPI_MAX_TEXT_LENGTH,
+from .constants import PAGE_TITLE, REGION
+from .language import (
+    AUTO_LANG,
+    AUTO_TARGET_LABEL,
+    DEFAULT_TARGET_LANG,
+    LANGUAGE_LABELS,
+    language_label,
+    resolve_direction,
+)
+from .providers import (
+    DEFAULT_PROVIDER,
+    PROVIDER_SPECS,
+    build_provider,
+    spec_for,
 )
 from .service import TranslateService
-from .translator import build_translator
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +43,8 @@ FIELDS = (
 #: 服务选择区里服务名一列的宽度, 让两行的说明文案左对齐
 PROVIDER_LABEL_WIDTH = 140
 
-#: 服务选择区里每一项的说明文案
-PROVIDER_HINTS = {
-    PROVIDER_HUAWEI: f"需要 AK / SK / Project ID, 单次最多 {MAX_TEXT_LENGTH} 字符",
-    PROVIDER_UAPI: f"公共免费接口, 无需凭据, 单次最多 {UAPI_MAX_TEXT_LENGTH} 字符",
-}
+#: 语言下拉框的宽度, 容得下最长的一项显示名
+LANGUAGE_COMBO_WIDTH = 26
 
 #: 测试连接用的短文本, 只要能走通一次真实翻译即可
 SKIP_TEST_TEXT = "Hello"
@@ -67,8 +68,14 @@ class TranslatePage(ToolPage):
         super().__init__(master, shell)
 
         self._vars = {key: tk.StringVar() for key, _ in FIELDS}
-        self._provider_var = tk.StringVar(value=PROVIDER_HUAWEI)
+        self._provider_var = tk.StringVar(value=DEFAULT_PROVIDER)
         self._cred_hint_var = tk.StringVar(value="")
+        self._lang_hint_var = tk.StringVar(value="")
+        # 源语言与目标语言的领域语言代码, 显示名与代码的对应关系随服务变化
+        self._source_lang = AUTO_LANG
+        self._target_lang = DEFAULT_TARGET_LANG
+        self._source_labels = {}
+        self._target_labels = {}
         self._status_var = tk.StringVar(value="")
         self._result_var = tk.StringVar(value=EMPTY_RESULT_HINT)
         self._test_queue = queue.Queue()
@@ -103,18 +110,17 @@ class TranslatePage(ToolPage):
         card = ttk.LabelFrame(body, text="翻译服务", padding=16)
         card.pack(side="top", fill="x", pady=(0, 12))
 
-        for provider in PROVIDERS:
+        for spec in PROVIDER_SPECS:
             row = ttk.Frame(card, style="Card.TFrame")
             row.pack(side="top", fill="x", pady=2)
-            # 第一列固定宽度, 两行的说明文案才会对齐
+            # 第一列固定宽度, 三行的说明文案才会对齐
             row.columnconfigure(0, minsize=PROVIDER_LABEL_WIDTH)
             ttk.Radiobutton(
-                row, text=PROVIDER_LABELS[provider], value=provider,
+                row, text=spec.label, value=spec.name,
                 variable=self._provider_var, style="Card.TRadiobutton",
                 command=self._on_provider_change,
             ).grid(row=0, column=0, sticky="w")
-            ttk.Label(row, text=PROVIDER_HINTS[provider],
-                      style="CardMuted.TLabel").grid(
+            ttk.Label(row, text=spec.hint, style="CardMuted.TLabel").grid(
                 row=0, column=1, sticky="w", padx=(12, 0)
             )
 
@@ -140,11 +146,48 @@ class TranslatePage(ToolPage):
         )
         self.btn_pause.pack(side="right", padx=(0, 8))
 
+    def _build_language_card(self, body):
+        """源语言与目标语言; 可选范围随当前服务变化, 换语言立即生效。
+
+        @param body: 放置卡片的容器
+        """
+        card = ttk.LabelFrame(body, text="翻译语言", padding=16)
+        card.pack(side="top", fill="x", pady=(0, 12))
+
+        row = ttk.Frame(card, style="Card.TFrame")
+        row.pack(side="top", fill="x")
+
+        ttk.Label(row, text="源语言", style="Card.TLabel").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.combo_source = ttk.Combobox(
+            row, state="readonly", width=LANGUAGE_COMBO_WIDTH
+        )
+        self.combo_source.grid(row=0, column=1, sticky="w", padx=(10, 28))
+        self.combo_source.bind("<<ComboboxSelected>>",
+                               lambda e: self._on_language_change())
+
+        ttk.Label(row, text="目标语言", style="Card.TLabel").grid(
+            row=0, column=2, sticky="w"
+        )
+        self.combo_target = ttk.Combobox(
+            row, state="readonly", width=LANGUAGE_COMBO_WIDTH
+        )
+        self.combo_target.grid(row=0, column=3, sticky="w", padx=(10, 0))
+        self.combo_target.bind("<<ComboboxSelected>>",
+                               lambda e: self._on_language_change())
+
+        ttk.Label(card, textvariable=self._lang_hint_var,
+                  style="CardMuted.TLabel").pack(
+            side="top", anchor="w", pady=(10, 0)
+        )
+
     def _build_form(self):
         body = ttk.Frame(self, padding=(16, 14))
         body.pack(side="top", fill="x")
 
         self._build_provider_card(body)
+        self._build_language_card(body)
 
         card = ttk.LabelFrame(body, text="华为云 NLP 凭据", padding=16)
         card.pack(side="top", fill="x")
@@ -201,7 +244,9 @@ class TranslatePage(ToolPage):
             values = {}
         for key, _ in FIELDS:
             self._vars[key].set(values.get(key, "") or "")
-        self._provider_var.set(values.get("provider") or PROVIDER_HUAWEI)
+        self._provider_var.set(values.get("provider") or DEFAULT_PROVIDER)
+        self._source_lang = values.get("source_lang") or AUTO_LANG
+        self._target_lang = values.get("target_lang") or DEFAULT_TARGET_LANG
 
     def _load_config(self):
         """启动时只装载已有配置, 翻译功能默认不开启, 等用户点启动。"""
@@ -215,6 +260,8 @@ class TranslatePage(ToolPage):
     def _values(self):
         values = {key: var.get().strip() for key, var in self._vars.items()}
         values["provider"] = self._provider_var.get()
+        values["source_lang"] = self._source_lang
+        values["target_lang"] = self._target_lang
         return values
 
     def _build_config(self, values):
@@ -223,17 +270,19 @@ class TranslatePage(ToolPage):
             sk=values["sk"],
             project_id=values["project_id"],
             region=values["region"] or REGION,
-            provider=values.get("provider") or PROVIDER_HUAWEI,
+            provider=values.get("provider") or DEFAULT_PROVIDER,
+            source_lang=values.get("source_lang") or AUTO_LANG,
+            target_lang=values.get("target_lang") or DEFAULT_TARGET_LANG,
         )
 
     @staticmethod
     def _ready_to_run(values):
-        """是否具备翻译条件: 免费接口不需要凭据, 华为云要求三项填全。
+        """是否具备翻译条件: 不需要凭据的服务直接可用, 需要的要求三项填全。
 
         @param values: _values() 的结果
         @return: 当前服务是否可以直接使用
         """
-        if values["provider"] != PROVIDER_HUAWEI:
+        if not spec_for(values["provider"]).requires_credentials:
             return True
         return all(values[key] for key in ("ak", "sk", "project_id"))
 
@@ -250,26 +299,79 @@ class TranslatePage(ToolPage):
 
     # ---------------- 状态刷新 ----------------
     def _sync_provider_ui(self):
-        """按当前服务刷新凭据卡片的提示文案。"""
-        if self._provider_var.get() == PROVIDER_UAPI:
-            self._cred_hint_var.set(
-                "当前使用 uapipro 免费接口, 下面的凭据不会被使用, 切回华为云时再填。"
-            )
-        else:
+        """按当前服务刷新凭据提示与可选语言。"""
+        spec = spec_for(self._provider_var.get())
+        if spec.requires_credentials:
             self._cred_hint_var.set(
                 "填写后点击「保存凭据」或「启动翻译」都会写入用户配置目录。"
             )
+        else:
+            self._cred_hint_var.set(
+                f"当前使用{spec.label}, 下面的凭据不会被使用, 切回华为云时再填。"
+            )
+        self._sync_language_ui()
+
+    def _sync_language_ui(self):
+        """按当前服务重建两个语言下拉框, 并把选择收敛到支持的范围。"""
+        spec = spec_for(self._provider_var.get())
+        self._source_labels = {
+            language_label(code): code
+            for code in (AUTO_LANG,) + tuple(LANGUAGE_LABELS)
+            if code in spec.source_languages
+        }
+        self._target_labels = {
+            self._target_label(code): code
+            for code in (AUTO_LANG,) + tuple(LANGUAGE_LABELS)
+            if code == AUTO_LANG or code in spec.languages
+        }
+        self.combo_source["values"] = list(self._source_labels)
+        self.combo_target["values"] = list(self._target_labels)
+        # 只有自动识别一项时说明该服务不能指定源语言, 直接置灰
+        self.combo_source.configure(
+            state="readonly" if len(self._source_labels) > 1 else "disabled"
+        )
+
+        if self._source_lang not in self._source_labels.values():
+            self._source_lang = AUTO_LANG
+        if self._target_lang not in self._target_labels.values():
+            self._target_lang = DEFAULT_TARGET_LANG
+        self.combo_source.set(language_label(self._source_lang))
+        self.combo_target.set(self._target_label(self._target_lang))
+
+        if len(self._source_labels) > 1:
+            hint = (f"{spec.label} 可选 {len(spec.languages)} 种目标语言; "
+                    f"选自动识别时由服务端判断源语言")
+        else:
+            hint = f"{spec.label} 由服务端识别源语言, 因此源语言固定为自动识别"
+        self._lang_hint_var.set(hint)
+
+    @staticmethod
+    def _target_label(code):
+        """目标语言下拉框里某一项的显示名。"""
+        return AUTO_TARGET_LABEL if code == AUTO_LANG else language_label(code)
+
+    def _read_language_ui(self):
+        """把下拉框上选中的显示名换回领域语言代码。"""
+        self._source_lang = self._source_labels.get(
+            self.combo_source.get(), AUTO_LANG
+        )
+        self._target_lang = self._target_labels.get(
+            self.combo_target.get(), DEFAULT_TARGET_LANG
+        )
 
     def _service_detail(self):
-        """状态行里的服务说明: 华为云带上区域, 免费接口只有名字。"""
+        """状态行里的服务说明: 服务名, 需要凭据时带上区域, 再跟上翻译方向。"""
         config = self.service.config
         provider = (config.provider if config is not None
                     else self._provider_var.get())
-        label = PROVIDER_LABELS.get(provider, provider)
-        if provider != PROVIDER_HUAWEI:
-            return label
-        region = config.region if config is not None else REGION
-        return f"{label} · region={region}"
+        spec = spec_for(provider)
+        parts = [spec.label]
+        if spec.requires_credentials:
+            region = config.region if config is not None else REGION
+            parts.append(f"region={region}")
+        parts.append(f"{language_label(self._source_lang)} → "
+                     f"{language_label(self._target_lang)}")
+        return " · ".join(parts)
 
     def on_show(self):
         self._refresh_state()
@@ -329,7 +431,14 @@ class TranslatePage(ToolPage):
         self.service.toggle_paused()
 
     def _on_provider_change(self):
-        """换服务: 立即生效, 不必先停止翻译; 华为云凭据不全时只记下选择。"""
+        """换服务: 立即生效, 不必先停止翻译; 凭据不全时只记下选择。"""
+        self._sync_language_ui()
+        self._apply_config(self._values())
+        self._refresh_state()
+
+    def _on_language_change(self):
+        """换语言: 与换服务一样立即生效, 下一次翻译就用新的方向。"""
+        self._read_language_ui()
         self._apply_config(self._values())
         self._refresh_state()
 
@@ -369,7 +478,7 @@ class TranslatePage(ToolPage):
             return
         if not self._store_config(values):
             return
-        label = PROVIDER_LABELS[values["provider"]]
+        label = spec_for(values["provider"]).label
         self._status_var.set(f"已保存 ({label}): {self._saved_path}")
 
     def _test_connection(self):
@@ -380,13 +489,18 @@ class TranslatePage(ToolPage):
             self._status_var.set("AK / SK / Project ID 都不能为空")
             return
 
-        label = PROVIDER_LABELS[values["provider"]]
+        label = spec_for(values["provider"]).label
         self._set_testing(True, f"正在测试连接 ({label}) ...")
         config = self._build_config(values)
 
         def worker():
             try:
-                build_translator(config).translate(SKIP_TEST_TEXT)
+                source_lang, target_lang = resolve_direction(
+                    SKIP_TEST_TEXT, config.source_lang, config.target_lang
+                )
+                build_provider(config).translate(
+                    SKIP_TEST_TEXT, source_lang, target_lang
+                )
                 self._test_queue.put((True, f"{label} 连接成功"))
             except Exception as exc:  # 网络/鉴权错误都要展示给用户
                 logger.warning("测试连接失败: %s", exc)
