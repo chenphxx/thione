@@ -21,7 +21,7 @@ def _short_name(path, limit=16):
 class DuplicateGroupWindow(tk.Toplevel):
     def __init__(self, master, groups, all_files, theme):
         super().__init__(master)
-        self.title("重复图片分组 - 秋白")
+        self.title("重复图片分组")
         self.geometry("1400x1000")
         self.theme = theme
         self.theme.register(self)
