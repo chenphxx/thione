@@ -17,6 +17,8 @@ from .constants import (
     BASE_COMBO_WIDTH,
     BASE_LABELS,
     BASES,
+    COMMON_BASES,
+    COMMON_LABELS,
     DEFAULT_SOURCE_BASE,
     DEFAULT_TARGET_BASE,
     EMPTY_HINT,
@@ -24,20 +26,27 @@ from .constants import (
     PAGE_TITLE,
     REFERENCE_COLUMNS,
     REFERENCE_LIMIT,
+    SUBTITLE,
 )
-from .converter import ConvertError, convert, reference_rows
+from .converter import ConvertError, convert_many, reference_rows
 
 # 状态栏里回显结果时的最大长度, 二进制结果可能很长
 STATUS_MAX_CHARS = 48
 
+#: 常用进制一栏的标题
+COMMON_TITLE = "常用进制"
+
+#: 常用进制分左右两侧展示, 每侧两项
+COMMON_SIDES = (COMMON_BASES[:2], COMMON_BASES[2:])
+
 
 class RadixPage(ToolPage):
-    """在 2 / 8 / 10 / 16 进制之间转换数字的工具页面。"""
+    """在 2 到 36 进制之间转换数字的工具页面。"""
 
     key = "radix"
     title = PAGE_TITLE
     icon = "🔢"
-    subtitle = "在 2 / 8 / 10 / 16 进制之间转换数字, 下方是常用进制对照表"
+    subtitle = SUBTITLE
 
     def __init__(self, master, shell):
         super().__init__(master, shell)
@@ -49,6 +58,7 @@ class RadixPage(ToolPage):
         self._input_var = tk.StringVar()
         self._result_var = tk.StringVar()
         self._hint_var = tk.StringVar(value=EMPTY_HINT)
+        self._common_vars = {base: tk.StringVar() for base in COMMON_BASES}
 
         self._build_toolbar()
         self.add_divider()
@@ -69,7 +79,10 @@ class RadixPage(ToolPage):
                   style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
 
     def _build_convert_area(self):
-        """页面上半部分: 左侧待转换的数字, 右侧转换结果, 中间是交换按钮。"""
+        """页面上半部分: 左侧待转换的数字, 右侧转换结果, 中间是交换按钮。
+
+        常用进制分在两侧, 与上方的两栏共用同一列, 因此左右两块自然对齐。
+        """
         card = ttk.LabelFrame(self, text="进制转换", padding=(16, 12))
         card.pack(side="top", fill="x")
         card.columnconfigure(0, weight=1)
@@ -77,6 +90,7 @@ class RadixPage(ToolPage):
 
         self._build_source_area(card)
         self._build_result_area(card)
+        self._build_common_bases(card)
 
         ttk.Button(card, text="⇄", width=3, style="Secondary.TButton",
                    command=self._swap_bases).grid(row=0, column=1, padx=14)
@@ -114,7 +128,8 @@ class RadixPage(ToolPage):
         """
         area = ttk.Frame(card, style="CardFlat.TFrame")
         area.grid(row=0, column=2, sticky="nsew")
-        area.columnconfigure(0, weight=1)
+        # 第 0 列放标题与常用进制的名称, 第 1 列放取值的输入框
+        area.columnconfigure(1, weight=1)
 
         ttk.Label(area, text="转换结果",
                   style="Card.TLabel").grid(row=0, column=0, sticky="w")
@@ -132,6 +147,31 @@ class RadixPage(ToolPage):
         ttk.Button(area, text="复制结果", style="Secondary.TButton",
                    command=self._copy_result).grid(row=2, column=0, columnspan=2,
                                                    sticky="e", pady=(6, 0))
+
+    def _build_common_bases(self, card):
+        """目标进制之外的四种常用进制: 左侧两种, 右侧两种。
+
+        @param card: 放置该区块的卡片
+        """
+        for column, bases in ((0, COMMON_SIDES[0]), (2, COMMON_SIDES[1])):
+            area = ttk.Frame(card, style="CardFlat.TFrame")
+            area.grid(row=1, column=column, sticky="nsew", pady=(12, 0))
+            area.columnconfigure(1, weight=1)
+
+            ttk.Separator(area, orient="horizontal").grid(
+                row=0, column=0, columnspan=2, sticky="we")
+            ttk.Label(area, text=COMMON_TITLE,
+                      style="CardMuted.TLabel").grid(row=1, column=0,
+                                                     columnspan=2, sticky="w",
+                                                     pady=(10, 0))
+            for index, base in enumerate(bases):
+                row = index + 2
+                ttk.Label(area, text=COMMON_LABELS[base],
+                          style="Card.TLabel").grid(row=row, column=0,
+                                                    sticky="w", pady=2)
+                ttk.Entry(area, textvariable=self._common_vars[base],
+                          font=self._number_font, state="readonly").grid(
+                    row=row, column=1, sticky="we", padx=(10, 0), pady=2)
 
     def _build_reference_table(self):
         """页面下半部分: 0 到 15 的四种进制对照, 高度不够时自己滚动。"""
@@ -168,17 +208,27 @@ class RadixPage(ToolPage):
         self._convert()
 
     def _convert(self):
-        """按当前的两个进制重新转换, 并刷新结果与输入框下方的说明。"""
+        """按当前的两个进制重新转换, 并刷新结果 常用进制与输入框下方的说明。"""
         try:
-            result = convert(self._input_var.get(), self._source_base,
-                             self._target_base)
+            values = convert_many(
+                self._input_var.get(), self._source_base,
+                (self._target_base, *COMMON_BASES),
+            )
         except ConvertError as exc:
             self._result_var.set("")
+            self._clear_common()
             self._set_hint(str(exc), error=True)
             return
-        self._result_var.set(result)
+        self._result_var.set(values[0])
+        for base, value in zip(COMMON_BASES, values[1:]):
+            self._common_vars[base].set(value)
         # 还没输入时给引导, 转换成功就不用再解释
-        self._set_hint("" if result else EMPTY_HINT)
+        self._set_hint("" if values[0] else EMPTY_HINT)
+
+    def _clear_common(self):
+        """清空常用进制的结果, 输入不合法时与主结果一起清掉。"""
+        for var in self._common_vars.values():
+            var.set("")
 
     def _set_hint(self, text, error=False):
         """更新输入框下方的说明。
