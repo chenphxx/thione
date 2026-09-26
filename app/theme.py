@@ -172,6 +172,8 @@ class ThemeManager:
             s.configure(name, background=p[surface], foreground=p["muted"],
                         font=sans(9))
         # 输入不合法等需要提醒用户的说明文字
+        s.configure("PanelError.TLabel", background=p["panel"],
+                    foreground=p["danger"])
         s.configure("CardError.TLabel", background=p["card"],
                     foreground=p["danger"], font=sans())
         s.configure("Header.TLabel", background=p["bg"], foreground=p["header"],
@@ -240,6 +242,8 @@ class ThemeManager:
         s.configure("Card.TCheckbutton", background=p["card"],
                     foreground=p["text"], padding=(4, 3))
         s.configure("Card.TRadiobutton", background=p["card"],
+                    foreground=p["text"], padding=(6, 4))
+        s.configure("Panel.TRadiobutton", background=p["panel"],
                     foreground=p["text"], padding=(6, 4))
 
         s.configure("TEntry", fieldbackground=p["input"], foreground=p["text"],

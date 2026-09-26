@@ -13,6 +13,8 @@ a = Analysis(
         'PIL.ImageDraw',
         'PIL.ImageTk',
         'uapi',
+        # 随包的 ffmpeg 引擎: 该依赖缺失时转换功能提示用户自备 ffmpeg
+        'imageio_ffmpeg',
     ],
     hookspath=[],
     hooksconfig={},
