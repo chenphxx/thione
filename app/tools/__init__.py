@@ -4,6 +4,7 @@
 与内容区页面。
 """
 
+from .comm import CommPage
 from .convert import ConvertPage
 from .dedupe import DedupePage
 from .port import PortPage
@@ -19,7 +20,8 @@ TOOL_PAGES = (
     RadixPage,
     PortPage,
     ConvertPage,
+    CommPage,
 )
 
 __all__ = ["TOOL_PAGES", "DedupePage", "RenamePage", "TranslatePage",
-           "RadixPage", "PortPage", "ConvertPage"]
+           "RadixPage", "PortPage", "ConvertPage", "CommPage"]

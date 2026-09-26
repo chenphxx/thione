@@ -47,6 +47,13 @@ a = Analysis(
         'uapi',
         # 随包的 ffmpeg 引擎: 该依赖缺失时转换功能提示用户自备 ffmpeg
         'imageio_ffmpeg',
+        # 串口助手用到的 pyserial 后端: serial_for_url 按 URL 名称动态导入,
+        # 静态分析发现不了, 漏掉时打包版打不开 loop:// 与 socket:// 之类的串口 URL
+        'serial.tools.list_ports',
+        'serial.urlhandler.protocol_loop',
+        'serial.urlhandler.protocol_socket',
+        'serial.urlhandler.protocol_rfc2217',
+        'serial.urlhandler.protocol_hwgrep',
     ],
     hookspath=[],
     hooksconfig={},
