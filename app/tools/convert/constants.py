@@ -74,10 +74,20 @@ QUALITY_HINTS = {
     "aiff": "按源采样率编码",
 }
 
-# 可以作为输入参与转换的扩展名
+# 可以直接交给 ffmpeg 解码的音频扩展名
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".oga",
                     ".opus", ".wma", ".aiff", ".aif", ".ape", ".amr", ".ac3",
                     ".mp2", ".mka", ".wv", ".m4b", ".caf", ".au")
+
+#: 视频容器的扩展名: 转换时只取其中的音频轨
+VIDEO_EXTENSIONS = (".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".flv",
+                    ".wmv", ".mpg", ".mpeg")
+
+#: 音乐平台加密容器的扩展名: 转换前先还原成常见音频
+ENCRYPTED_EXTENSIONS = (".ncm",)
+
+#: 可以加进列表参与转换的全部扩展名
+INPUT_EXTENSIONS = AUDIO_EXTENSIONS + VIDEO_EXTENSIONS + ENCRYPTED_EXTENSIONS
 
 #: 同一编码格式的其它扩展名: 命中时与目标格式视为相同 直接复制而不再编码
 #  没有列出的扩展名只与自身相同
@@ -103,6 +113,8 @@ STATUS_SKIPPED = "已跳过"
 STATUS_CANCELLED = "已终止"
 #: 源文件已经是目标格式时只复制文件, 状态列里的文字
 STATUS_COPIED = "已复制"
+#: 加密容器还原出来的音频就是目标格式时, 状态列里的文字
+STATUS_DECODED = "已解密"
 
 #: 状态列里转换失败时的前缀
 STATUS_FAILED = "失败"
@@ -123,7 +135,7 @@ EMPTY_HINT = "点击左上角的「添加文件」或者「添加文件夹」开
 
 #: 列表卡片的标题与工具条上的说明
 CARD_TITLE = "待转换文件"
-PAGE_HINT = "添加音频文件, 选好输出格式后点「开始转换」"
+PAGE_HINT = "添加音频 视频或加密文件, 选好输出格式后点「开始转换」"
 #: 选好指定文件夹之后的提示
 CUSTOM_DEST_HINT = "输出到 {path}"
 #: 输出位置一行: 源文件夹时路径框里的说明 与 刷新扫描按钮
@@ -145,6 +157,11 @@ SKIP_SAME_FORMAT = "与源文件同格式同目录, 已跳过"
 #: 失败消息的前缀: 状态列只显示去掉前缀之后的原因
 CONVERT_FAILED = "转换失败"
 COPY_FAILED = "复制失败"
+DECRYPT_FAILED = "解密失败"
+#: 加密容器还原失败的原因
+PLATFORM_KEY_BROKEN = "文件结构损坏, 解不出音频密钥"
+PLATFORM_NO_AUDIO = "还原出来的数据不是已知的音频格式"
+PLATFORM_UNKNOWN = "文件既不是加密容器, 也不是已知的音频"
 
 #: 找不到 ffmpeg 时的提示
 FFMPEG_MISSING = "没有找到 ffmpeg, 请手动选择 ffmpeg.exe, 或者把它加入 PATH"

@@ -4,12 +4,15 @@
 依赖 tkinter, 可以单独验证。
 """
 
+import logging
 import os
 import shutil
 from dataclasses import dataclass
 
-from .constants import (AUDIO_EXTENSIONS, EMPTY_VALUE, FORMAT_ALIASES,
+from .constants import (EMPTY_VALUE, FORMAT_ALIASES, INPUT_EXTENSIONS,
                         STATUS_WAITING)
+
+logger = logging.getLogger(__name__)
 
 #: 输出文件重名时最多尝试多少个序号
 MAX_NAME_ATTEMPTS = 1000
@@ -59,7 +62,7 @@ def scan_folder(folder):
     found = []
     for root, _dirs, filenames in os.walk(folder):
         for name in filenames:
-            if os.path.splitext(name)[1].lower() in AUDIO_EXTENSIONS:
+            if os.path.splitext(name)[1].lower() in INPUT_EXTENSIONS:
                 found.append(os.path.join(root, name))
     return sorted(found)
 
@@ -80,17 +83,17 @@ def is_same_target(source, dest_dir, extension):
     return os.path.splitext(source)[1].lstrip(".").lower() == extension.lower()
 
 
-def is_same_format(source, extension):
-    """判断源文件是否已经是目标格式。
+def is_same_format(extension, other):
+    """判断两个扩展名是否属于同一编码格式。
 
-    同一编码格式可能有多个扩展名, 例如 .oga 与 .ogg 因此按格式比较而不是
-    直接比较扩展名字符串
+    同一编码格式可能有多个扩展名, 例如 .oga 与 .ogg 因此按格式比较而不是直接
+    比较扩展名字符串
 
-    @param source: 源文件路径
-    @param extension: 目标扩展名, 不带点
-    @return: 源文件已经是目标格式时为 True
+    @param extension: 一个扩展名, 可以带点
+    @param other: 另一个扩展名, 可以带点
+    @return: 两者是同一编码格式时为 True
     """
-    return _format_key(os.path.splitext(source)[1]) == _format_key(extension)
+    return _format_key(extension) == _format_key(other)
 
 
 def copy_file(source, target):
@@ -104,6 +107,32 @@ def copy_file(source, target):
     @throws OSError: 复制失败, 例如目标位置没有写入权限
     """
     shutil.copy2(source, target)
+
+
+def move_file(source, target):
+    """把已经还原好的音频直接移到输出位置。
+
+    还原结果本身就是目标格式时, 移动比再复制一份省一次读写
+
+    @param source: 还原结果的临时路径
+    @param target: 输出文件路径
+    @throws OSError: 移动失败
+    """
+    shutil.move(source, target)
+
+
+def remove_file(path):
+    """删掉临时文件, 删不掉时只记日志。
+
+    @param path: 文件路径
+    """
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        # 还原结果被直接移到了输出位置, 临时文件已经不在了
+        return
+    except OSError:
+        logger.warning("删除临时文件失败: %s", path, exc_info=True)
 
 
 def output_path(source, dest_dir, extension):

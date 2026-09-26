@@ -2,8 +2,9 @@
 
 转换交给 ffmpeg 子进程完成, 页面只负责收集文件 目标格式与输出位置, 并在后台
 线程里依次处理; 进度与结果经队列回到主线程刷新列表, 因此后台线程不碰 tkinter
-对象。已经是目标格式的文件只复制不重新编码, 因为重新编码只会白白损失音质。
-转换过程中可以终止, 没写完的输出文件会被删掉。
+对象。音乐平台的加密容器先还原成常见音频, 已经是目标格式的文件只复制不重新
+编码, 因为重新编码只会白白损失音质。转换过程中可以终止, 没写完的输出文件会被
+删掉。
 """
 
 import logging
@@ -15,9 +16,8 @@ from tkinter import filedialog, messagebox, ttk
 
 from ...errors import open_path, show_error
 from ...shell.page import ToolPage
-from . import ffmpeg, tasks
+from . import ffmpeg, platforms, tasks
 from .constants import (
-    AUDIO_EXTENSIONS,
     AUDIO_FORMATS,
     AUTO_BITRATE,
     BITRATE_LABELS,
@@ -26,6 +26,7 @@ from .constants import (
     CONVERT_FAILED,
     COPY_FAILED,
     CUSTOM_DEST_HINT,
+    DECRYPT_FAILED,
     DEFAULT_BITRATE,
     DEFAULT_FORMAT,
     DEST_CUSTOM,
@@ -45,6 +46,7 @@ from .constants import (
     FORMAT_CODECS,
     FORMAT_COMBO_WIDTH,
     FORMAT_LABELS,
+    INPUT_EXTENSIONS,
     LOSSLESS_ONLY_FORMATS,
     LOSSLESS_QUALITY,
     PAGE_HINT,
@@ -59,6 +61,7 @@ from .constants import (
     TOP_QUALITY,
     STATUS_CANCELLED,
     STATUS_COPIED,
+    STATUS_DECODED,
     STATUS_DONE,
     STATUS_FAILED,
     STATUS_RUNNING,
@@ -92,7 +95,7 @@ class ConvertPage(ToolPage):
     key = "convert"
     title = PAGE_TITLE
     icon = "🎵"
-    subtitle = "把音频文件批量转换成 MP3 WAV FLAC 等常见格式"
+    subtitle = "把音频 视频与加密音乐文件批量转换成常见格式"
 
     def __init__(self, master, shell):
         super().__init__(master, shell)
@@ -327,11 +330,11 @@ class ConvertPage(ToolPage):
 
     # ---------------- 文件列表 ----------------
     def _add_files(self):
-        """选择若干音频文件加进列表。"""
-        patterns = " ".join(f"*{ext}" for ext in AUDIO_EXTENSIONS)
+        """选择若干音频 视频或者加密文件加进列表。"""
+        patterns = " ".join(f"*{ext}" for ext in INPUT_EXTENSIONS)
         paths = filedialog.askopenfilenames(
-            title="选择要转换的音频文件",
-            filetypes=(("音频文件", patterns), ("所有文件", "*.*")),
+            title="选择要转换的音频 视频或加密文件",
+            filetypes=(("音频 视频与加密文件", patterns), ("所有文件", "*.*")),
             parent=self.window)
         if not paths:
             return
@@ -339,15 +342,15 @@ class ConvertPage(ToolPage):
         self._report_added(added)
 
     def _add_folder(self):
-        """选择文件夹并把里面的音频文件一次加进列表。"""
-        folder = filedialog.askdirectory(title="选择包含音频文件的文件夹",
+        """选择文件夹并把里面的音频 视频与加密文件一次加进列表。"""
+        folder = filedialog.askdirectory(title="选择包含音频或者视频的文件夹",
                                          parent=self.window)
         if not folder:
             return
         folder = os.path.normpath(folder)
         found = tasks.scan_folder(folder)
         if not found:
-            messagebox.showinfo("提示", "这个文件夹里没有可转换的音频文件",
+            messagebox.showinfo("提示", "这个文件夹里没有可转换的文件",
                                 parent=self.window)
             return
         self._remember_folder(folder)
@@ -758,6 +761,8 @@ class ConvertPage(ToolPage):
         @param bitrate: 码率 (kbps); 无损为 0, 最高音质档为 AUTO_BITRATE
         @param extra_args: 最高音质档附带的编码参数
         @param dest_dir: 指定的输出目录, 空串表示与源文件同目录
+
+        加密容器先还原到临时文件, 用完即删; 视频容器只取其中的音频轨
         """
         for index, source in jobs:
             if self._stop_event.is_set():
@@ -774,22 +779,37 @@ class ConvertPage(ToolPage):
                 self._messages.put(("failed", index, str(exc)))
                 continue
 
-            # 已经是目标格式时只复制, 重新编码只会白白损失音质
-            if tasks.is_same_format(source, extension):
+            # 平台加密容器先还原成常见音频, 普通音频与视频容器原样返回
+            try:
+                prepared = platforms.prepare(source)
+            except platforms.PlatformError as exc:
+                logger.warning("无法还原加密容器: %s: %s", source, exc)
+                self._messages.put(("failed", index, str(exc)))
+                continue
+
+            # 已经是目标格式时只复制; 还原结果本身就是目标格式时直接落盘
+            if tasks.is_same_format(prepared.extension, extension):
                 try:
-                    tasks.copy_file(source, target)
+                    if prepared.temporary:
+                        tasks.move_file(prepared.path, target)
+                    else:
+                        tasks.copy_file(prepared.path, target)
                 except OSError as exc:
-                    logger.exception("复制同格式文件失败: %s", source)
+                    logger.exception("写出同格式文件失败: %s", source)
                     self._messages.put(
                         ("failed", index, f"{COPY_FAILED}: {exc}"))
-                    continue
-                self._messages.put(("copied", index, os.path.basename(target),
-                                    target))
+                else:
+                    self._messages.put(
+                        ("decoded" if prepared.temporary else "copied", index,
+                         os.path.basename(target), target))
+                finally:
+                    if prepared.temporary:
+                        tasks.remove_file(prepared.path)
                 continue
 
             self._messages.put(("start", index))
             try:
-                ffmpeg.convert(self._ffmpeg_path, source, target, codec,
+                ffmpeg.convert(self._ffmpeg_path, prepared.path, target, codec,
                                bitrate, extra_args,
                                on_progress=self._progress_sender(index),
                                on_start=self._remember_process)
@@ -799,6 +819,9 @@ class ConvertPage(ToolPage):
                     return
                 self._messages.put(("failed", index, str(exc)))
                 continue
+            finally:
+                if prepared.temporary:
+                    tasks.remove_file(prepared.path)
             self._messages.put(("done", index, os.path.basename(target),
                                 target))
         self._messages.put(("finished",))
@@ -864,6 +887,11 @@ class ConvertPage(ToolPage):
             self._ok += 1
             self._outputs.add(os.path.normcase(message[3]))
             self._advance(message[1], f"{STATUS_DONE} · {message[2]}", TAG_DONE)
+        elif kind == "decoded":
+            self._ok += 1
+            self._outputs.add(os.path.normcase(message[3]))
+            self._advance(message[1], f"{STATUS_DECODED} · {message[2]}",
+                          TAG_DONE)
         elif kind == "copied":
             self._ok += 1
             self._outputs.add(os.path.normcase(message[3]))
@@ -889,11 +917,12 @@ class ConvertPage(ToolPage):
         状态列放不下整段英文报错, 这里只留原因本身; 完整消息写到状态栏与
         日志, 便于排查
 
-        @param message: 转换或复制失败的消息
+        @param message: 转换 复制或解密失败的消息
         @return: 状态列要显示的文字
         """
         reason = message
-        for prefix in (f"{CONVERT_FAILED}: ", f"{COPY_FAILED}: "):
+        for prefix in (f"{CONVERT_FAILED}: ", f"{COPY_FAILED}: ",
+                       f"{DECRYPT_FAILED}: "):
             if reason.startswith(prefix):
                 reason = reason[len(prefix):]
                 break
