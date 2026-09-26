@@ -5,6 +5,7 @@
 """
 
 from .dedupe import DedupePage
+from .radix import RadixPage
 from .rename import RenamePage
 from .translate import TranslatePage
 
@@ -13,6 +14,8 @@ TOOL_PAGES = (
     DedupePage,
     RenamePage,
     TranslatePage,
+    RadixPage,
 )
 
-__all__ = ["TOOL_PAGES", "DedupePage", "RenamePage", "TranslatePage"]
+__all__ = ["TOOL_PAGES", "DedupePage", "RenamePage", "TranslatePage",
+           "RadixPage"]

@@ -149,6 +149,9 @@ class ThemeManager:
         s.configure("Panel.TFrame", background=p["panel"])
         s.configure("Card.TFrame", background=p["card"], borderwidth=1,
                      relief="solid", bordercolor=p["border"])
+        # 卡片内部的普通容器: 与卡片同底但不额外画边框
+        s.configure("CardFlat.TFrame", background=p["card"], borderwidth=0,
+                     relief="flat")
         s.configure("Divider.TFrame", background=p["border"])
         s.configure("Drag.TFrame", background=p["bg"])
         s.configure("DragHover.TFrame", background=p["accent"])
@@ -168,6 +171,9 @@ class ThemeManager:
                               ("SidebarMuted.TLabel", "panel")):
             s.configure(name, background=p[surface], foreground=p["muted"],
                         font=sans(9))
+        # 输入不合法等需要提醒用户的说明文字
+        s.configure("CardError.TLabel", background=p["card"],
+                    foreground=p["danger"], font=sans())
         s.configure("Header.TLabel", background=p["bg"], foreground=p["header"],
                     font=sans(20, True))
         s.configure("PanelHeader.TLabel", background=p["panel"],
