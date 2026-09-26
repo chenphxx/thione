@@ -5,6 +5,7 @@
 """
 
 from .dedupe import DedupePage
+from .port import PortPage
 from .radix import RadixPage
 from .rename import RenamePage
 from .translate import TranslatePage
@@ -15,7 +16,8 @@ TOOL_PAGES = (
     RenamePage,
     TranslatePage,
     RadixPage,
+    PortPage,
 )
 
 __all__ = ["TOOL_PAGES", "DedupePage", "RenamePage", "TranslatePage",
-           "RadixPage"]
+           "RadixPage", "PortPage"]
