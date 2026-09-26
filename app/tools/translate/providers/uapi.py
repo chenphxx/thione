@@ -3,10 +3,6 @@
 与另外两家服务的区别: 不需要凭据, 目标语言放在 query 里给出, 接口没有源语言
 参数, 一律由服务端识别, 因此该服务下只有 `auto` 能作为源语言。
 
-调用示例见仓库根目录的 test.py:
-
-    client = UapiClient("https://uapis.cn")
-    client.translate.post_translate_text(to_lang="zh", text="hello world")
 """
 
 import logging

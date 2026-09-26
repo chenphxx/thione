@@ -6,10 +6,7 @@
     pynput 线程 —— 键盘监听, 只把待展示的文本投递到队列
     pystray线程 —— 托盘菜单, 回调同样只投递队列
 
-跨线程一律不碰 tkinter 对象, 统一走 self._queue + root.after 轮询。
-
-与独立版 transpy 的唯一区别是根窗口的来源: 这里不再自己创建 Tk, 也不跑
-mainloop, 而是借用外壳的根窗口做定时轮询, 因此可以作为一个工具挂进工具箱。
+跨线程一律不碰 tkinter 对象, 统一走 self._queue + root.after 轮询
 """
 
 import logging
