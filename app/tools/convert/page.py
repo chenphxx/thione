@@ -762,7 +762,8 @@ class ConvertPage(ToolPage):
         @param extra_args: 最高音质档附带的编码参数
         @param dest_dir: 指定的输出目录, 空串表示与源文件同目录
 
-        加密容器先还原到临时文件, 用完即删; 视频容器只取其中的音频轨
+        加密容器先还原到临时文件, 用完即删; 视频容器只取其中的音频轨; 加密容器里
+        的曲目信息与封面写进输出文件
         """
         for index, source in jobs:
             if self._stop_event.is_set():
@@ -787,13 +788,29 @@ class ConvertPage(ToolPage):
                 self._messages.put(("failed", index, str(exc)))
                 continue
 
-            # 已经是目标格式时只复制; 还原结果本身就是目标格式时直接落盘
+            # 已经是目标格式时只复制; 还原结果本身就是目标格式时直接落盘,
+            # 但容器里带出来的曲目信息与封面要用一次流复制写进输出
             if tasks.is_same_format(prepared.extension, extension):
+                tags = prepared.tags()
                 try:
-                    if prepared.temporary:
+                    if prepared.temporary and (tags or prepared.cover):
+                        # 还原结果里没有容器自己的标签, 用一次流复制把曲目信息
+                        # 与封面写进输出, 音频流原样搬运, 不做二次编码
+                        ffmpeg.convert(
+                            self._ffmpeg_path, prepared.path, target,
+                            ffmpeg.COPY_CODEC, 0, tags=tags,
+                            cover=prepared.cover,
+                            on_start=self._remember_process)
+                    elif prepared.temporary:
                         tasks.move_file(prepared.path, target)
                     else:
                         tasks.copy_file(prepared.path, target)
+                except ffmpeg.ConvertError as exc:
+                    if self._stop_event.is_set():
+                        self._messages.put(("stopped",))
+                        return
+                    logger.warning("写出同格式文件失败: %s: %s", source, exc)
+                    self._messages.put(("failed", index, str(exc)))
                 except OSError as exc:
                     logger.exception("写出同格式文件失败: %s", source)
                     self._messages.put(
@@ -803,14 +820,14 @@ class ConvertPage(ToolPage):
                         ("decoded" if prepared.temporary else "copied", index,
                          os.path.basename(target), target))
                 finally:
-                    if prepared.temporary:
-                        tasks.remove_file(prepared.path)
+                    self._cleanup(prepared)
                 continue
 
             self._messages.put(("start", index))
             try:
                 ffmpeg.convert(self._ffmpeg_path, prepared.path, target, codec,
-                               bitrate, extra_args,
+                               bitrate, extra_args, tags=prepared.tags(),
+                               cover=prepared.cover,
                                on_progress=self._progress_sender(index),
                                on_start=self._remember_process)
             except ffmpeg.ConvertError as exc:
@@ -820,11 +837,21 @@ class ConvertPage(ToolPage):
                 self._messages.put(("failed", index, str(exc)))
                 continue
             finally:
-                if prepared.temporary:
-                    tasks.remove_file(prepared.path)
+                self._cleanup(prepared)
             self._messages.put(("done", index, os.path.basename(target),
                                 target))
         self._messages.put(("finished",))
+
+    @staticmethod
+    def _cleanup(prepared):
+        """删掉这次准备产生的临时文件: 还原出来的音频与封面图。
+
+        @param prepared: platforms.prepare() 的返回值
+        """
+        if prepared.temporary:
+            tasks.remove_file(prepared.path)
+        if prepared.cover:
+            tasks.remove_file(prepared.cover)
 
     def _progress_sender(self, index):
         """给 ffmpeg 的进度回调绑定当前文件的序号。

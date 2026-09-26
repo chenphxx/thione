@@ -4,6 +4,9 @@
 项目里不需要再引入音频编解码库。程序按 用户指定 -> 系统 PATH -> 随包副本 ->
 常见安装位置 的顺序找 ffmpeg, 找不到时由页面引导用户手动选择。
 
+加密容器还原出来的曲目信息与封面由调用方传进来, 转换成 -metadata 与附加图片流写进
+输出文件; 封面只在支持附加图片的容器里写, 见 constants.COVER_FORMATS。
+
 转换在子进程里进行, 用 ffmpeg 的 -progress 输出换算进度; 取消时直接结束子进程,
 并删掉没写完的输出文件, 因此不会留下半成品。
 """
@@ -22,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 #: 打包成窗口程序后没有控制台, 用它避免每次调用都闪一个黑窗口
 CREATE_NO_WINDOW = 0x08000000
+
+#: 只换容器不重新编码时传给 ffmpeg 的音频编码器名
+COPY_CODEC = "copy"
 
 #: 读取时长与进度用的匹配式
 DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)")
@@ -65,17 +71,21 @@ def version(ffmpeg_path):
 
 
 def convert(ffmpeg_path, source, target, codec, bitrate, extra_args=(),
-            on_progress=None, on_start=None):
+            tags=(), cover="", on_progress=None, on_start=None):
     """把一个音频文件转换成目标格式。
 
     @param ffmpeg_path: ffmpeg 可执行文件路径
     @param source: 源文件路径
     @param target: 输出文件路径
-    @param codec: 目标格式的音频编码器名
+    @param codec: 目标格式的音频编码器名; 只换容器不重新编码时传 COPY_CODEC
     @param bitrate: 有损格式的码率 (kbps); 无损格式传 0; 传 AUTO_BITRATE 时按
                     每声道上限与源文件声道数算出最高码率; 其余超过编码器上限的
                     值按声道数下调 见 _effective_bitrate
     @param extra_args: 最高音质档附带的编码参数, 直接排在编码器参数之后
+    @param tags: 要写进输出文件的 (标签名, 取值) 序列, 例如加密容器里的曲目信息;
+                 排在 -map_metadata 之后, 因此同名标签以此处为准
+    @param cover: 封面临时文件路径, 由调用方负责删除; 输出容器不支持附加图片时
+                  忽略封面 见 constants.COVER_FORMATS
     @param on_progress: 可选回调, 参数是 0 到 1 的浮点进度
     @param on_start: 可选回调, 参数是刚启动的 Popen 对象, 供取消时结束进程
     @throws ConvertError: 转换失败, 消息可以直接展示给用户
@@ -85,11 +95,23 @@ def convert(ffmpeg_path, source, target, codec, bitrate, extra_args=(),
     elif bitrate:
         bitrate = _effective_bitrate(ffmpeg_path, source, codec, bitrate)
 
+    extension = os.path.splitext(target)[1].lstrip(".").lower()
+    attach = bool(cover) and extension in constants.COVER_FORMATS
+
     args = [ffmpeg_path, "-hide_banner", "-nostdin", "-nostats", "-y",
-            "-i", source, "-vn", "-sn", "-dn", "-map_metadata", "0",
-            "-c:a", codec]
+            "-i", source]
+    if attach:
+        # 封面只能作为附加图片流写入, 有封面时不能传 -vn, 否则封面会被一起丢掉
+        args += ["-i", cover, "-map", "0:a", "-map", "1:v", "-c:v", "copy",
+                 "-disposition:v", "attached_pic"]
+    else:
+        args += ["-vn", "-sn", "-dn"]
+    args += ["-map_metadata", "0", "-c:a", codec]
     if bitrate:
         args += ["-b:a", f"{bitrate}k"]
+    args += list(constants.FORMAT_TAG_ARGS.get(extension, ()))
+    for name, value in tags:
+        args += ["-metadata", f"{name}={value}"]
     args += list(extra_args)
     args += ["-progress", "pipe:1", target]
 

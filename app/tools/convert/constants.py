@@ -74,6 +74,12 @@ QUALITY_HINTS = {
     "aiff": "按源采样率编码",
 }
 
+#: 可以把封面写进输出文件的容器: 其余格式 (wav ogg opus) 不支持附加图片
+COVER_FORMATS = frozenset({"mp3", "flac", "m4a", "wma", "aiff"})
+
+#: 写标签与封面时要额外传给 ffmpeg 的参数: aiff 不打开 ID3v2 只会写入标题
+FORMAT_TAG_ARGS = {"aiff": ("-write_id3v2", "1")}
+
 # 可以直接交给 ffmpeg 解码的音频扩展名
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".oga",
                     ".opus", ".wma", ".aiff", ".aif", ".ape", ".amr", ".ac3",

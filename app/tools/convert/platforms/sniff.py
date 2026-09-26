@@ -24,6 +24,25 @@ MP4_EXTENSION = "m4a"
 HEAD_SIZE = 16
 
 
+#: 封面图片的魔数与对应的扩展名
+IMAGE_SIGNATURES = (
+    (b"\xff\xd8\xff", ".jpg"),
+    (b"\x89PNG\r\n", ".png"),
+)
+
+
+def sniff_image(head):
+    """按开头字节判断图片类型。
+
+    @param head: 图片开头的若干字节
+    @return: 带点的图片扩展名; 识别不出来时返回空串
+    """
+    for signature, extension in IMAGE_SIGNATURES:
+        if head.startswith(signature):
+            return extension
+    return ""
+
+
 def sniff_bytes(head):
     """按文件开头的字节判断真实格式。
 
