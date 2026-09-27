@@ -6,6 +6,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from ..constants import APP_MIN_SIZE, APP_SIZE, APP_TITLE, QUEUE_POLL_MS
+from ..errors import open_path, show_error
+from ..paths import ensure_dir, user_log_dir
 from ..theme import ThemeManager
 from .sidebar import Sidebar
 
@@ -61,6 +63,7 @@ class ShellWindow:
             [(cls.key, cls.icon, cls.title) for cls in self._page_classes],
             on_select=self.show,
             on_toggle_theme=self.toggle_theme,
+            on_open_log=self.open_log_folder,
         )
         self.sidebar.pack(side="left", fill="y")
         ttk.Separator(body, orient="vertical").pack(side="left", fill="y")
@@ -129,6 +132,17 @@ class ShellWindow:
         for page in self._pages.values():
             page.on_theme_changed()
         return "break"
+
+    def open_log_folder(self):
+        """打开运行日志目录, 供用户查看日志或反馈问题。"""
+        folder = user_log_dir()
+        try:
+            ensure_dir(folder)
+        except OSError:
+            logger.exception("创建日志目录失败: %s", folder)
+            show_error("无法创建日志目录:\n%s" % folder, parent=self.root)
+            return
+        open_path(folder, parent=self.root)
 
     def set_status(self, message):
         self._status_var.set(message or "")

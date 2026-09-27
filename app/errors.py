@@ -8,11 +8,12 @@
 """
 
 import logging
+import os
 import traceback
 from tkinter import messagebox
 
 from .constants import APP_TITLE
-from .win32 import open_file, reveal_file
+from .win32 import open_file, open_folder, reveal_file
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,11 @@ def open_path(path, parent=None, reveal=False):
     @param reveal: True 时打开所在目录并选中该文件
     @return: 是否成功
     """
-    opener = reveal_file if reveal else open_file
+    if reveal:
+        opener = reveal_file
+    else:
+        # 目录交给 open_folder, 失败时日志里能区分文件与目录
+        opener = open_folder if os.path.isdir(path) else open_file
     if opener(path):
         return True
     show_error(f"无法打开: {path}", parent=parent)
