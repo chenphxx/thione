@@ -1,4 +1,4 @@
-# 本地凭据, 不要提交
+# 本地凭据
 .env
 IAM_*-accessKeys.csv
 
@@ -39,7 +39,7 @@ MANIFEST
 #   before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-#   thione.spec 是本仓库唯一的打包配置, 需要随仓库版本化, 不能被上面的通配符忽略掉
+# 打包配置 
 !thione.spec
 
 # Installer logs
