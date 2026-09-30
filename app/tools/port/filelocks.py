@@ -1,8 +1,6 @@
-"""查询文件被哪些进程占用。
+"""查询文件被哪些进程占用
 
-用的是 Windows 重启管理器 (Restart Manager) 接口, 它正是系统弹出「该文件
-正被另一个程序使用」时所依据的接口: 以普通用户身份就能列出持有该文件句柄
-的进程, 不需要管理员权限, 也不需要自己枚举全系统的句柄表。
+用的是 Windows 重启管理器 (Restart Manager) 接口
 """
 
 import ctypes
@@ -62,7 +60,7 @@ class RM_PROCESS_INFO(ctypes.Structure):
 
 
 class FileLock(NamedTuple):
-    """占用文件的一个进程。"""
+    """占用文件的一个进程"""
 
     pid: int
     app_name: str
@@ -94,10 +92,10 @@ _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
 
 def list_locks(path):
-    """列出占用指定文件的进程。
+    """列出占用指定文件的进程
 
     重启管理器只登记文件, 文件夹要查占用得逐个文件登记, 因此这里只
-    接受文件路径。
+    接受文件路径
 
     @param path: 文件的完整路径
     @return: FileLock 列表, 没有进程占用时为空列表
@@ -124,11 +122,11 @@ def list_locks(path):
 
 
 def is_available(path):
-    """判断文件当前能不能被独占打开。
+    """判断文件当前能不能被独占打开
 
     重启管理器只登记会妨碍文件被替换的进程, 读完就释放句柄的程序 (多数图片
     查看器) 不在其中; 独占打开是直接问系统现在还有没有别的句柄开着这个文件,
-    因此两种结果可以互相印证。
+    因此两种结果可以互相印证
 
     @param path: 文件的完整路径
     @return: True 可以独占打开, 说明当前没有别的程序占用; False 文件被别的
@@ -138,7 +136,7 @@ def is_available(path):
 
 
 def _try_open(path, access):
-    """以不共享的方式打开文件, 写权限不足时退回只读再试一次。"""
+    """以不共享的方式打开文件, 写权限不足时退回只读再试一次"""
     handle = _kernel32.CreateFileW(path, access, 0, None, OPEN_EXISTING,
                                    FILE_ATTRIBUTE_NORMAL, None)
     if handle != INVALID_HANDLE_VALUE:
@@ -157,10 +155,10 @@ def _try_open(path, access):
 
 
 def _collect(session):
-    """取会话里登记的进程列表。
+    """取会话里登记的进程列表
 
     第一次调用只为拿到需要的数组长度, 返回 ERROR_MORE_DATA; 按长度重新申请
-    再取一次。没有进程占用时第一次调用就返回成功且数量为 0。
+    再取一次. 没有进程占用时第一次调用就返回成功且数量为 0
     """
     needed = wintypes.UINT(0)
     count = wintypes.UINT(0)

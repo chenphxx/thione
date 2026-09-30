@@ -1,8 +1,8 @@
-"""双击 Ctrl 触发翻译, 基于 pynput 监听键盘。
+"""双击 Ctrl 触发翻译, 基于 pynput 监听键盘
 
 监听回调运行在 pynput 自己的后台线程里, 因此这里绝对不能直接创建或操作
-tkinter 窗口 —— Tk 有线程亲和性, 跨线程操作会导致偶发崩溃或窗口不显示。
-本模块只负责把待展示的文本交给 result_callback, 由它投递到主线程。
+tkinter 窗口 - Tk 有线程亲和性, 跨线程操作会导致偶发崩溃或窗口不显示
+本模块只负责把待展示的文本交给 result_callback, 由它投递到主线程
 """
 
 import logging
@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 class DoubleCtrlListener:
-    """监听连续两次 Ctrl, 自动复制选中文本, 调用翻译并展示结果。
+    """监听连续两次 Ctrl, 自动复制选中文本, 调用翻译并展示结果
 
     翻成哪种语言由构造时传入的选择决定, 目标语言为 auto 时按文本内容决定
-    方向; 运行中换服务或换语言时由 TranslateService 直接改写这两个属性。
+    方向; 运行中换服务或换语言时由 TranslateService 直接改写这两个属性
     """
 
     def __init__(self, translator, result_callback,
@@ -37,7 +37,7 @@ class DoubleCtrlListener:
         self.target_lang = target_lang
         self._first_press = None
         self._ctrl_down = False
-        #: 本次按住的落下时间, 用来区分「按一下」与长按
+        #: 本次按住的落下时间, 用来区分'按一下'与长按
         self._ctrl_down_at = 0.0
         #: 正在执行 _handle(), 期间到达的按键事件来自自己合成的 Ctrl+C
         self._handling = False
@@ -50,7 +50,7 @@ class DoubleCtrlListener:
     # -- 生命周期 ---------------------------------------------------------
 
     def start(self):
-        """启动监听 (非阻塞)。"""
+        """启动监听 (非阻塞)"""
         if self._listener is not None:
             return
         self._listener = Listener(
@@ -61,7 +61,7 @@ class DoubleCtrlListener:
         logger.info("键盘监听已启动")
 
     def stop(self):
-        """停止监听并释放键盘钩子。"""
+        """停止监听并释放键盘钩子"""
         if self._listener is None:
             return
         try:
@@ -87,10 +87,10 @@ class DoubleCtrlListener:
     # -- 事件处理 ---------------------------------------------------------
 
     def _on_press(self, key, injected=False):
-        """Ctrl 按下事件。
+        """Ctrl 按下事件
 
         连续两次按下才算触发, 因此这里排除两类假按下: 自己合成的 Ctrl+C 与按住
-        Ctrl 时系统持续补发的自动重复事件。
+        Ctrl 时系统持续补发的自动重复事件
 
         @param key: pynput 给出的按键对象
         @param injected: 事件是否由注入产生, Windows 后端会给出, 其它后端为 False
@@ -104,21 +104,21 @@ class DoubleCtrlListener:
         now = time.monotonic()
         if key not in (Key.ctrl_l, Key.ctrl_r):
             # 两次 Ctrl 之间按了别的键, 判定为普通操作而非双击手势,
-            # 避免 Ctrl+C 之后紧接着一次 Ctrl 就误触发。
+            # 避免 Ctrl+C 之后紧接着一次 Ctrl 就误触发
             self._first_press = None
             return
 
-        # 按住 Ctrl 时系统会持续补发「按下」事件 (自动重复)。抬起之前到达的
+        # 按住 Ctrl 时系统会持续补发'按下'事件 (自动重复). 抬起之前到达的
         # 重复事件都属于同一次按住, 因此不能当成新的一次按下, 否则长按 Ctrl
-        # 就会被当成连续双击。
+        # 就会被当成连续双击
         if self._ctrl_down:
             return
         self._ctrl_down = True
         self._ctrl_down_at = now
 
-        # 上一次按下已经超过双击间隔就无法再配对, 直接以本次重新计时。
+        # 上一次按下已经超过双击间隔就无法再配对, 直接以本次重新计时
         # 否则长按 Ctrl 留在 _first_press 里的旧时间戳会吃掉下一次真正的
-        # 双击的前一半, 表现为长按之后双击不灵, 过一会才恢复。
+        # 双击的前一半, 表现为长按之后双击不灵, 过一会才恢复
         if (self._first_press is None
                 or now - self._first_press >= DOUBLE_PRESS_INTERVAL):
             self._first_press = now
@@ -131,12 +131,12 @@ class DoubleCtrlListener:
             logger.exception("处理双击 Ctrl 时出错")
 
     def _on_release(self, key, injected=False):
-        """记录 Ctrl 抬起。
+        """记录 Ctrl 抬起
 
         只有用户真正抬起才会清零: 长按产生的自动重复因此不会被当成新的按下,
-        自己合成的 Ctrl+C 抬起也被忽略, 否则仍被按住的 Ctrl 会被误判成已松开。
+        自己合成的 Ctrl+C 抬起也被忽略, 否则仍被按住的 Ctrl 会被误判成已松开
         按住时间超过 CTRL_HOLD_LIMIT 的算长按, 一并丢弃待配对的那一次按下,
-        免得长按之后紧接着的一次 Ctrl 被配成双击。
+        免得长按之后紧接着的一次 Ctrl 被配成双击
 
         @param key: pynput 给出的按键对象
         @param injected: 事件是否由注入产生
@@ -153,10 +153,10 @@ class DoubleCtrlListener:
             self._first_press = None
 
     def _is_synthetic(self, injected):
-        """事件是否由 _handle() 自己合成的 Ctrl+C 产生。
+        """事件是否由 _handle() 自己合成的 Ctrl+C 产生
 
         合成事件同样会回到本监听器, 且要等 _handle() 返回后才轮到处理, 因此除了
-        注入标记, 还要看当前是否正在执行 _handle() 或刚执行完。
+        注入标记, 还要看当前是否正在执行 _handle() 或刚执行完
 
         @param injected: 监听回调给出的注入标记
         @return: True 表示该事件应被忽略
@@ -166,7 +166,7 @@ class DoubleCtrlListener:
         return self._handling or time.monotonic() < self._synthetic_until
 
     def _handle(self):
-        """复制选中文本并翻译, 结果交给 UI 层。"""
+        """复制选中文本并翻译, 结果交给 UI 层"""
         # 合成的 Ctrl+C 同样会回到本监听器, 且要等本函数返回后才轮到处理,
         # 因此整个执行期间都不可信, 结束后再补一小段忽略窗口
         self._handling = True
@@ -178,7 +178,7 @@ class DoubleCtrlListener:
 
             text = wait_for_text(COPY_SETTLE_TIME)
             if not text:
-                self._show("未检测到剪贴板文本 (请先选中要翻译的内容)。")
+                self._show("未检测到剪贴板文本 (请先选中要翻译的内容)")
                 return
 
             try:
@@ -197,7 +197,7 @@ class DoubleCtrlListener:
             self._synthetic_until = time.monotonic() + SYNTHETIC_EVENT_IGNORE
 
     def _show(self, text):
-        """把文本交给 UI 层; 这里只是回调, 不涉及任何 tkinter 对象。"""
+        """把文本交给 UI 层; 这里只是回调, 不涉及任何 tkinter 对象"""
         try:
             self.result_callback(text)
         except Exception:

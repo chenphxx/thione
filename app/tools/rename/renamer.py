@@ -1,7 +1,7 @@
-"""重命名核心逻辑: 任务构建, 任务执行与原地重命名辅助。
+"""重命名核心逻辑: 任务构建, 任务执行与原地重命名辅助
 
 执行过程中需要与界面交互的地方 (冲突选择, 进度上报, 中止判断) 一律用回调
-表达, 因此这里不依赖 tkinter。
+表达, 因此这里不依赖 tkinter
 """
 
 import os
@@ -10,13 +10,13 @@ import uuid
 
 
 def build_tasks(items, save_folder, prefix, start_num):
-    """把 (文件夹, 文件名) 列表转为重命名任务。
+    """把 (文件夹, 文件名) 列表转为重命名任务
 
-    返回 [(src, dst, inplace, src_name), ...]：
+    返回 [(src, dst, inplace, src_name), ...]:
       - src/dst: 源/目标完整路径
       - inplace: 是否在原文件夹内原地重命名
-      - src_name: 源文件名（用于临时文件还原）
-    编号按 items 顺序依次分配，与结果无关。
+      - src_name: 源文件名 (用于临时文件还原)
+    编号按 items 顺序依次分配, 与结果无关
     """
     norm_save = os.path.normcase(os.path.normpath(save_folder))
 
@@ -37,10 +37,10 @@ def build_tasks(items, save_folder, prefix, start_num):
 
 
 def prepare_inplace_temps(folder, jobs):
-    """将目标名与其他待处理源文件同名的文件先移到临时名，防止互相覆盖。
+    """将目标名与其他待处理源文件同名的文件先移到临时名, 防止互相覆盖
 
-    jobs: [(源文件名, 目标文件名), ...]，均位于 folder 内。
-    返回 {源文件名: 临时完整路径}；中途出错时自动还原已移动的文件并抛出异常。
+    jobs: [(源文件名, 目标文件名), ...], 均位于 folder 内
+    返回 {源文件名: 临时完整路径}; 中途出错时自动还原已移动的文件并抛出异常
     """
     moved = {}
     try:
@@ -58,7 +58,7 @@ def prepare_inplace_temps(folder, jobs):
 
 
 def restore_inplace_temp(folder, src_name, tmp):
-    """把单个临时文件还原为原名（仅当原名尚不存在时）。"""
+    """把单个临时文件还原为原名 (仅当原名尚不存在时) """
     original = os.path.join(folder, src_name)
     if os.path.exists(tmp) and not os.path.exists(original):
         try:
@@ -68,17 +68,17 @@ def restore_inplace_temp(folder, src_name, tmp):
 
 
 def restore_inplace_temps(folder, moved):
-    """还原所有仍处于临时名的文件。"""
+    """还原所有仍处于临时名的文件"""
     for src_name, tmp in list(moved.items()):
         restore_inplace_temp(folder, src_name, tmp)
 
 
 class CancelledError(Exception):
-    """用户在任务执行过程中终止了操作。"""
+    """用户在任务执行过程中终止了操作"""
 
 
 class TaskError(RuntimeError):
-    """单项任务执行失败。
+    """单项任务执行失败
 
     @ivar src: 出错时正在处理的源文件路径
     """
@@ -89,7 +89,7 @@ class TaskError(RuntimeError):
 
 
 def run_tasks(tasks, folder, moved, on_conflict, on_progress, is_cancelled):
-    """逐项执行 build_tasks 生成的任务。
+    """逐项执行 build_tasks 生成的任务
 
     @param tasks: build_tasks 的返回值
     @param folder: 原地重命名所在的目录 (非原地任务时传保存目录)
@@ -144,6 +144,6 @@ def run_tasks(tasks, folder, moved, on_conflict, on_progress, is_cancelled):
 
 
 def _same_path(path_a, path_b):
-    """判断两个路径是否指向同一个文件。"""
+    """判断两个路径是否指向同一个文件"""
     return (os.path.normcase(os.path.normpath(path_a))
             == os.path.normcase(os.path.normpath(path_b)))

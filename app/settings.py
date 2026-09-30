@@ -1,4 +1,4 @@
-"""读取和保存上次选择的工具页面偏好。"""
+"""读取和保存上次选择的工具页面偏好"""
 
 import configparser
 import logging
@@ -16,24 +16,24 @@ DEFAULT_PAGE = ""
 
 
 def config_path():
-    """返回 settings.ini 的完整路径 (不保证文件已存在)。"""
+    """返回 settings.ini 的完整路径 (不保证文件已存在)"""
     return os.path.join(paths.user_data_dir(), SETTINGS_FILE)
 
 
 def legacy_config_path():
-    """返回更名前 settings.ini 的路径, 只作为兼容读取来源。"""
+    """返回更名前 settings.ini 的路径, 只作为兼容读取来源"""
     return os.path.join(paths.legacy_user_data_dir(), SETTINGS_FILE)
 
 
 def _read_section(path):
-    """读取设置文件里的 [ui] 段, 返回去掉首尾空白后的键值对。
+    """读取设置文件里的 [ui] 段, 返回去掉首尾空白后的键值对
 
     @param path: 设置文件路径
     @return: 键值对字典; 文件不存在或没有 [ui] 段时返回 None
     """
     parser = configparser.ConfigParser()
     try:
-        # utf-8-sig: 兼容记事本「UTF-8」另存后带 BOM 的文件
+        # utf-8-sig: 兼容记事本'UTF-8'另存后带 BOM 的文件
         parser.read(path, encoding="utf-8-sig")
     except (configparser.Error, OSError, UnicodeDecodeError):
         logger.warning("界面设置无法读取, 忽略该文件: %s", path)
@@ -44,7 +44,7 @@ def _read_section(path):
 
 
 class AppSettings:
-    """界面偏好的内存表示, 修改属性后调用 save() 落盘。"""
+    """界面偏好的内存表示, 修改属性后调用 save() 落盘"""
 
     def __init__(self, theme=DEFAULT_THEME, page=DEFAULT_PAGE):
         self.theme = theme if theme in THEMES else DEFAULT_THEME
@@ -52,7 +52,7 @@ class AppSettings:
 
     @classmethod
     def load(cls):
-        """读取界面设置, 新位置没有可用内容时回落到更名前的旧位置。
+        """读取界面设置, 新位置没有可用内容时回落到更名前的旧位置
 
         @return: AppSettings 实例; 任何异常都回落到默认值
         """
@@ -67,7 +67,7 @@ class AppSettings:
         return cls(theme=theme, page=values.get("page", DEFAULT_PAGE))
 
     def save(self):
-        """写入设置文件; 失败只记日志, 不打断退出流程。"""
+        """写入设置文件; 失败只记日志, 不打断退出流程"""
         path = config_path()
         parser = configparser.ConfigParser()
         parser[SECTION] = {

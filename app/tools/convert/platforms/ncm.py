@@ -1,11 +1,11 @@
-"""网易云音乐 ncm 容器的还原。
+"""网易云音乐 ncm 容器的还原
 
 ncm 由文件头 元数据 封面 与音频数据组成: 音频密钥存在文件头里, 用固定的 AES-128
-密钥加密; 音频本体用密钥调度的密钥流循环异或还原。还原只用本机计算, 不需要联网,
-也不需要额外的加密库或者可执行文件。
+密钥加密; 音频本体用密钥调度的密钥流循环异或还原. 还原只用本机计算, 不需要联网,
+也不需要额外的加密库或者可执行文件
 
 还原音频本体的同时把曲目信息与封面读出来交给调用方: 元数据解密后取出标题 艺术家与
-专辑, 封面图片写进临时文件, 由调用方在转换时写进输出文件。
+专辑, 封面图片写进临时文件, 由调用方在转换时写进输出文件
 """
 
 import base64
@@ -51,7 +51,7 @@ TEMP_PREFIX = "thione-ncm-"
 
 
 def is_container(path):
-    """判断文件是不是 ncm 容器。
+    """判断文件是不是 ncm 容器
 
     @param path: 文件路径
     @return: 开头是 ncm 魔数时为 True
@@ -64,7 +64,7 @@ def is_container(path):
 
 
 def decrypt(source):
-    """把 ncm 还原成常见音频文件。
+    """把 ncm 还原成常见音频文件
 
     还原结果写在系统临时目录里, 由调用方负责删除
 
@@ -93,7 +93,7 @@ def decrypt(source):
 
 
 def _audio_key(handle):
-    """读文件头里的音频密钥。
+    """读文件头里的音频密钥
 
     @param handle: 已打开的 ncm 文件
     @return: 音频密钥
@@ -110,7 +110,7 @@ def _audio_key(handle):
 
 
 def _unpad(data):
-    """去掉 AES 分组用的 PKCS#7 填充。
+    """去掉 AES 分组用的 PKCS#7 填充
 
     @param data: 解密后的数据
     @return: 去掉填充的数据; 填充不合法时原样返回
@@ -126,7 +126,7 @@ def _unpad(data):
 
 
 def _key_stream(key):
-    """按 RC4 的密钥调度算法生成循环密钥流。
+    """按 RC4 的密钥调度算法生成循环密钥流
 
     @param key: 音频密钥
     @return: STREAM_SIZE 字节密钥流, 音频的第一个字节从表的第二项开始取用
@@ -142,7 +142,7 @@ def _key_stream(key):
 
 
 def _read_sections(handle):
-    """读元数据与封面, 并把文件位置移到音频数据。
+    """读元数据与封面, 并把文件位置移到音频数据
 
     @param handle: 已打开的 ncm 文件, 位置在音频密钥之后
     @return: (曲目信息字典, 封面临时文件路径); 没有的部分为空值
@@ -157,7 +157,7 @@ def _read_sections(handle):
 
 
 def _parse_meta(raw):
-    """解析元数据里要写进输出文件的曲目信息。
+    """解析元数据里要写进输出文件的曲目信息
 
     元数据解不开时不影响转换, 只是输出文件没有标签
 
@@ -181,7 +181,7 @@ def _parse_meta(raw):
 
 
 def _write_cover(handle, space, size):
-    """把封面图片写进临时文件。
+    """把封面图片写进临时文件
 
     @param handle: 已打开的 ncm 文件, 位置在封面区之前
     @param space: 封面区占用的字节数
@@ -209,7 +209,7 @@ def _write_cover(handle, space, size):
 
 
 def _remove_temp(path):
-    """删掉还原过程中写出的临时文件, 删不掉时只记日志。
+    """删掉还原过程中写出的临时文件, 删不掉时只记日志
 
     @param path: 临时文件路径, 空串表示没有
     """
@@ -222,7 +222,7 @@ def _remove_temp(path):
 
 
 def _write_output(handle, stream, first, extension):
-    """把还原出来的音频写进临时文件。
+    """把还原出来的音频写进临时文件
 
     @param handle: 已打开的 ncm 文件, 位置在第一块之后
     @param stream: 循环密钥流
@@ -249,7 +249,7 @@ def _write_output(handle, stream, first, extension):
 
 
 def _xor(data, stream):
-    """用循环密钥流异或一块数据。
+    """用循环密钥流异或一块数据
 
     异或按整数一次算完, 比逐字节循环快得多
 

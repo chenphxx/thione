@@ -1,7 +1,7 @@
-"""华为云 NLP 文本翻译 Provider。
+"""华为云 NLP 文本翻译 Provider
 
 与另外两家服务的区别: 需要 AK / SK / Project ID 凭据, 单次最多 2000 字符,
-繁体中文的语言代码是 `zh-tw`。
+繁体中文的语言代码是 `zh-tw`
 """
 
 from huaweicloudsdknlp.v2.model import RunTextTranslationRequest, TextTranslationReq
@@ -16,14 +16,14 @@ SPEC = spec_for("huawei")
 
 
 class HuaweiTranslator(TranslationProvider):
-    """封装华为云 NLP 文本翻译接口。"""
+    """封装华为云 NLP 文本翻译接口"""
 
     def __init__(self, config: Config):
         self.config = config
         self._client = build_client(config)
 
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
-        """调用 run_text_translation 翻译文本。
+        """调用 run_text_translation 翻译文本
 
         @param text: 待翻译文本
         @param source_lang: 源语言的领域语言代码, `auto` 交给服务端识别
@@ -33,9 +33,9 @@ class HuaweiTranslator(TranslationProvider):
         """
         text = (text or "").strip()
         if not text:
-            raise TranslationError("待翻译文本为空。")
+            raise TranslationError("待翻译文本为空")
         if len(text) > MAX_TEXT_LENGTH:
-            raise TranslationError(f"文本过长 (超过 {MAX_TEXT_LENGTH} 字符)。")
+            raise TranslationError(f"文本过长 (超过 {MAX_TEXT_LENGTH} 字符)")
 
         request = RunTextTranslationRequest(
             body=TextTranslationReq(

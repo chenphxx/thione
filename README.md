@@ -32,18 +32,18 @@
 
 ### 文件格式转换
 
-- 把音频 视频或加密音乐文件(当前只支持网易云ncm)批量转换成 MP3 WAV FLAC M4A OGG OPUS WMA AIFF 等常见格式 
+- 把音频 视频或加密音乐文件 (当前只支持网易云ncm) 批量转换成 MP3 WAV FLAC M4A OGG OPUS WMA AIFF 等常见格式 
 - 视频文件只提取其中的音频轨 
 - 目标格式与源文件相同时直接复制文件, 不重新编码 
 
 ### 串口助手
 
-- 通过本机串口或者网络(TCP Client/TCP Server/UDP)与外部设备收发数据, 两条链路可以同时打开 
+- 通过本机串口或者网络 (TCP Client/TCP Server/UDP) 与外部设备收发数据, 两条链路可以同时打开 
 - 收发数据支持 文本 HEX DEC OCT BIN 五种形式 文本模式可选 UTF-8 与 GBK 编码 
 
 ## 如何使用
 
-- Python 3.10 及以上 
+- Python 3.10 及以上 (项目以3.14.7版本开发) 
 
 ```bash
 pip install -r requirements.txt

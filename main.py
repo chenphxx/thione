@@ -1,11 +1,11 @@
-"""thione 启动入口。
+"""thione 启动入口
 
     1. 初始化日志
-    2. 单实例检测 —— 避免多开导致多个键盘钩子各弹各的窗口,
+    2. 单实例检测 - 避免多开导致多个键盘钩子各弹各的窗口,
        第二个实例只负责把已有实例的主窗口唤到前台;
-    3. 设置 AppUserModelID —— 让任务栏使用本程序图标而不是 python;
+    3. 设置 AppUserModelID - 让任务栏使用本程序图标而不是 python;
     4. 创建唯一的 Tk 根窗口, 交给外壳组装各工具页面;
-    5. 进入 mainloop —— 划词翻译的热键与托盘在各自的后台线程。
+    5. 进入 mainloop - 划词翻译的热键与托盘在各自的后台线程
 """
 
 import logging
@@ -22,7 +22,7 @@ logger = logging.getLogger("thione")
 
 
 class Application:
-    """进程级应用对象: 负责单实例、外壳窗口与退出清理。"""
+    """进程级应用对象: 负责单实例, 外壳窗口与退出清理"""
 
     def __init__(self):
         self.shell = None
@@ -66,7 +66,7 @@ class Application:
 
 
 def main(argv=None):
-    """进程入口, 返回退出码。"""
+    """进程入口, 返回退出码"""
     argv = list(sys.argv[1:] if argv is None else argv)
     logging_setup.setup()
     logger.info(
@@ -83,7 +83,7 @@ def main(argv=None):
 
 
 def _flush_streams():
-    """窗口模式下 sys.stdout/stderr 可能为 None (甚至整个属性都不存在)。"""
+    """窗口模式下 sys.stdout/stderr 可能为 None (甚至整个属性都不存在)"""
     for name in ("stdout", "stderr"):
         stream = getattr(sys, name, None)
         if stream is not None:

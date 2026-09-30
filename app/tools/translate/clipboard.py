@@ -1,4 +1,4 @@
-"""剪贴板读写工具。"""
+"""剪贴板读写工具"""
 
 import time
 
@@ -14,7 +14,7 @@ def paste() -> str:
 
 
 def wait_for_text(wait: float, attempts: int = 3) -> str:
-    """延时后读取剪贴板, 对空值做简单重试。"""
+    """延时后读取剪贴板, 对空值做简单重试"""
     text = ""
     for _ in range(attempts):
         time.sleep(wait)

@@ -137,11 +137,11 @@ EMPTY_VALUE = "-"
 
 # 列表为空时的占位文案: 标题 与 下一步动作
 EMPTY_TITLE = "还没有要转换的文件"
-EMPTY_HINT = "点击左上角的「添加文件」或者「添加文件夹」开始"
+EMPTY_HINT = "点击左上角的'添加文件'或者'添加文件夹'开始"
 
 #: 列表卡片的标题与工具条上的说明
 CARD_TITLE = "待转换文件"
-PAGE_HINT = "添加音频 视频或加密文件, 选好输出格式后点「开始转换」"
+PAGE_HINT = "添加音频 视频或加密文件, 选好输出格式后点'开始转换'"
 #: 选好指定文件夹之后的提示
 CUSTOM_DEST_HINT = "输出到 {path}"
 #: 输出位置一行: 源文件夹时路径框里的说明 与 刷新扫描按钮
@@ -186,4 +186,4 @@ ENGINE_CHOOSE = "选择 ffmpeg"
 # 转换结束后的总结: 状态栏 与 页面底部
 SUMMARY_DONE = "转换完成: 成功 {ok} 个, 跳过 {skip} 个, 失败 {fail} 个"
 SUMMARY_STOPPED = "转换已终止: 成功 {ok} 个, 跳过 {skip} 个, 失败 {fail} 个"
-SUMMARY_SHORT = "成功 {ok} · 跳过 {skip} · 失败 {fail}"
+SUMMARY_SHORT = "成功 {ok} | 跳过 {skip} | 失败 {fail}"

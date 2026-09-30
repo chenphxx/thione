@@ -1,11 +1,4 @@
-"""文件格式转换页面: 把选中的音频文件批量转成另一种格式。
-
-转换交给 ffmpeg 子进程完成, 页面只负责收集文件 目标格式与输出位置, 并在后台
-线程里依次处理; 进度与结果经队列回到主线程刷新列表, 因此后台线程不碰 tkinter
-对象。音乐平台的加密容器先还原成常见音频, 已经是目标格式的文件只复制不重新
-编码, 因为重新编码只会白白损失音质。转换过程中可以终止, 没写完的输出文件会被
-删掉。
-"""
+"""文件格式转换页面: 把选中的音频文件批量转成另一种格式"""
 
 import logging
 import os
@@ -90,7 +83,7 @@ TAG_ERROR = "error"
 
 
 class ConvertPage(ToolPage):
-    """在常见音频格式之间批量转换的工具页面。"""
+    """在常见音频格式之间批量转换的工具页面"""
 
     key = "convert"
     title = PAGE_TITLE
@@ -146,10 +139,10 @@ class ConvertPage(ToolPage):
 
     # ---------------- 界面构建 ----------------
     def _build_toolbar(self):
-        """工具条三行: 标题与主操作 输入与格式 输出位置与列表操作。
+        """工具条三行: 标题与主操作 输入与格式 输出位置与列表操作
 
         最小窗口宽度下放不下全部控件, 因此设置区拆成两行, 避免控件被 Tk
-        挤出可视区。
+        挤出可视区
         """
         bar, head, actions = self.build_toolbar()
 
@@ -229,7 +222,7 @@ class ConvertPage(ToolPage):
         self.entry_dest.bind("<Button-1>", self._on_dest_click)
 
     def _build_list_card(self):
-        """待转换文件列表, 没有内容时由空状态占位块顶替。"""
+        """待转换文件列表, 没有内容时由空状态占位块顶替"""
         card = ttk.LabelFrame(self, text=CARD_TITLE, padding=(16, 12))
         card.pack(side="top", fill="both", expand=True, pady=(12, 0))
 
@@ -268,7 +261,7 @@ class ConvertPage(ToolPage):
         self.menu.add_command(label="从列表移除", command=self._remove_selected)
 
     def _build_empty_state(self, parent):
-        """建立列表的空状态占位块。
+        """建立列表的空状态占位块
 
         @param parent: 承载占位块的容器
         @return: 占位块 Frame (默认不显示)
@@ -287,7 +280,7 @@ class ConvertPage(ToolPage):
         return box
 
     def _wrap_empty_state(self, width):
-        """按容器宽度调整占位块文字的换行宽度。
+        """按容器宽度调整占位块文字的换行宽度
 
         @param width: 容器的当前宽度 (像素)
         """
@@ -296,7 +289,7 @@ class ConvertPage(ToolPage):
         self.empty_hint.configure(wraplength=wrap)
 
     def _build_statusbar(self):
-        """底部一行: 引擎 计数 进度与终止按钮。"""
+        """底部一行: 引擎 计数 进度与终止按钮"""
         status = ttk.Frame(self, style="Panel.TFrame", padding=(16, 8))
         status.pack(side="bottom", fill="x")
 
@@ -321,7 +314,7 @@ class ConvertPage(ToolPage):
                   style="Panel.TLabel").pack(side="left")
 
     def _apply_row_tags(self):
-        """给状态列配上颜色, 便于一眼看出哪些文件出错。"""
+        """给状态列配上颜色, 便于一眼看出哪些文件出错"""
         palette = self.theme.palette
         self.table.tag_configure(TAG_RUNNING, foreground=palette["accent"])
         self.table.tag_configure(TAG_DONE, foreground=palette["ok"])
@@ -330,7 +323,7 @@ class ConvertPage(ToolPage):
 
     # ---------------- 文件列表 ----------------
     def _add_files(self):
-        """选择若干音频 视频或者加密文件加进列表。"""
+        """选择若干音频 视频或者加密文件加进列表"""
         patterns = " ".join(f"*{ext}" for ext in INPUT_EXTENSIONS)
         paths = filedialog.askopenfilenames(
             title="选择要转换的音频 视频或加密文件",
@@ -342,7 +335,7 @@ class ConvertPage(ToolPage):
         self._report_added(added)
 
     def _add_folder(self):
-        """选择文件夹并把里面的音频 视频与加密文件一次加进列表。"""
+        """选择文件夹并把里面的音频 视频与加密文件一次加进列表"""
         folder = filedialog.askdirectory(title="选择包含音频或者视频的文件夹",
                                          parent=self.window)
         if not folder:
@@ -358,7 +351,7 @@ class ConvertPage(ToolPage):
         self._report_added(added, skipped)
 
     def _remember_folder(self, folder):
-        """记住加过的文件夹, 供「刷新扫描」重新扫描。
+        """记住加过的文件夹, 供'刷新扫描'重新扫描
 
         @param folder: 已经加进列表的来源文件夹
         """
@@ -367,7 +360,7 @@ class ConvertPage(ToolPage):
             self._folders.append(folder)
 
     def _add_paths(self, paths, skip_outputs=False):
-        """把文件加进列表, 已经在列表里的文件会被跳过。
+        """把文件加进列表, 已经在列表里的文件会被跳过
 
         @param paths: 文件路径序列
         @param skip_outputs: True 时跳过本次已经转出的文件
@@ -395,7 +388,7 @@ class ConvertPage(ToolPage):
         return added, skipped
 
     def _report_added(self, added, skipped=0):
-        """把添加结果写到状态栏。
+        """把添加结果写到状态栏
 
         @param added: 新增的文件数量
         @param skipped: 因为是本次转出的文件而跳过的数量
@@ -409,7 +402,7 @@ class ConvertPage(ToolPage):
         self.set_status(text)
 
     def _rescan(self):
-        """重新扫描来源文件夹与列表里的文件, 与图片查重页的「刷新扫描」一致。"""
+        """重新扫描来源文件夹与列表里的文件, 与图片查重页的'刷新扫描'一致"""
         if self._ongoing:
             return
         removed = 0
@@ -448,7 +441,7 @@ class ConvertPage(ToolPage):
         self.set_status(text)
 
     def _remove_selected(self):
-        """把选中的行移出列表, 磁盘上的文件不受影响。"""
+        """把选中的行移出列表, 磁盘上的文件不受影响"""
         selected = set(self.table.selection())
         if not selected:
             return
@@ -458,7 +451,7 @@ class ConvertPage(ToolPage):
         self.set_status(f"已移除选中项, 还剩 {len(self._items)} 个待转换")
 
     def _clear_items(self):
-        """清空列表, 磁盘上的文件不受影响。"""
+        """清空列表, 磁盘上的文件不受影响"""
         if not self._items:
             return
         self._items = []
@@ -466,7 +459,7 @@ class ConvertPage(ToolPage):
         self.set_status("列表已清空")
 
     def _rebuild_rows(self):
-        """按当前的文件列表重建表格行, 状态与颜色一并恢复。"""
+        """按当前的文件列表重建表格行, 状态与颜色一并恢复"""
         self.table.delete(*self.table.get_children())
         self._rows = [self._insert_row(item) for item in self._items]
         self._update_empty_state()
@@ -474,7 +467,7 @@ class ConvertPage(ToolPage):
         self._update_actions()
 
     def _insert_row(self, item):
-        """往表格末尾插一行。
+        """往表格末尾插一行
 
         @param item: 这一行对应的记录
         @return: Treeview 的行标识
@@ -484,12 +477,12 @@ class ConvertPage(ToolPage):
 
     @staticmethod
     def _row_values(item):
-        """一行四列的内容: 文件名 格式 大小 状态。"""
+        """一行四列的内容: 文件名 格式 大小 状态"""
         return (item.name, item.extension, tasks.format_size(item.size),
                 item.status)
 
     def _set_row_status(self, index, status, tag=""):
-        """更新一行的状态列与颜色。
+        """更新一行的状态列与颜色
 
         @param index: 文件在列表中的序号
         @param status: 状态文字
@@ -502,12 +495,12 @@ class ConvertPage(ToolPage):
                         tags=(tag,) if tag else ())
 
     def _reset_statuses(self):
-        """开始新一轮转换前把每一行复位成等待状态。"""
+        """开始新一轮转换前把每一行复位成等待状态"""
         for index in range(len(self._items)):
             self._set_row_status(index, STATUS_WAITING)
 
     def _selected_index(self):
-        """当前选中行对应的序号。
+        """当前选中行对应的序号
 
         @return: 列表序号; 没有选中任何一行时返回 None
         """
@@ -520,7 +513,7 @@ class ConvertPage(ToolPage):
             return None
 
     def _update_empty_state(self):
-        """列表为空时显示占位块, 否则显示列表。"""
+        """列表为空时显示占位块, 否则显示列表"""
         if self._items:
             self.empty_state.pack_forget()
             self.table_area.pack(side="top", fill="both", expand=True)
@@ -531,16 +524,16 @@ class ConvertPage(ToolPage):
         self.empty_state.pack(side="top", fill="both", expand=True)
 
     def _update_counts(self):
-        """刷新状态栏上的文件数与总大小。"""
+        """刷新状态栏上的文件数与总大小"""
         if not self._items:
             self._counts_var.set("")
             return
         size = sum(item.size for item in self._items)
-        self._counts_var.set(f"{len(self._items)} 个文件 · "
+        self._counts_var.set(f"{len(self._items)} 个文件 | "
                              f"{tasks.format_size(size)}")
 
     def _update_actions(self, _event=None):
-        """按运行状态与选中项刷新按钮的可用性。"""
+        """按运行状态与选中项刷新按钮的可用性"""
         busy = self._ongoing
         for button in (self.btn_add_files, self.btn_add_folder, self.btn_clear,
                        self.btn_rescan):
@@ -552,7 +545,7 @@ class ConvertPage(ToolPage):
 
     # ---------------- 右键菜单 ----------------
     def _show_menu(self, event):
-        """在右键位置弹出菜单, 先把这一行选中。
+        """在右键位置弹出菜单, 先把这一行选中
 
         @param event: 鼠标事件
         """
@@ -567,13 +560,13 @@ class ConvertPage(ToolPage):
             self.menu.grab_release()
 
     def _open_selected(self, _event=None):
-        """打开选中的文件, 双击一行也会走这里。"""
+        """打开选中的文件, 双击一行也会走这里"""
         index = self._selected_index()
         if index is not None:
             open_path(self._items[index].source, parent=self.window)
 
     def _open_selected_location(self):
-        """打开选中文件所在的文件夹并选中它。"""
+        """打开选中文件所在的文件夹并选中它"""
         index = self._selected_index()
         if index is not None:
             open_path(self._items[index].source, parent=self.window,
@@ -581,7 +574,7 @@ class ConvertPage(ToolPage):
 
     # ---------------- 转换设置 ----------------
     def _target_format(self):
-        """下拉框当前选中的目标格式。
+        """下拉框当前选中的目标格式
 
         @return: 扩展名, 不带点
         """
@@ -592,7 +585,7 @@ class ConvertPage(ToolPage):
         return DEFAULT_FORMAT
 
     def _quality_choice(self):
-        """音质下拉框当前对应的编码器 码率与额外参数。
+        """音质下拉框当前对应的编码器 码率与额外参数
 
         @return: (编码器, 码率 kbps, 额外编码参数); 无损与最高音质档的码率见说明
         """
@@ -611,7 +604,7 @@ class ConvertPage(ToolPage):
         return FORMAT_CODECS[extension], DEFAULT_BITRATE, ()
 
     def _sync_quality(self):
-        """按目标格式刷新音质选项与旁边的说明。
+        """按目标格式刷新音质选项与旁边的说明
 
         容器支持无损编码时把无损排在最前, 有损格式再接最高音质档与共用的
         码率档, 只有 WAV FLAC AIFF 这类没有有损编码的容器才只有无损一项
@@ -632,19 +625,19 @@ class ConvertPage(ToolPage):
         self._quality_hint_var.set(QUALITY_HINTS.get(extension, ""))
 
     def _on_dest_change(self):
-        """切换输出位置: 选指定文件夹时挑目录, 取消就保持原来的选择。"""
+        """切换输出位置: 选指定文件夹时挑目录, 取消就保持原来的选择"""
         if self._dest_var.get() == DEST_SOURCE:
             self._apply_dest("")
             return
         self._choose_dest_folder()
 
     def _on_dest_click(self, _event):
-        """点输出位置的路径框时重新挑一次输出文件夹。"""
+        """点输出位置的路径框时重新挑一次输出文件夹"""
         if str(self.entry_dest.cget("state")) == "readonly":
             self._choose_dest_folder()
 
     def _choose_dest_folder(self):
-        """弹出目录选择框, 选好后写进输出位置一行。"""
+        """弹出目录选择框, 选好后写进输出位置一行"""
         folder = filedialog.askdirectory(title="选择输出文件夹",
                                          parent=self.window)
         if folder:
@@ -655,7 +648,7 @@ class ConvertPage(ToolPage):
             self._apply_dest("")
 
     def _apply_dest(self, folder):
-        """把输出目录写进界面状态。
+        """把输出目录写进界面状态
 
         @param folder: 输出目录; 空串表示与源文件同目录
         """
@@ -673,7 +666,7 @@ class ConvertPage(ToolPage):
 
     # ---------------- 转换引擎 ----------------
     def _refresh_engine(self):
-        """找一次 ffmpeg, 并把结果显示在状态栏上。"""
+        """找一次 ffmpeg, 并把结果显示在状态栏上"""
         self._engine_checked = True
         self._ffmpeg_path = ffmpeg.find_ffmpeg(self._ffmpeg_path)
         if not self._ffmpeg_path:
@@ -685,7 +678,7 @@ class ConvertPage(ToolPage):
         self.lbl_engine.configure(style="PanelMuted.TLabel")
 
     def _ensure_engine(self):
-        """确认有可用的转换引擎。
+        """确认有可用的转换引擎
 
         @return: 可以开始转换时为 True, 否则提示用户后返回 False
         """
@@ -697,7 +690,7 @@ class ConvertPage(ToolPage):
         return False
 
     def _choose_ffmpeg(self):
-        """让用户手动指定 ffmpeg.exe, 选中后先验证一次再采用。"""
+        """让用户手动指定 ffmpeg.exe, 选中后先验证一次再采用"""
         path = filedialog.askopenfilename(
             title="选择 ffmpeg.exe",
             filetypes=(("ffmpeg", "ffmpeg.exe"), ("可执行文件", "*.exe"),
@@ -715,7 +708,7 @@ class ConvertPage(ToolPage):
 
     # ---------------- 转换流程 ----------------
     def _start(self):
-        """开始转换: 快照当前设置后在后台线程里依次处理列表里的文件。"""
+        """开始转换: 快照当前设置后在后台线程里依次处理列表里的文件"""
         if self._ongoing:
             return
         if not self._items:
@@ -753,7 +746,7 @@ class ConvertPage(ToolPage):
         self.set_status(f"开始转换 {len(jobs)} 个文件为 {extension.upper()}")
 
     def _run(self, jobs, extension, codec, bitrate, extra_args, dest_dir):
-        """后台线程: 依次转换, 只通过队列与主线程通信。
+        """后台线程: 依次转换, 只通过队列与主线程通信
 
         @param jobs: (序号, 源文件路径) 组成的元组
         @param extension: 目标扩展名, 不带点
@@ -844,7 +837,7 @@ class ConvertPage(ToolPage):
 
     @staticmethod
     def _cleanup(prepared):
-        """删掉这次准备产生的临时文件: 还原出来的音频与封面图。
+        """删掉这次准备产生的临时文件: 还原出来的音频与封面图
 
         @param prepared: platforms.prepare() 的返回值
         """
@@ -854,7 +847,7 @@ class ConvertPage(ToolPage):
             tasks.remove_file(prepared.cover)
 
     def _progress_sender(self, index):
-        """给 ffmpeg 的进度回调绑定当前文件的序号。
+        """给 ffmpeg 的进度回调绑定当前文件的序号
 
         @param index: 文件在列表中的序号
         @return: 参数是 0 到 1 的进度回调
@@ -864,14 +857,14 @@ class ConvertPage(ToolPage):
         return send
 
     def _remember_process(self, process):
-        """记住正在运行的 ffmpeg 子进程, 终止时要用它。
+        """记住正在运行的 ffmpeg 子进程, 终止时要用它
 
         @param process: 刚启动的 Popen 对象
         """
         self._process = process
 
     def _stop(self):
-        """终止转换: 通知后台线程并结束正在跑的 ffmpeg 子进程。"""
+        """终止转换: 通知后台线程并结束正在跑的 ffmpeg 子进程"""
         if not self._ongoing:
             return
         self._stop_event.set()
@@ -885,7 +878,7 @@ class ConvertPage(ToolPage):
         self.btn_stop.configure(state="disabled")
 
     def _poll_messages(self):
-        """在主线程里消费后台线程的消息。"""
+        """在主线程里消费后台线程的消息"""
         try:
             while True:
                 self._handle(self._messages.get_nowait())
@@ -894,7 +887,7 @@ class ConvertPage(ToolPage):
         self._poll_job = self.root.after(POLL_INTERVAL_MS, self._poll_messages)
 
     def _handle(self, message):
-        """处理一条后台消息。
+        """处理一条后台消息
 
         @param message: (类型, ...) 组成的元组, 类型见 _run 里的投递
         """
@@ -913,20 +906,20 @@ class ConvertPage(ToolPage):
         elif kind == "done":
             self._ok += 1
             self._outputs.add(os.path.normcase(message[3]))
-            self._advance(message[1], f"{STATUS_DONE} · {message[2]}", TAG_DONE)
+            self._advance(message[1], f"{STATUS_DONE} | {message[2]}", TAG_DONE)
         elif kind == "decoded":
             self._ok += 1
             self._outputs.add(os.path.normcase(message[3]))
-            self._advance(message[1], f"{STATUS_DECODED} · {message[2]}",
+            self._advance(message[1], f"{STATUS_DECODED} | {message[2]}",
                           TAG_DONE)
         elif kind == "copied":
             self._ok += 1
             self._outputs.add(os.path.normcase(message[3]))
-            self._advance(message[1], f"{STATUS_COPIED} · {message[2]}",
+            self._advance(message[1], f"{STATUS_COPIED} | {message[2]}",
                           TAG_DONE)
         elif kind == "skipped":
             self._skipped += 1
-            self._advance(message[1], f"{STATUS_SKIPPED} · {message[2]}",
+            self._advance(message[1], f"{STATUS_SKIPPED} | {message[2]}",
                           TAG_SKIPPED)
         elif kind == "failed":
             self._failed += 1
@@ -939,7 +932,7 @@ class ConvertPage(ToolPage):
             self._finish(stopped=True)
 
     def _failure_text(self, message):
-        """把失败消息压缩成状态列里一行。
+        """把失败消息压缩成状态列里一行
 
         状态列放不下整段英文报错, 这里只留原因本身; 完整消息写到状态栏与
         日志, 便于排查
@@ -956,10 +949,10 @@ class ConvertPage(ToolPage):
         reason = reason.strip()
         if len(reason) > REASON_MAX_CHARS:
             reason = reason[:REASON_MAX_CHARS] + "..."
-        return f"{STATUS_FAILED} · {reason}"
+        return f"{STATUS_FAILED} | {reason}"
 
     def _report_failure(self, index, message):
-        """把失败原因写到状态栏与日志。
+        """把失败原因写到状态栏与日志
 
         @param index: 文件在列表中的序号
         @param message: 失败的消息, 已经带有 转换失败 或 复制失败 前缀
@@ -969,7 +962,7 @@ class ConvertPage(ToolPage):
         self.set_status(f"{os.path.basename(source)}: {message}")
 
     def _advance(self, index, status, tag):
-        """记下一个文件的结果, 并把整体进度往前推一格。
+        """记下一个文件的结果, 并把整体进度往前推一格
 
         @param index: 文件在列表中的序号
         @param status: 状态列要显示的文字
@@ -982,7 +975,7 @@ class ConvertPage(ToolPage):
         self._update_progress()
 
     def _update_progress(self):
-        """按已完成数量与当前文件的进度刷新进度条。"""
+        """按已完成数量与当前文件的进度刷新进度条"""
         total = len(self._items)
         if not total:
             self.progress["value"] = 0
@@ -993,7 +986,7 @@ class ConvertPage(ToolPage):
         self._progress_var.set(PROGRESS_RUNNING.format(index=index, total=total))
 
     def _finish(self, stopped=False):
-        """收尾: 复位进度与按钮, 并把结果写到状态栏。
+        """收尾: 复位进度与按钮, 并把结果写到状态栏
 
         @param stopped: True 表示这次是用户终止的
         """
@@ -1016,16 +1009,16 @@ class ConvertPage(ToolPage):
 
     # ---------------- 生命周期 ----------------
     def on_show(self):
-        """首次进入本页时才去找 ffmpeg, 不拖慢程序启动。"""
+        """首次进入本页时才去找 ffmpeg, 不拖慢程序启动"""
         if not self._engine_checked:
             self._refresh_engine()
 
     def on_theme_changed(self):
-        """主题切换后重新应用状态列的颜色。"""
+        """主题切换后重新应用状态列的颜色"""
         self._apply_row_tags()
 
     def on_close(self):
-        """退出前结束子进程与后台线程, 避免留下没写完的输出文件。"""
+        """退出前结束子进程与后台线程, 避免留下没写完的输出文件"""
         if self._poll_job is not None:
             self.root.after_cancel(self._poll_job)
             self._poll_job = None

@@ -1,8 +1,8 @@
-"""端口与文件占用页面: 扫描端口 查询指定端口 查询文件被哪个程序占用。
+"""端口与文件占用页面: 扫描端口 查询指定端口 查询文件被哪个程序占用
 
-结果区按查询方式切换, 右侧固定显示选中进程的详情并提供强制结束。强制结束走
+结果区按查询方式切换, 右侧固定显示选中进程的详情并提供强制结束. 强制结束走
 TerminateProcess, 与任务管理器的 结束任务 等价, 结束前先让用户确认; 以管理员
-权限运行的进程需要 thione 自身也以管理员身份启动才能结束。
+权限运行的进程需要 thione 自身也以管理员身份启动才能结束
 """
 
 import logging
@@ -36,13 +36,13 @@ NO_SELECTION = "未选择"
 #: 端口输入框为空时的说明
 EMPTY_PORT_HINT = "输入端口号可只查这个端口, 留空表示显示全部"
 #: 还没有扫描过时的说明
-NOT_SCANNED_HINT = "还没有扫描, 点击右上角的「扫描本机端口」开始"
+NOT_SCANNED_HINT = "还没有扫描, 点击右上角的'扫描本机端口'开始"
 #: 文件查询的说明
-EMPTY_FILE_HINT = "选择文件后点击「查询占用」"
+EMPTY_FILE_HINT = "选择文件后点击'查询占用'"
 
 
 class PortPage(ToolPage):
-    """扫描端口占用并查询文件被哪个程序占用的工具页面。"""
+    """扫描端口占用并查询文件被哪个程序占用的工具页面"""
 
     key = "port"
     title = PAGE_TITLE
@@ -83,7 +83,7 @@ class PortPage(ToolPage):
         self.btn_scan.pack(side="right")
 
     def _build_query_card(self):
-        """查询方式切换与两种查询条件。"""
+        """查询方式切换与两种查询条件"""
         card = ttk.LabelFrame(self, text="查询", padding=(16, 12))
         card.pack(side="top", fill="x")
 
@@ -133,7 +133,7 @@ class PortPage(ToolPage):
         self.lbl_hint.pack(side="top", fill="x", pady=(10, 0))
 
     def _build_body(self):
-        """左栏是占用列表, 右栏是选中进程的详情。"""
+        """左栏是占用列表, 右栏是选中进程的详情"""
         body = ttk.Panedwindow(self, orient="horizontal")
         body.pack(side="top", fill="both", expand=True, pady=(12, 0))
 
@@ -149,7 +149,7 @@ class PortPage(ToolPage):
         self._build_details_card(right)
 
     def _build_result_card(self, parent):
-        """结果列表与空状态占位块共用一块区域, 按需要显示其中之一。"""
+        """结果列表与空状态占位块共用一块区域, 按需要显示其中之一"""
         self.result_card = ttk.LabelFrame(parent, text="占用列表",
                                           padding=(16, 12))
         self.result_card.pack(side="top", fill="both", expand=True)
@@ -172,7 +172,7 @@ class PortPage(ToolPage):
         self.empty_state = self._build_empty_state(box)
 
     def _build_empty_state(self, parent):
-        """没有结果时顶替列表的占位块。
+        """没有结果时顶替列表的占位块
 
         @param parent: 承载占位块的容器
         @return: 占位块 Frame (默认不显示)
@@ -191,7 +191,7 @@ class PortPage(ToolPage):
         return box
 
     def _wrap_empty_state(self, width):
-        """按容器宽度调整占位块文字的换行宽度。
+        """按容器宽度调整占位块文字的换行宽度
 
         @param width: 占位块容器的当前宽度 (像素)
         """
@@ -200,7 +200,7 @@ class PortPage(ToolPage):
         self.empty_hint.configure(wraplength=wrap)
 
     def _build_details_card(self, parent):
-        """右栏: 选中进程的详情与强制结束按钮。"""
+        """右栏: 选中进程的详情与强制结束按钮"""
         card = ttk.LabelFrame(parent, text="进程详情", padding=(16, 12))
         card.pack(side="top", fill="both", expand=True)
         self.details_card = card
@@ -237,7 +237,7 @@ class PortPage(ToolPage):
         self._apply_view()
 
     def _apply_view(self):
-        """按当前视图重建列并复位列表与提示。"""
+        """按当前视图重建列并复位列表与提示"""
         self._clear_rows()
         for name, button in self._view_buttons.items():
             button.configure(
@@ -266,7 +266,7 @@ class PortPage(ToolPage):
         self._show_details(None)
 
     def _set_columns(self, columns):
-        """按当前视图重建表格的列。
+        """按当前视图重建表格的列
 
         @param columns: (列标识, 标题, 宽度, 对齐) 组成的序列
         """
@@ -283,7 +283,7 @@ class PortPage(ToolPage):
         self._selected_pid = None
 
     def _update_empty_state(self, title, hint):
-        """列表为空时显示占位块, 否则显示列表。"""
+        """列表为空时显示占位块, 否则显示列表"""
         if self.table.get_children():
             self.empty_state.pack_forget()
             self.table_area.pack(side="top", fill="both", expand=True)
@@ -295,14 +295,14 @@ class PortPage(ToolPage):
 
     # ---------------- 端口查询 ----------------
     def _scan(self):
-        """扫描本机端口: 清空端口条件后列出当前的连接。"""
+        """扫描本机端口: 清空端口条件后列出当前的连接"""
         self._port_var.set("")
         if not self._reload_connections():
             return
         self._search_port()
 
     def _reload_connections(self):
-        """重新读取连接表与进程快照。
+        """重新读取连接表与进程快照
 
         @return: 是否成功; 失败时提示用户并保留原有数据
         """
@@ -315,7 +315,7 @@ class PortPage(ToolPage):
         return True
 
     def _visible_connections(self):
-        """按 只看监听中的端口 筛出列表要展示的连接。
+        """按 只看监听中的端口 筛出列表要展示的连接
 
         @return: Connection 列表
         """
@@ -324,7 +324,7 @@ class PortPage(ToolPage):
         return [row for row in self._connections if netconn.is_listening(row)]
 
     def _scan_summary(self, rows):
-        """扫描结果的一句话说明。
+        """扫描结果的一句话说明
 
         @param rows: 列表中实际展示的连接
         @return: 说明文本
@@ -332,11 +332,11 @@ class PortPage(ToolPage):
         pids = {row.pid for row in rows}
         text = f"共 {len(rows)} 条连接, 来自 {len(pids)} 个进程"
         if len(rows) != len(self._connections):
-            text += f" · 已隐藏 {len(self._connections) - len(rows)} 条非监听连接"
+            text += f" | 已隐藏 {len(self._connections) - len(rows)} 条非监听连接"
         return text
 
     def _search_port(self):
-        """按输入框里的端口号过滤连接, 留空表示显示全部。"""
+        """按输入框里的端口号过滤连接, 留空表示显示全部"""
         text = self._port_var.get().strip()
         if not text:
             rows = self._visible_connections()
@@ -362,7 +362,7 @@ class PortPage(ToolPage):
         if not matched:
             self._fill_ports([], empty=(
                 f"端口 {port} 当前没有被占用",
-                "换一个端口号再查, 或者点右上角的「扫描本机端口」看全部占用",
+                "换一个端口号再查, 或者点右上角的'扫描本机端口'看全部占用",
             ))
             self._set_query_hint(f"端口 {port} 当前没有被占用")
             return
@@ -372,7 +372,7 @@ class PortPage(ToolPage):
         self._set_query_hint(f"端口 {port} 被 {len(matched)} 条连接占用: {names}")
 
     def _fill_ports(self, rows, select_first=False, empty=None):
-        """把连接记录填进表格。
+        """把连接记录填进表格
 
         @param rows: Connection 列表
         @param select_first: True 时选中第一行, 右栏立即显示详情
@@ -391,7 +391,7 @@ class PortPage(ToolPage):
             self._select_first_row()
 
     def _names_of(self, rows):
-        """结果里出现过的进程名, 去重后保持稳定顺序。"""
+        """结果里出现过的进程名, 去重后保持稳定顺序"""
         seen = []
         for row in rows:
             name = self._process_name(row.pid)
@@ -400,7 +400,7 @@ class PortPage(ToolPage):
         return seen
 
     def _process_name(self, pid):
-        """从进程快照里取进程名。"""
+        """从进程快照里取进程名"""
         entry = self._entries.get(pid)
         if entry is not None:
             return entry.name
@@ -416,7 +416,7 @@ class PortPage(ToolPage):
         self._query_file()
 
     def _query_file(self):
-        """查询选中文件被哪些进程占用。"""
+        """查询选中文件被哪些进程占用"""
         path = self._file_var.get().strip()
         if not path:
             self._set_query_hint("先选择要查询的文件", error=True)
@@ -440,10 +440,10 @@ class PortPage(ToolPage):
         self._set_query_hint(f"{name} 正被 {len(locks)} 个进程占用")
 
     def _report_free_file(self, path, name):
-        """重启管理器没有返回占用者时, 再用独占打开复核一次。
+        """重启管理器没有返回占用者时, 再用独占打开复核一次
 
         查看器之类的程序读完文件就释放句柄, 重启管理器因此查不到它们; 反过来,
-        独占打开失败说明确实有程序按独占方式持有文件, 只是没能列出是谁。
+        独占打开失败说明确实有程序按独占方式持有文件, 只是没能列出是谁
 
         @param path: 文件的完整路径
         @param name: 文件名, 用于提示行
@@ -473,7 +473,7 @@ class PortPage(ToolPage):
         self._set_query_hint(f"{name} 当前没有程序占用")
 
     def _fill_files(self, locks, empty=None):
-        """把占用文件的进程填进表格。
+        """把占用文件的进程填进表格
 
         @param locks: FileLock 列表
         @param empty: 没有结果时的 (标题, 说明)
@@ -506,7 +506,7 @@ class PortPage(ToolPage):
         self._show_details(self._row_pids.get(selection[0]))
 
     def _show_details(self, pid):
-        """把选中进程的详情填进右栏。
+        """把选中进程的详情填进右栏
 
         @param pid: 进程 ID, None 表示没有选中任何一行
         """
@@ -536,7 +536,7 @@ class PortPage(ToolPage):
         self.btn_kill.configure(state="normal")
 
     def _terminate(self):
-        """确认后强制结束选中的进程, 然后刷新列表。"""
+        """确认后强制结束选中的进程, 然后刷新列表"""
         pid = self._selected_pid
         if pid is None:
             return
@@ -545,7 +545,7 @@ class PortPage(ToolPage):
                 "结束进程",
                 f"确定要强制结束 {name} (PID {pid}) 吗?\n\n"
                 f"程序未保存的数据会丢失, 以管理员身份运行的进程需要 thione "
-                f"也以管理员身份启动。",
+                f"也以管理员身份启动",
                 parent=self.window):
             return
 
@@ -559,7 +559,7 @@ class PortPage(ToolPage):
         self._refresh_view()
 
     def _refresh_view(self):
-        """结束进程之后重新取一次数据, 保持当前的查询条件。"""
+        """结束进程之后重新取一次数据, 保持当前的查询条件"""
         if self._view == VIEW_PORTS:
             if self._reload_connections():
                 self._search_port()
@@ -568,7 +568,7 @@ class PortPage(ToolPage):
 
     # ---------------- 提示 ----------------
     def _set_query_hint(self, text, error=False):
-        """更新查询卡片下方的说明。
+        """更新查询卡片下方的说明
 
         @param text: 要显示的内容
         @param error: True 时改用危险色

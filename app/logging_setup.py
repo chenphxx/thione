@@ -1,11 +1,11 @@
-"""日志初始化。
+"""日志初始化
 
-打包成 GUI 程序后没有控制台, print() 的内容会消失。这里做两件事:
+打包成 GUI 程序后没有控制台, print() 的内容会消失. 这里做两件事:
 
 1. 把日志写入 %LOCALAPPDATA%\\thione\\logs\\thione.log (按大小轮转);
-2. 若确实没有可用的 stdout/stderr, 把 print 重定向到日志, 保留 print 的可见性。
+2. 若确实没有可用的 stdout/stderr, 把 print 重定向到日志, 保留 print 的可见性
 
-日志目录不可写时自动降级为只输出到 stderr, 不影响程序启动。
+日志目录不可写时自动降级为只输出到 stderr, 不影响程序启动
 """
 
 import logging
@@ -22,7 +22,7 @@ BACKUP_COUNT = 2
 
 
 class _StreamToLogger:
-    """把被重定向的 stdout/stderr 逐行转投到 logger。"""
+    """把被重定向的 stdout/stderr 逐行转投到 logger"""
 
     def __init__(self, logger, level):
         self._logger = logger
@@ -53,7 +53,7 @@ def log_file_path():
 
 
 def setup():
-    """配置根 logger, 返回本程序的 logger。重复调用不会叠加 handler。"""
+    """配置根 logger, 返回本程序的 logger. 重复调用不会叠加 handler"""
     root = logging.getLogger()
     root.setLevel(logging.INFO)
 
@@ -98,7 +98,7 @@ def setup():
 
 
 def install_excepthook():
-    """把未捕获异常写进日志, 避免静默死亡时无迹可寻。"""
+    """把未捕获异常写进日志, 避免静默死亡时无迹可寻"""
     logger = logging.getLogger(LOGGER_NAME)
 
     def _hook(exc_type, exc_value, exc_tb):

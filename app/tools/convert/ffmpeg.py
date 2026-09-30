@@ -1,14 +1,13 @@
-"""ffmpeg 的定位与音频转换调用。
+"""ffmpeg 的定位与音频转换调用
 
-转换本身全部交给 ffmpeg: 一套参数就能覆盖常见音频格式的容器与编码器组合, 因此
-项目里不需要再引入音频编解码库。程序按 用户指定 -> 系统 PATH -> 随包副本 ->
-常见安装位置 的顺序找 ffmpeg, 找不到时由页面引导用户手动选择。
+转换本身全部交给 ffmpeg, 不需要再引入音频编解码库; 程序按 用户指定 -> 系统 PATH -> 随包副本 ->
+常见安装位置 的顺序找 ffmpeg, 找不到时由页面引导用户手动选择
 
 加密容器还原出来的曲目信息与封面由调用方传进来, 转换成 -metadata 与附加图片流写进
-输出文件; 封面只在支持附加图片的容器里写, 见 constants.COVER_FORMATS。
+输出文件; 封面只在支持附加图片的容器里写, 见 constants.COVER_FORMATS
 
 转换在子进程里进行, 用 ffmpeg 的 -progress 输出换算进度; 取消时直接结束子进程,
-并删掉没写完的输出文件, 因此不会留下半成品。
+并删掉没写完的输出文件, 因此不会留下半成品
 """
 
 import collections
@@ -44,11 +43,11 @@ MAX_REASON_CHARS = 200
 
 
 class ConvertError(RuntimeError):
-    """转换失败, 消息可以直接展示给用户。"""
+    """转换失败, 消息可以直接展示给用户"""
 
 
 def find_ffmpeg(configured=""):
-    """按优先级找一个可用的 ffmpeg。
+    """按优先级找一个可用的 ffmpeg
 
     @param configured: 用户在页面里指定的路径, 可以是空串
     @return: ffmpeg 可执行文件路径; 一个都找不到时返回空串
@@ -60,7 +59,7 @@ def find_ffmpeg(configured=""):
 
 
 def version(ffmpeg_path):
-    """取 ffmpeg 的版本号, 用于确认选择的程序确实可用。
+    """取 ffmpeg 的版本号, 用于确认选择的程序确实可用
 
     @param ffmpeg_path: ffmpeg 可执行文件路径
     @return: 例如 7.1; 无法执行时返回空串
@@ -72,7 +71,7 @@ def version(ffmpeg_path):
 
 def convert(ffmpeg_path, source, target, codec, bitrate, extra_args=(),
             tags=(), cover="", on_progress=None, on_start=None):
-    """把一个音频文件转换成目标格式。
+    """把一个音频文件转换成目标格式
 
     @param ffmpeg_path: ffmpeg 可执行文件路径
     @param source: 源文件路径
@@ -158,7 +157,7 @@ def convert(ffmpeg_path, source, target, codec, bitrate, extra_args=(),
 
 
 def _auto_bitrate(ffmpeg_path, source, codec):
-    """算最高音质档要用的码率: 每声道上限 x 源文件声道数。
+    """算最高音质档要用的码率: 每声道上限 x 源文件声道数
 
     @param ffmpeg_path: ffmpeg 可执行文件路径
     @param source: 源文件路径
@@ -173,7 +172,7 @@ def _auto_bitrate(ffmpeg_path, source, codec):
 
 
 def _effective_bitrate(ffmpeg_path, source, codec, bitrate):
-    """按编码器的每声道码率上限下调码率。
+    """按编码器的每声道码率上限下调码率
 
     单声道文件用 opus 或 vorbis 编码时, 码率超过每声道上限会让编码器直接
     失败; 因此请求值超过上限时先读一次源文件的声道数, 再按 声道数 x 上限
@@ -195,7 +194,7 @@ def _effective_bitrate(ffmpeg_path, source, codec, bitrate):
 
 
 def _channel_count(ffmpeg_path, source):
-    """读源文件的声道数。
+    """读源文件的声道数
 
     @param ffmpeg_path: ffmpeg 可执行文件路径
     @param source: 源文件路径
@@ -223,7 +222,7 @@ def _channel_count(ffmpeg_path, source):
 
 
 def _candidates():
-    """系统里可能存在的 ffmpeg, 按可靠性从高到低。"""
+    """系统里可能存在的 ffmpeg, 按可靠性从高到低"""
     found = shutil.which("ffmpeg")
     if found:
         yield found
@@ -233,7 +232,7 @@ def _candidates():
 
 
 def _common_paths():
-    """常见安装位置, 只做定点检查, 不做全盘搜索。"""
+    """常见安装位置, 只做定点检查, 不做全盘搜索"""
     roots = (
         os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet",
                      "Links"),
@@ -246,7 +245,7 @@ def _common_paths():
 
 
 def _bundled_path():
-    """随程序附带的 ffmpeg 副本, 来自可选的 imageio-ffmpeg 依赖。"""
+    """随程序附带的 ffmpeg 副本, 来自可选的 imageio-ffmpeg 依赖"""
     try:
         import imageio_ffmpeg
     except ImportError:
@@ -259,7 +258,7 @@ def _bundled_path():
 
 
 def _version_line(ffmpeg_path):
-    """取 ffmpeg -version 的第一行, 失败时返回空串。"""
+    """取 ffmpeg -version 的第一行, 失败时返回空串"""
     try:
         result = subprocess.run([ffmpeg_path, "-version"], capture_output=True,
                                 text=True, encoding="utf-8", errors="replace",
@@ -271,7 +270,7 @@ def _version_line(ffmpeg_path):
 
 
 def _failure_message(code, tail):
-    """从末尾输出里挑一句能说明问题的原因。"""
+    """从末尾输出里挑一句能说明问题的原因"""
     reason = ""
     for line in reversed(tail):
         if "rror" in line or "Invalid" in line or "failed" in line:
@@ -286,7 +285,7 @@ def _failure_message(code, tail):
 
 
 def _remove_partial(target):
-    """删掉没转换完的输出文件, 失败时只记日志。"""
+    """删掉没转换完的输出文件, 失败时只记日志"""
     try:
         os.remove(target)
     except OSError:

@@ -2,7 +2,7 @@
 
 四个卡片 (串口接收 网络接收 串口发送 网络发送) 由两个类拼出来: ReceivePanel 负责
 把收到的字节格式化后追加到只读视图, SendPanel 负责把输入内容按模式解析后交给页面
-发送。两个类都不直接持有会话, 收发动作一律回调给页面
+发送. 两个类都不直接持有会话, 收发动作一律回调给页面
 
 @brief 串口助手的两类数据面板
 """
@@ -405,7 +405,7 @@ class ReceivePanel(ttk.LabelFrame):
         """
         text = "本次接收 %d 字节" % self._total
         if self._paused_bytes:
-            text += " · 暂停期间 %d 字节" % self._paused_bytes
+            text += " | 暂停期间 %d 字节" % self._paused_bytes
         return text
 
     def _refresh_count(self):

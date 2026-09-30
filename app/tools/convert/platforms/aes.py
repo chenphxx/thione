@@ -1,7 +1,7 @@
-"""平台加密容器解密时要用到的 AES-128 解密。
+"""平台加密容器解密时要用到的 AES-128 解密
 
 加密容器里只有几十字节的密钥块需要解密, 因此这里用纯 Python 实现解密方向,
-不引入加密库或者额外的可执行文件。实现遵循 FIPS-197, 已用标准测试向量校验。
+不引入加密库或者额外的可执行文件. 实现遵循 FIPS-197, 已用标准测试向量校验
 """
 
 #: AES 的 S 盒, 逆 S 盒由它反推
@@ -35,7 +35,7 @@ ROUNDS = 10
 
 
 def decrypt(key, data):
-    """按 AES-128-ECB 解密。
+    """按 AES-128-ECB 解密
 
     @param key: 16 字节密钥
     @param data: 密文, 长度必须是 16 的整数倍
@@ -52,7 +52,7 @@ def decrypt(key, data):
 
 
 def _expand_key(key):
-    """把密钥扩展成每一轮要用的轮密钥。
+    """把密钥扩展成每一轮要用的轮密钥
 
     @param key: 16 字节密钥
     @return: 长度 11 的列表, 每项是 16 字节轮密钥
@@ -70,7 +70,7 @@ def _expand_key(key):
 
 
 def _decrypt_block(round_keys, block):
-    """解密一个 16 字节分组。
+    """解密一个 16 字节分组
 
     @param round_keys: _expand_key() 的结果
     @param block: 16 字节密文分组
@@ -90,13 +90,13 @@ def _decrypt_block(round_keys, block):
 
 
 def _add_round_key(state, round_key):
-    """把轮密钥异或进状态 (就地修改)。"""
+    """把轮密钥异或进状态 (就地修改)"""
     for index in range(BLOCK_SIZE):
         state[index] ^= round_key[index]
 
 
 def _inv_shift_rows(state):
-    """逆向行移位: 第 n 行循环右移 n 个字节。"""
+    """逆向行移位: 第 n 行循环右移 n 个字节"""
     shifted = bytearray(BLOCK_SIZE)
     for column in range(4):
         for row in range(4):
@@ -105,7 +105,7 @@ def _inv_shift_rows(state):
 
 
 def _inv_mix_columns(state):
-    """逆向列混淆: 每一列在 GF(2^8) 上乘以固定的多项式。"""
+    """逆向列混淆: 每一列在 GF(2^8) 上乘以固定的多项式"""
     mixed = bytearray(BLOCK_SIZE)
     for column in range(4):
         column_bytes = state[column * 4:column * 4 + 4]
@@ -119,7 +119,7 @@ def _inv_mix_columns(state):
 
 
 def _multiply(value, factor):
-    """GF(2^8) 上的乘法, 既约多项式取 x^8 + x^4 + x^3 + x + 1。"""
+    """GF(2^8) 上的乘法, 既约多项式取 x^8 + x^4 + x^3 + x + 1"""
     result = 0
     while factor:
         if factor & 1:

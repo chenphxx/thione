@@ -1,4 +1,4 @@
-"""批量重命名页面: 图标视图 预览窗格与重命名流程。
+"""批量重命名页面: 图标视图 预览窗格与重命名流程
 
 按 Windows 资源管理器的方式组织: 主区是文件夹卡片的滚动列表 (每张卡片内部
 是缩略图网格), 右侧是可收起的预览窗格, 底部是可收起的详细信息窗格
@@ -27,7 +27,7 @@ from .renamer import (
 
 
 class RenamePage(ToolPage):
-    """把文件夹内的文件按前缀 + 序号批量重命名的工具页面。"""
+    """把文件夹内的文件按前缀 + 序号批量重命名的工具页面"""
 
     key = "rename"
     title = "批量重命名"
@@ -151,7 +151,7 @@ class RenamePage(ToolPage):
                                      state="disabled")
         self.btn_cancel.pack(side="right", padx=(8, 12))
 
-        self.lbl_counts = ttk.Label(status, text="文件夹: 0 · 总文件数: 0",
+        self.lbl_counts = ttk.Label(status, text="文件夹: 0 | 总文件数: 0",
                                     style="PanelMuted.TLabel")
         self.lbl_counts.pack(side="left", padx=(0, 12))
 
@@ -164,12 +164,12 @@ class RenamePage(ToolPage):
         self.lbl_progress_text.pack(side="left")
 
     def _build_details(self):
-        """底部详细信息窗格; 在状态栏之后构建, 因此排在状态栏上方。"""
+        """底部详细信息窗格; 在状态栏之后构建, 因此排在状态栏上方"""
         self.details = DetailsPane(self, self.theme)
 
     # ---------------- 视图切换 ----------------
     def toggle_preview(self):
-        """显示或收起右侧预览窗格。"""
+        """显示或收起右侧预览窗格"""
         self.preview_visible = not self.preview_visible
         if self.preview_visible:
             self.paned.add(self.preview, weight=0)
@@ -178,7 +178,7 @@ class RenamePage(ToolPage):
         self._sync_view_controls()
 
     def toggle_details(self):
-        """显示或收起底部详细信息窗格。"""
+        """显示或收起底部详细信息窗格"""
         self.details_visible = not self.details_visible
         if self.details_visible:
             self.details.pack(side="bottom", fill="x")
@@ -187,14 +187,14 @@ class RenamePage(ToolPage):
         self._sync_view_controls()
 
     def _sync_view_controls(self):
-        """把两个窗格的开关状态同步到右下角与工具条上的按钮。"""
+        """把两个窗格的开关状态同步到右下角与工具条上的按钮"""
         self.toggles.set_state(self.details_visible, self.preview_visible)
         self.btn_preview.configure(
             style="SegmentOn.TButton" if self.preview_visible
             else "Secondary.TButton")
 
     def _on_view_change(self, view):
-        """切换列表与缩略图展示, 并同步到每一张文件夹卡片。"""
+        """切换列表与缩略图展示, 并同步到每一张文件夹卡片"""
         if view == self.view:
             return
         self.view = view
@@ -203,7 +203,7 @@ class RenamePage(ToolPage):
         self.view_switch.set_state(self.view, self.tier)
 
     def _on_tier_change(self, tier):
-        """切换缩略图档位; 在列表展示下点档位即切回缩略图展示。"""
+        """切换缩略图档位; 在列表展示下点档位即切回缩略图展示"""
         changed = tier != self.tier
         self.tier = tier
         for card in self.folder_blocks:
@@ -217,7 +217,7 @@ class RenamePage(ToolPage):
         self.view_switch.set_state(self.view, self.tier)
 
     def on_file_selected(self, path):
-        """任意卡片里的选中项变化时, 同步右侧预览与底部详细信息。"""
+        """任意卡片里的选中项变化时, 同步右侧预览与底部详细信息"""
         self.details.show(path)
         self.preview.show(path)
 
@@ -227,19 +227,19 @@ class RenamePage(ToolPage):
         self.preview.refresh()
 
     def on_hide(self):
-        """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动。"""
+        """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动"""
         unbind_mousewheel(self.canvas)
         for card in self.folder_blocks:
             unbind_mousewheel(card.grid.canvas)
 
     # ---------------- 文件夹卡片管理 ----------------
     def _on_cards_resize(self, event):
-        """卡片区随窗口变化: 宽度跟窗口走, 高度至少铺满可视区。"""
+        """卡片区随窗口变化: 宽度跟窗口走, 高度至少铺满可视区"""
         self.canvas.itemconfigure(self.canvas_window, width=event.width)
         self._fit_cards_height(event.height)
 
     def _fit_cards_height(self, height):
-        """把卡片区撑到可视高度; 卡片的最小高度之和更大时保留原高度并滚动。"""
+        """把卡片区撑到可视高度; 卡片的最小高度之和更大时保留原高度并滚动"""
         needed = self.blocks_frame.winfo_reqheight()
         self.canvas.itemconfigure(self.canvas_window,
                                   height=max(height, needed))
@@ -259,7 +259,7 @@ class RenamePage(ToolPage):
         self._queue_card_layout()
 
     def _queue_card_layout(self):
-        """卡片增删后等一轮布局完成, 再按新的最小高度重新贴合可视区。"""
+        """卡片增删后等一轮布局完成, 再按新的最小高度重新贴合可视区"""
         def fit():
             self.canvas.configure(scrollregion=self.canvas.bbox("all"))
             self._fit_cards_height(self.canvas.winfo_height())
@@ -268,10 +268,10 @@ class RenamePage(ToolPage):
     def refresh_overall_counts(self):
         folders = len([b for b in self.folder_blocks if b.folder_path])
         total = sum(len(b.files) for b in self.folder_blocks if b.folder_path)
-        self.lbl_counts.config(text=f"文件夹: {folders} · 总文件数: {total}")
+        self.lbl_counts.config(text=f"文件夹: {folders} | 总文件数: {total}")
 
     def rescan_folders(self):
-        """重新读取各文件夹里的文件, 与图片查重页的「刷新扫描」一致。"""
+        """重新读取各文件夹里的文件, 与图片查重页的'刷新扫描'一致"""
         for card in self.folder_blocks:
             if card.folder_path:
                 card.load_files()
@@ -309,11 +309,11 @@ class RenamePage(ToolPage):
 
         tasks = build_tasks(items, save_folder, prefix, start_num)
 
-        # 原位重命名模式下跳过“清空/新增”选择，避免清空源文件夹
+        # 原位重命名模式下跳过'清空/新增'选择, 避免清空源文件夹
         if not any(t[2] for t in tasks):
             choice = messagebox.askyesnocancel(
                 "保存模式选择",
-                "请选择目标文件夹操作方式：\n\n是 = 清空文件夹\n否 = 在文件夹内新增\n取消 = 终止操作",
+                "请选择目标文件夹操作方式:\n\n是 = 清空文件夹\n否 = 在文件夹内新增\n取消 = 终止操作",
             )
             if choice is None:
                 return
@@ -337,7 +337,7 @@ class RenamePage(ToolPage):
         self.btn_cancel.config(state="normal")
         self._update_progress(0, total)
 
-        # 原位重命名：先把目标名与其他待处理源文件冲突的文件挪到临时名
+        # 原位重命名: 先把目标名与其他待处理源文件冲突的文件挪到临时名
         inplace_tasks = [t for t in tasks if t[2]]
         if inplace_tasks:
             folder = os.path.dirname(inplace_tasks[0][0])
@@ -373,26 +373,26 @@ class RenamePage(ToolPage):
         # 处理完成
         self.lbl_progress_text.config(text="处理完成")
         self.progress["value"] = 0
-        if messagebox.askyesno("完成", "文件处理完成，是否现在打开目标文件夹？"):
+        if messagebox.askyesno("完成", "文件处理完成, 是否现在打开目标文件夹?"):
             open_path(save_folder, parent=self.window)
 
     def _conflict_dialog(self, filename):
-        """返回 'overwrite'、'skip' 或 'cancel'。支持全局应用。"""
+        """返回 'overwrite', 'skip' 或 'cancel'. 支持全局应用"""
         if self.global_action == "overwrite":
             return "overwrite"
         if self.global_action == "skip":
             return "skip"
 
-        choice = messagebox.askyesnocancel("文件已存在", f"{filename} 已存在。\n\n是 = 覆盖\n否 = 跳过\n取消 = 终止操作")
+        choice = messagebox.askyesnocancel("文件已存在", f"{filename} 已存在.\n\n是 = 覆盖\n否 = 跳过\n取消 = 终止操作")
         if choice is None:
             return "cancel"
         elif choice:
-            apply_all = messagebox.askyesno("应用到全部", "是否对后续冲突文件全部覆盖？")
+            apply_all = messagebox.askyesno("应用到全部", "是否对后续冲突文件全部覆盖?")
             if apply_all:
                 self.global_action = "overwrite"
             return "overwrite"
         else:
-            apply_all = messagebox.askyesno("应用到全部", "是否对后续冲突文件全部跳过？")
+            apply_all = messagebox.askyesno("应用到全部", "是否对后续冲突文件全部跳过?")
             if apply_all:
                 self.global_action = "skip"
             return "skip"

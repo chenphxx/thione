@@ -1,10 +1,10 @@
-"""划词翻译的后台服务: 全局热键 + 系统托盘 + 主线程投递。
+"""划词翻译的后台服务: 全局热键 + 系统托盘 + 主线程投递
 
 线程模型 (与独立版 transpy 一致, 这是本工具最容易出错的地方):
 
-    主线程      —— 唯一的 Tk 根窗口与 mainloop, 所有窗口都只能在这里创建
-    pynput 线程 —— 键盘监听, 只把待展示的文本投递到队列
-    pystray线程 —— 托盘菜单, 回调同样只投递队列
+    主线程      - 唯一的 Tk 根窗口与 mainloop, 所有窗口都只能在这里创建
+    pynput 线程 - 键盘监听, 只把待展示的文本投递到队列
+    pystray线程 - 托盘菜单, 回调同样只投递队列
 
 跨线程一律不碰 tkinter 对象, 统一走 self._queue + root.after 轮询
 """
@@ -25,13 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 class TranslateService:
-    """持有翻译器、热键监听与托盘图标的后台服务。
+    """持有翻译器, 热键监听与托盘图标的后台服务
 
     参数:
         root:             外壳的根窗口 (用于 after 轮询, 并作为弹窗的 master)
         on_state_change:  callable(), 已配置/热键开关等状态变化时调用
-        on_show_window:   callable(), 用户在托盘选择「打开主窗口」时调用
-        on_exit:          callable(), 用户在托盘选择「退出」时调用
+        on_show_window:   callable(), 用户在托盘选择'打开主窗口'时调用
+        on_exit:          callable(), 用户在托盘选择'退出'时调用
         theme:            ThemeManager, 仅用于让翻译结果弹窗跟随当前配色
     """
 
@@ -58,14 +58,14 @@ class TranslateService:
     # -- 生命周期 ---------------------------------------------------------
     @property
     def running(self):
-        """翻译功能是否已启动, 即热键与托盘是否在工作。"""
+        """翻译功能是否已启动, 即热键与托盘是否在工作"""
         return self._running
 
     def start(self):
-        """启动翻译: 建立全局热键监听并显示托盘图标。
+        """启动翻译: 建立全局热键监听并显示托盘图标
 
-        凭据尚未就绪时不会启动, 返回 False 交给调用方提示用户。
-        程序启动时不自动调用, 由用户在划词翻译页面显式开启。
+        凭据尚未就绪时不会启动, 返回 False 交给调用方提示用户
+        程序启动时不自动调用, 由用户在划词翻译页面显式开启
         """
         if self._running:
             return True
@@ -74,7 +74,7 @@ class TranslateService:
 
         self._stopping = False
         self._running = True
-        # 每次启动都从「不暂停」开始, 避免上次的暂停状态让人以为热键坏了
+        # 每次启动都从'不暂停'开始, 避免上次的暂停状态让人以为热键坏了
         self.paused = False
 
         self._start_listener()
@@ -85,7 +85,7 @@ class TranslateService:
         return True
 
     def stop(self):
-        """停止翻译: 释放键盘钩子并移除托盘图标, 已保存的凭据不受影响。"""
+        """停止翻译: 释放键盘钩子并移除托盘图标, 已保存的凭据不受影响"""
         if not self._running:
             return
 
@@ -99,7 +99,7 @@ class TranslateService:
         self._notify_state()
 
     def shutdown(self):
-        """进程退出前的收尾: 停掉翻译并禁止再续排定时器。"""
+        """进程退出前的收尾: 停掉翻译并禁止再续排定时器"""
         self.stop()
         self._stopping = True
 
@@ -142,14 +142,14 @@ class TranslateService:
     # -- 配置 -------------------------------------------------------------
     @property
     def ready(self):
-        """翻译服务是否已就绪, 即是否具备启动翻译的条件。
+        """翻译服务是否已就绪, 即是否具备启动翻译的条件
 
         需要凭据的服务缺凭据时为 False; 不需要凭据的服务装载好即为 True
         """
         return self.translator is not None
 
     def set_config(self, config):
-        """记住配置并重建翻译客户端, 不改变运行状态。
+        """记住配置并重建翻译客户端, 不改变运行状态
 
         运行中换服务或换凭据都能立即生效: 热键监听下一次触发就会用上
         新的客户端, 不必先停止再启动
@@ -168,7 +168,7 @@ class TranslateService:
 
     # -- 热键开关 ---------------------------------------------------------
     def set_paused(self, paused):
-        """暂停或恢复全局热键。"""
+        """暂停或恢复全局热键"""
         self.paused = bool(paused)
         if self._listener is not None:
             if self.paused:
@@ -180,13 +180,13 @@ class TranslateService:
         self._notify_state()
 
     def toggle_paused(self):
-        """在暂停与恢复之间切换, 返回切换后的状态。"""
+        """在暂停与恢复之间切换, 返回切换后的状态"""
         self.set_paused(not self.paused)
         return self.paused
 
     # -- 托盘 -------------------------------------------------------------
     def _ensure_tray(self):
-        """创建并启动托盘图标; 托盘不可用不应导致程序无法运行。"""
+        """创建并启动托盘图标; 托盘不可用不应导致程序无法运行"""
         if self._tray is not None:
             return
         try:
@@ -205,9 +205,9 @@ class TranslateService:
             self._tray = None
             logger.exception("托盘图标不可用")
             show_error(
-                f"系统托盘图标初始化失败, 划词翻译仍会在后台工作。\n"
-                f"如需退出, 直接关闭 {APP_TITLE} 主窗口即可。\n"
-                f"详情见日志文件。",
+                f"系统托盘图标初始化失败, 划词翻译仍会在后台工作.\n"
+                f"如需退出, 直接关闭 {APP_TITLE} 主窗口即可.\n"
+                f"详情见日志文件",
                 parent=self.root,
             )
 
@@ -221,7 +221,7 @@ class TranslateService:
 
     # -- 跨线程投递 -------------------------------------------------------
     def _post(self, action):
-        """任何线程都可以调用, 把要在主线程执行的动作排队。"""
+        """任何线程都可以调用, 把要在主线程执行的动作排队"""
         self._queue.put(action)
 
     def _schedule_poll(self):
@@ -233,7 +233,7 @@ class TranslateService:
             self._poll_id = None
 
     def _dispatch(self):
-        """主线程轮询: 只在这里执行后台线程排队的动作。"""
+        """主线程轮询: 只在这里执行后台线程排队的动作"""
         self._poll_id = None
         if self._stopping:
             return
@@ -250,7 +250,7 @@ class TranslateService:
 
     # -- 翻译结果 ---------------------------------------------------------
     def _on_result(self, text):
-        """热键线程的结果回调: 只投递, 绝不在这里碰 tkinter。"""
+        """热键线程的结果回调: 只投递, 绝不在这里碰 tkinter"""
         self._post(lambda: self._show_result(text))
 
     def _show_result(self, text):

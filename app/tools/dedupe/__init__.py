@@ -1,4 +1,4 @@
-"""图片查重工具包。"""
+"""图片查重工具包"""
 
 from .page import DedupePage
 

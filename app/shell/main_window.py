@@ -1,4 +1,4 @@
-"""管理应用外壳、工具页面切换及工作线程到界面的消息队列。"""
+"""管理应用外壳, 工具页面切换及工作线程到界面的消息队列"""
 
 import logging
 import queue
@@ -16,7 +16,7 @@ SPLITTER_WIDTH = 5
 
 
 class ShellWindow:
-    """承载侧栏、工具页面和应用状态栏。"""
+    """承载侧栏, 工具页面和应用状态栏"""
 
     def __init__(self, root, settings, page_classes):
         self.root = root
@@ -106,7 +106,7 @@ class ShellWindow:
         return self.settings.page if self.settings.page in keys else keys[0]
 
     def show(self, key):
-        """切换到指定工具并通知页面生命周期钩子。"""
+        """切换到指定工具并通知页面生命周期钩子"""
         if key not in self._pages or key == self._current_key:
             return
         previous = self._pages.get(self._current_key)
@@ -122,7 +122,7 @@ class ShellWindow:
         page.on_show()
 
     def toggle_theme(self, _event=None):
-        """切换浅色与深色外观并保存用户选择。"""
+        """切换浅色与深色外观并保存用户选择"""
         mode = "dark" if self.theme.mode == "light" else "light"
         if not self.theme.set_mode(mode):
             return "break"
@@ -134,7 +134,7 @@ class ShellWindow:
         return "break"
 
     def open_log_folder(self):
-        """打开运行日志目录, 供用户查看日志或反馈问题。"""
+        """打开运行日志目录, 供用户查看日志或反馈问题"""
         folder = user_log_dir()
         try:
             ensure_dir(folder)
@@ -155,7 +155,7 @@ class ShellWindow:
         self._indicator_var.set("   \u00b7   ".join(self._indicators.values()))
 
     def post(self, action):
-        """将回调加入队列, 由 Tk 主线程执行。"""
+        """将回调加入队列, 由 Tk 主线程执行"""
         self._queue.put(action)
 
     def _drain_queue(self):
@@ -176,7 +176,7 @@ class ShellWindow:
             self._queue_job = None
 
     def raise_window(self):
-        """还原并聚焦主窗口, 供托盘回调使用。"""
+        """还原并聚焦主窗口, 供托盘回调使用"""
         try:
             self.root.deiconify()
             self.root.lift()
@@ -185,7 +185,7 @@ class ShellWindow:
             logger.debug("Could not restore the main window", exc_info=True)
 
     def on_close(self):
-        """通知活动页面清理资源, 保存偏好并关闭窗口。"""
+        """通知活动页面清理资源, 保存偏好并关闭窗口"""
         for page in list(self._pages.values()):
             try:
                 if not page.on_close():

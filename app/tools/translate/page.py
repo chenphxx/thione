@@ -1,7 +1,7 @@
-"""划词翻译页面: 服务选择与凭据配置、启动开关与最近一次翻译结果。
+"""划词翻译页面: 服务选择与凭据配置, 启动开关与最近一次翻译结果
 
 翻译功能默认不启动: 打开 thione 只是把服务选择与凭据读进来, 热键与托盘图标都要等
-用户在本页面点「启动翻译」之后才建立, 避免一开程序就挂上全局键盘钩子。
+用户在本页面点'启动翻译'之后才建立, 避免一开程序就挂上全局键盘钩子
 """
 
 import logging
@@ -60,7 +60,7 @@ EMPTY_RESULT_HINT = "还没有翻译记录 启动翻译后选中任意文本 连
 
 
 class TranslatePage(ToolPage):
-    """选择翻译服务与凭据并常驻划词翻译热键的工具页面。"""
+    """选择翻译服务与凭据并常驻划词翻译热键的工具页面"""
 
     key = "translate"
     title = "划词翻译"
@@ -107,7 +107,7 @@ class TranslatePage(ToolPage):
 
     # ---------------- 界面构建 ----------------
     def _build_provider_card(self, body):
-        """翻译服务二选一; 换服务后不必重启, 下一次翻译就用新的服务。
+        """翻译服务二选一; 换服务后不必重启, 下一次翻译就用新的服务
 
         @param body: 放置卡片的容器
         """
@@ -151,7 +151,7 @@ class TranslatePage(ToolPage):
         self.btn_pause.pack(side="right", padx=(0, 8))
 
     def _build_language_card(self, body):
-        """源语言与目标语言; 可选范围随当前服务变化, 换语言立即生效。
+        """源语言与目标语言; 可选范围随当前服务变化, 换语言立即生效
 
         @param body: 放置卡片的容器
         """
@@ -188,10 +188,10 @@ class TranslatePage(ToolPage):
         )
 
     def _build_form(self):
-        """服务选择 语言选择与凭据表单。
+        """服务选择 语言选择与凭据表单
 
         表单放在可滚动的画布里: 窗口高度不足时滚动条才出现, 表单不会被裁掉,
-        也不会把下面的结果区挤出可视区。
+        也不会把下面的结果区挤出可视区
         """
         outer = ttk.Frame(self)
         outer.pack(side="top", fill="both", expand=True)
@@ -247,7 +247,7 @@ class TranslatePage(ToolPage):
                    command=self._save).pack(side="left")
 
     def _build_report(self):
-        """运行状态与最近一次翻译, 固定贴住页面底部。"""
+        """运行状态与最近一次翻译, 固定贴住页面底部"""
         body = ttk.Frame(self, padding=(16, 10))
         body.pack(side="bottom", fill="x")
 
@@ -265,7 +265,7 @@ class TranslatePage(ToolPage):
         card.bind("<Configure>", self._on_result_card_configure)
 
     def _on_result_card_configure(self, event):
-        """结果文本按卡片实际宽度换行。
+        """结果文本按卡片实际宽度换行
 
         @param event: Tk 的 Configure 事件, width 为卡片宽度
         """
@@ -273,17 +273,17 @@ class TranslatePage(ToolPage):
 
     # ---------------- 表单滚动 ----------------
     def _on_form_content_configure(self, _event=None):
-        """表单高度变化时刷新滚动范围, 并同步滚动条的显隐。"""
+        """表单高度变化时刷新滚动范围, 并同步滚动条的显隐"""
         self.form_canvas.configure(scrollregion=self.form_canvas.bbox("all"))
         self._sync_form_scrollbar()
 
     def _on_form_canvas_configure(self, event):
-        """画布尺寸变化时让表单跟着变宽, 并重新判断是否需要滚动条。"""
+        """画布尺寸变化时让表单跟着变宽, 并重新判断是否需要滚动条"""
         self.form_canvas.itemconfigure(self._form_window, width=event.width)
         self._sync_form_scrollbar()
 
     def _sync_form_scrollbar(self):
-        """表单装得下就不显示滚动条, 装不下时才显示并允许滚动。"""
+        """表单装得下就不显示滚动条, 装不下时才显示并允许滚动"""
         bbox = self.form_canvas.bbox("all")
         overflows = (
             bbox is not None
@@ -298,7 +298,7 @@ class TranslatePage(ToolPage):
 
     # ---------------- 初始数据 ----------------
     def _prefill(self):
-        """把已有来源 (环境变量 / 旧版配置 / .env / csv) 的选择与凭据预填进表单。"""
+        """把已有来源 (环境变量 / 旧版配置 / .env / csv) 的选择与凭据预填进表单"""
         try:
             values = storage.current_values()
         except Exception:
@@ -311,7 +311,7 @@ class TranslatePage(ToolPage):
         self._target_lang = values.get("target_lang") or DEFAULT_TARGET_LANG
 
     def _load_config(self):
-        """启动时只装载已有配置, 翻译功能默认不开启, 等用户点启动。"""
+        """启动时只装载已有配置, 翻译功能默认不开启, 等用户点启动"""
         try:
             config = storage.load()
         except Exception as exc:
@@ -339,7 +339,7 @@ class TranslatePage(ToolPage):
 
     @staticmethod
     def _ready_to_run(values):
-        """是否具备翻译条件: 不需要凭据的服务直接可用, 需要的要求三项填全。
+        """是否具备翻译条件: 不需要凭据的服务直接可用, 需要的要求三项填全
 
         @param values: _values() 的结果
         @return: 当前服务是否可以直接使用
@@ -349,7 +349,7 @@ class TranslatePage(ToolPage):
         return all(values[key] for key in ("ak", "sk", "project_id"))
 
     def _apply_config(self, values):
-        """把表单里的选择交给服务, 换服务与换凭据都会立即生效。
+        """把表单里的选择交给服务, 换服务与换凭据都会立即生效
 
         @param values: _values() 的结果
         @return: 是否已经装载 (华为云凭据不全时不装载)
@@ -361,20 +361,20 @@ class TranslatePage(ToolPage):
 
     # ---------------- 状态刷新 ----------------
     def _sync_provider_ui(self):
-        """按当前服务刷新凭据提示与可选语言。"""
+        """按当前服务刷新凭据提示与可选语言"""
         spec = spec_for(self._provider_var.get())
         if spec.requires_credentials:
             self._cred_hint_var.set(
-                "填写后点击「保存凭据」或「启动翻译」都会写入用户配置目录。"
+                "填写后点击'保存凭据'或'启动翻译'都会写入用户配置目录"
             )
         else:
             self._cred_hint_var.set(
-                f"当前使用{spec.label}, 下面的凭据不会被使用, 切回华为云时再填。"
+                f"当前使用{spec.label}, 下面的凭据不会被使用, 切回华为云时再填"
             )
         self._sync_language_ui()
 
     def _sync_language_ui(self):
-        """按当前服务重建两个语言下拉框, 并把选择收敛到支持的范围。"""
+        """按当前服务重建两个语言下拉框, 并把选择收敛到支持的范围"""
         spec = spec_for(self._provider_var.get())
         self._source_labels = {
             language_label(code): code
@@ -408,11 +408,11 @@ class TranslatePage(ToolPage):
 
     @staticmethod
     def _target_label(code):
-        """目标语言下拉框里某一项的显示名。"""
+        """目标语言下拉框里某一项的显示名"""
         return AUTO_TARGET_LABEL if code == AUTO_LANG else language_label(code)
 
     def _read_language_ui(self):
-        """把下拉框上选中的显示名换回领域语言代码。"""
+        """把下拉框上选中的显示名换回领域语言代码"""
         self._source_lang = self._source_labels.get(
             self.combo_source.get(), AUTO_LANG
         )
@@ -421,15 +421,15 @@ class TranslatePage(ToolPage):
         )
 
     def _apply_preferred_target(self):
-        """两边都选了中文时把目标语言换成英文, 并同步下拉框的显示。
+        """两边都选了中文时把目标语言换成英文, 并同步下拉框的显示
 
-        目标语言默认是自动, 因此只有用户明确选了中文才会走到这里。
+        目标语言默认是自动, 因此只有用户明确选了中文才会走到这里
         """
         self._target_lang = preferred_target(self._source_lang, self._target_lang)
         self.combo_target.set(self._target_label(self._target_lang))
 
     def _service_detail(self):
-        """状态行里的服务说明: 服务名, 需要凭据时带上区域, 再跟上翻译方向。"""
+        """状态行里的服务说明: 服务名, 需要凭据时带上区域, 再跟上翻译方向"""
         config = self.service.config
         provider = (config.provider if config is not None
                     else self._provider_var.get())
@@ -441,13 +441,13 @@ class TranslatePage(ToolPage):
         # 目标语言用下拉框里的显示名, 自动项才说清它代表什么方向
         parts.append(f"{language_label(self._source_lang)} → "
                      f"{self._target_label(self._target_lang)}")
-        return " · ".join(parts)
+        return " | ".join(parts)
 
     def on_show(self):
         self._refresh_state()
 
     def on_hide(self):
-        """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动。"""
+        """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动"""
         unbind_mousewheel(self.form_canvas)
 
     def _refresh_state(self):
@@ -468,7 +468,7 @@ class TranslatePage(ToolPage):
 
         if running and paused:
             self._status_var.set(
-                "已暂停: 全局热键当前不响应, 点击「恢复热键」继续"
+                "已暂停: 全局热键当前不响应, 点击'恢复热键'继续"
             )
             indicator = "翻译热键: 已暂停"
         elif running:
@@ -479,12 +479,12 @@ class TranslatePage(ToolPage):
             indicator = "翻译热键: 已启用"
         elif ready:
             self._status_var.set(
-                f"未启动 ({self._service_detail()}): 点击「启动翻译」开始划词翻译"
+                f"未启动 ({self._service_detail()}): 点击'启动翻译'开始划词翻译"
             )
             indicator = ""
         else:
             self._status_var.set(
-                "未配置: 填写 AK / SK / Project ID 后点击「启动翻译」"
+                "未配置: 填写 AK / SK / Project ID 后点击'启动翻译'"
             )
             indicator = ""
 
@@ -496,7 +496,7 @@ class TranslatePage(ToolPage):
         self._result_var.set(result)
 
     def _show_me(self):
-        """托盘菜单: 切回本页面并把主窗口拉到前台。"""
+        """托盘菜单: 切回本页面并把主窗口拉到前台"""
         self.shell.show(self.key)
         self.shell.raise_window()
 
@@ -505,20 +505,20 @@ class TranslatePage(ToolPage):
         self.service.toggle_paused()
 
     def _on_provider_change(self):
-        """换服务: 立即生效, 不必先停止翻译; 凭据不全时只记下选择。"""
+        """换服务: 立即生效, 不必先停止翻译; 凭据不全时只记下选择"""
         self._sync_language_ui()
         self._apply_config(self._values())
         self._refresh_state()
 
     def _on_language_change(self):
-        """换语言: 与换服务一样立即生效, 下一次翻译就用新的方向。"""
+        """换语言: 与换服务一样立即生效, 下一次翻译就用新的方向"""
         self._read_language_ui()
         self._apply_preferred_target()
         self._apply_config(self._values())
         self._refresh_state()
 
     def _toggle_running(self):
-        """启动或停止翻译; 启动前先把表单里的选择与凭据落盘。"""
+        """启动或停止翻译; 启动前先把表单里的选择与凭据落盘"""
         if self.service.running:
             self.service.stop()
             return
@@ -532,7 +532,7 @@ class TranslatePage(ToolPage):
         self.service.start()
 
     def _store_config(self, values):
-        """把服务选择与凭据写入用户配置目录并交给服务; 失败返回 False。"""
+        """把服务选择与凭据写入用户配置目录并交给服务; 失败返回 False"""
         config = self._build_config(values)
         try:
             path = storage.save(config)
@@ -593,7 +593,7 @@ class TranslatePage(ToolPage):
             self._status_var.set(message)
 
     def _schedule_test_poll(self):
-        """轮询后台的测试结果; 页面销毁后不再续排。"""
+        """轮询后台的测试结果; 页面销毁后不再续排"""
         try:
             self._test_poll_id = self.after(80, self._poll_test)
         except tk.TclError:
@@ -612,7 +612,7 @@ class TranslatePage(ToolPage):
 
     # ---------------- 收尾 ----------------
     def on_close(self):
-        """停掉热键与托盘; 主窗口随外壳一起关闭, 因此这里不阻止退出。"""
+        """停掉热键与托盘; 主窗口随外壳一起关闭, 因此这里不阻止退出"""
         unbind_mousewheel(self.form_canvas)
         if self._test_poll_id is not None:
             try:

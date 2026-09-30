@@ -1,4 +1,4 @@
-"""重复图片检测工作线程。"""
+"""重复图片检测工作线程"""
 
 from PIL import Image
 
@@ -29,7 +29,7 @@ def difference_hash(image, hash_size=8):
 
 def dedupe_worker(file_list, progress_queue, stop_event,
                   hash_func=difference_hash, threshold=HASH_THRESHOLD):
-    """在后台线程中计算感知哈希并按相似度分组。
+    """在后台线程中计算感知哈希并按相似度分组
 
     通过 progress_queue 发送消息:
       ("progress", processed, total) - 进度

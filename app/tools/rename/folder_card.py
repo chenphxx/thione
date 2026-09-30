@@ -1,4 +1,4 @@
-"""文件夹卡片: 选择路径 筛选与文件视图。
+"""文件夹卡片: 选择路径 筛选与文件视图
 
 卡片本身撑满所在区域, 文件网格再撑满卡片的剩余高度, 因此批量重命名页下方
 不会留白; 卡片多到一屏放不下时由外层画布滚动
@@ -14,7 +14,7 @@ from .constants import LIST_MIN_HEIGHT
 
 
 class FolderCard(ttk.LabelFrame):
-    """一个文件夹卡片: 路径 筛选 计数 文件网格 删除按钮。"""
+    """一个文件夹卡片: 路径 筛选 计数 文件网格 删除按钮"""
 
     def __init__(self, parent, app, idx):
         super().__init__(parent, text=f"文件夹 {idx}", padding=12)
@@ -45,7 +45,7 @@ class FolderCard(ttk.LabelFrame):
         self.combo_filter.pack(side="left", padx=(6, 8))
         self.combo_filter.bind("<<ComboboxSelected>>", lambda e: self.apply_filter())
 
-        self.lbl_counts = ttk.Label(row, text="总数 0 · 筛选 0",
+        self.lbl_counts = ttk.Label(row, text="总数 0 | 筛选 0",
                                     style="CardMuted.TLabel", width=18,
                                     anchor="center")
         self.lbl_counts.pack(side="left", padx=(0, 8))
@@ -113,17 +113,17 @@ class FolderCard(ttk.LabelFrame):
         self.grid.set_files(
             [os.path.join(self.folder_path, n) for n in self.filtered_files])
         self.lbl_counts.config(
-            text=f"总数 {len(self.files)} · 筛选 {len(self.filtered_files)}")
+            text=f"总数 {len(self.files)} | 筛选 {len(self.filtered_files)}")
         self.app.refresh_overall_counts()
         # 列表内容变化后清空预览
         self.app.on_file_selected(None)
 
     def set_tier(self, tier):
-        """切换缩略图档位; 由页面统一驱动, 保证各卡片一致。"""
+        """切换缩略图档位; 由页面统一驱动, 保证各卡片一致"""
         self.grid.set_tier(tier)
 
     def set_view(self, view):
-        """切换展示方式; 由页面统一驱动, 保证各卡片一致。"""
+        """切换展示方式; 由页面统一驱动, 保证各卡片一致"""
         self.grid.set_view(view)
     def delete_block(self):
         # 按要求直接删除, 不提示

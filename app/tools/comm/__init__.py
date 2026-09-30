@@ -1,4 +1,4 @@
-"""串口与网络收发工具包。"""
+"""串口与网络收发工具包"""
 
 from .page import CommPage
 

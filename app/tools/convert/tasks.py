@@ -1,8 +1,4 @@
-"""转换任务的准备: 扫描输入文件 规划输出路径与显示大小。
-
-页面只负责收集用户输入与展示进度, 文件系统相关的规则集中在这里; 该模块不
-依赖 tkinter, 可以单独验证。
-"""
+"""转换任务的准备: 扫描输入文件 规划输出路径与显示大小"""
 
 import logging
 import os
@@ -20,7 +16,7 @@ MAX_NAME_ATTEMPTS = 1000
 
 @dataclass
 class ConvertItem:
-    """列表里的一行: 源文件 大小 当前状态与状态颜色。
+    """列表里的一行: 源文件 大小 当前状态与状态颜色
 
     @brief 输出路径要到开始转换时才决定, 因此这里只记录源文件
     """
@@ -32,17 +28,17 @@ class ConvertItem:
 
     @property
     def name(self):
-        """文件名 (不含目录)。"""
+        """文件名 (不含目录)"""
         return os.path.basename(self.source)
 
     @property
     def extension(self):
-        """扩展名的大写形式, 没有扩展名时显示占位符。"""
+        """扩展名的大写形式, 没有扩展名时显示占位符"""
         return os.path.splitext(self.source)[1].lstrip(".").upper() or EMPTY_VALUE
 
 
 def file_size(path):
-    """取文件大小。
+    """取文件大小
 
     @param path: 文件路径
     @return: 字节数; 文件读不到时返回 0
@@ -54,7 +50,7 @@ def file_size(path):
 
 
 def scan_folder(folder):
-    """递归收集文件夹里可以作为输入的音频文件。
+    """递归收集文件夹里可以作为输入的音频文件
 
     @param folder: 要扫描的文件夹
     @return: 按路径排序的文件列表
@@ -68,7 +64,7 @@ def scan_folder(folder):
 
 
 def is_same_target(source, dest_dir, extension):
-    """判断一次转换是否没有意义。
+    """判断一次转换是否没有意义
 
     源文件已经是目标格式 并且输出会落回源文件本身时 没有必要再转一次
 
@@ -84,7 +80,7 @@ def is_same_target(source, dest_dir, extension):
 
 
 def is_same_format(extension, other):
-    """判断两个扩展名是否属于同一编码格式。
+    """判断两个扩展名是否属于同一编码格式
 
     同一编码格式可能有多个扩展名, 例如 .oga 与 .ogg 因此按格式比较而不是直接
     比较扩展名字符串
@@ -97,7 +93,7 @@ def is_same_format(extension, other):
 
 
 def copy_file(source, target):
-    """把已经是目标格式的文件直接复制到输出位置。
+    """把已经是目标格式的文件直接复制到输出位置
 
     复制不经过编码器, 因此不会因为二次编码损失音质; 元数据与修改时间一并
     保留
@@ -110,7 +106,7 @@ def copy_file(source, target):
 
 
 def move_file(source, target):
-    """把已经还原好的音频直接移到输出位置。
+    """把已经还原好的音频直接移到输出位置
 
     还原结果本身就是目标格式时, 移动比再复制一份省一次读写
 
@@ -122,7 +118,7 @@ def move_file(source, target):
 
 
 def remove_file(path):
-    """删掉临时文件, 删不掉时只记日志。
+    """删掉临时文件, 删不掉时只记日志
 
     @param path: 文件路径
     """
@@ -136,7 +132,7 @@ def remove_file(path):
 
 
 def output_path(source, dest_dir, extension):
-    """给出这次转换的输出路径。
+    """给出这次转换的输出路径
 
     @param source: 源文件路径
     @param dest_dir: 指定的输出目录, 空串表示与源文件同目录
@@ -149,7 +145,7 @@ def output_path(source, dest_dir, extension):
 
 
 def format_size(size):
-    """把字节数换成便于阅读的大小文字。
+    """把字节数换成便于阅读的大小文字
 
     @param size: 字节数
     @return: 例如 3.2 MB
@@ -164,7 +160,7 @@ def format_size(size):
 
 
 def _unique_path(path):
-    """文件名已经被占用时追加 (1) (2) 直到找到空位。
+    """文件名已经被占用时追加 (1) (2) 直到找到空位
 
     @param path: 期望的输出路径
     @return: 可用的输出路径; 序号用尽时返回原路径
@@ -180,7 +176,7 @@ def _unique_path(path):
 
 
 def _format_key(extension):
-    """把扩展名归一到同一编码格式的代表名。
+    """把扩展名归一到同一编码格式的代表名
 
     @param extension: 扩展名, 可以带点
     @return: 小写的代表扩展名
@@ -193,5 +189,5 @@ def _format_key(extension):
 
 
 def _key(path):
-    """目录比较用的规范化形式。"""
+    """目录比较用的规范化形式"""
     return os.path.normcase(os.path.abspath(path))

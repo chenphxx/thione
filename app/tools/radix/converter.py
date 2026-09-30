@@ -1,10 +1,10 @@
-"""进制转换的数字解析与格式化。
+"""进制转换的数字解析与格式化
 
 约定与常见计算器一致: 输入可以带正负号, 可以带与所选进制匹配的 0b / 0o / 0x
 前缀; 空格 逗号与下划线只作为分隔符被忽略, 全角字符先按 NFKC 归一化成半角
-因此从别处复制过来的数字可以直接粘贴。
+因此从别处复制过来的数字可以直接粘贴
 
-这里只依赖标准库, 不引入 tkinter, 页面只负责取值与展示。
+这里只依赖标准库, 不引入 tkinter, 页面只负责取值与展示
 """
 
 import unicodedata
@@ -30,11 +30,11 @@ _CN_DIGITS = "零一二三四五六七八九"
 
 
 class ConvertError(ValueError):
-    """输入无法解析为该进制的数字, 消息可以直接展示给用户。"""
+    """输入无法解析为该进制的数字, 消息可以直接展示给用户"""
 
 
 def base_name(base):
-    """取进制的名字。
+    """取进制的名字
 
     @param base: 2 到 36 之间的进制
     @return: 例如 2 对应 二进制, 16 对应 十六进制, 36 对应 三十六进制
@@ -50,7 +50,7 @@ def base_name(base):
 
 
 def digit_hint(base):
-    """描述该进制可以使用的数字字符, 用于错误消息。
+    """描述该进制可以使用的数字字符, 用于错误消息
 
     @param base: 2 到 36 之间的进制
     @return: 例如 16 对应 0-9 与 A-F
@@ -63,7 +63,7 @@ def digit_hint(base):
 
 
 def normalize(text):
-    """把输入整理成只含符号 前缀与数字字符的形式。
+    """把输入整理成只含符号 前缀与数字字符的形式
 
     @param text: 界面输入框里的原始内容
     @return: 去掉全角字符与分隔符之后的字符串
@@ -75,7 +75,7 @@ def normalize(text):
 
 
 def parse_number(text, base):
-    """把输入按 base 解析成整数。
+    """把输入按 base 解析成整数
 
     @param text: 界面输入框里的原始内容
     @param base: 2 到 36 之间的进制
@@ -103,7 +103,7 @@ def parse_number(text, base):
 
 
 def format_number(value, base):
-    """把整数按 base 输出成字符串。
+    """把整数按 base 输出成字符串
 
     @param value: 待输出的整数
     @param base: 2 到 36 之间的进制
@@ -123,7 +123,7 @@ def format_number(value, base):
 
 
 def convert(text, source_base, target_base):
-    """按输入进制解析后, 再按目标进制输出。
+    """按输入进制解析后, 再按目标进制输出
 
     @param text: 界面输入框里的原始内容
     @param source_base: 输入的进制
@@ -135,7 +135,7 @@ def convert(text, source_base, target_base):
 
 
 def convert_many(text, source_base, target_bases):
-    """解析一次, 同时给出多个进制下的结果。
+    """解析一次, 同时给出多个进制下的结果
 
     @param text: 界面输入框里的原始内容
     @param source_base: 输入的进制
@@ -150,7 +150,7 @@ def convert_many(text, source_base, target_bases):
 
 
 def reference_rows(limit):
-    """生成对照表的数据行, 每行的四列与 REFERENCE_COLUMNS 对应。
+    """生成对照表的数据行, 每行的四列与 REFERENCE_COLUMNS 对应
 
     @param limit: 生成 [0, limit) 范围内的整数
     @return: 每行一个 (十进制, 二进制, 八进制, 十六进制) 元组的列表

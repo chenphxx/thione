@@ -1,11 +1,11 @@
-"""系统托盘图标。
+"""系统托盘图标
 
-这是程序在任务栏/通知区域的「存在感」: 划词翻译的热键是全局的, 用户切到
+这是程序在任务栏/通知区域的'存在感': 划词翻译的热键是全局的, 用户切到
 别的窗口后仍然可用, 托盘图标既能提示程序在运行, 也提供了暂停热键与退出的
-快捷入口, 不必再回到主窗口操作。
+快捷入口, 不必再回到主窗口操作
 
 注意 pystray 与 tkinter 都要求主线程, 因此这里统一用 run_detached() 让托盘
-在自己的线程里跑, 主线程留给 tkinter。
+在自己的线程里跑, 主线程留给 tkinter
 """
 
 import logging
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_icon_image():
-    """加载托盘图标; 失败时返回一个纯色占位图, 保证托盘仍可用。"""
+    """加载托盘图标; 失败时返回一个纯色占位图, 保证托盘仍可用"""
     try:
         return Image.open(resource_path(ICON_PATH))
     except Exception:
@@ -30,7 +30,7 @@ def load_icon_image():
 
 
 class TrayIcon:
-    """托盘图标与右键菜单。
+    """托盘图标与右键菜单
 
     参数均为回调, 且在非主线程中被调用, 回调内部必须自行投递到主线程:
         on_show()    显示主窗口
@@ -66,7 +66,7 @@ class TrayIcon:
         )
 
     def _safe(self, func):
-        """包装菜单回调, 避免异常打断托盘线程。"""
+        """包装菜单回调, 避免异常打断托盘线程"""
 
         def wrapper(icon, item):  # pystray 会传入 (icon, item)
             try:
@@ -105,14 +105,14 @@ class TrayIcon:
             logger.debug("刷新托盘菜单失败", exc_info=True)
 
     def notify(self, message, title=APP_TITLE):
-        """弹出气泡提示; 不支持时静默忽略。"""
+        """弹出气泡提示; 不支持时静默忽略"""
         try:
             self._icon.notify(message, title)
         except Exception:
             logger.debug("托盘气泡提示不可用", exc_info=True)
 
     def start(self):
-        """在后台线程启动托盘图标 (主线程要继续跑 tkinter)。"""
+        """在后台线程启动托盘图标 (主线程要继续跑 tkinter)"""
         self._icon.run_detached()
         logger.info("托盘图标已启动")
 

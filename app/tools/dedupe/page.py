@@ -1,8 +1,4 @@
-"""图片查重页面: 图标视图浏览文件夹, 预览窗格与重复查找入口。
-
-列表按 Windows 资源管理器的方式组织: 主区是缩略图网格, 右侧是可收起的
-预览窗格, 底部是可收起的详细信息窗格, 缩略图大小分小 中 大三档
-"""
+"""图片查重页面: 图标视图浏览文件夹, 预览窗格与重复查找入口"""
 
 import queue
 import threading
@@ -27,7 +23,7 @@ from .scanner import is_image_file, scan_folder
 
 
 class DedupePage(ToolPage):
-    """按感知哈希查找重复图片的工具页面。"""
+    """按感知哈希查找重复图片的工具页面"""
 
     key = "dedupe"
     title = "图片查重"
@@ -133,9 +129,9 @@ class DedupePage(ToolPage):
         self.paned.forget(self.preview)  # 默认收起
 
     def _build_empty_state(self, parent):
-        """建立文件网格的空状态占位块。
+        """建立文件网格的空状态占位块
 
-        没有可显示的文件时用它顶替网格, 给出下一步该做什么, 而不是留一块白屏。
+        没有可显示的文件时用它顶替网格, 给出下一步该做什么, 而不是留一块白屏
 
         @param parent: 承载占位块的父容器
         @return: 占位块 Frame (默认不显示)
@@ -151,17 +147,17 @@ class DedupePage(ToolPage):
         return box
 
     def _update_empty_state(self):
-        """按当前是否有可显示的文件, 在网格与空状态之间切换。"""
+        """按当前是否有可显示的文件, 在网格与空状态之间切换"""
         if self.filtered_files:
             self.empty_state.pack_forget()
             self.grid_box.pack(side="top", fill="both", expand=True)
             return
         if self.current_folder:
             self.empty_title.config(text="这个文件夹里没有可显示的图片")
-            self.empty_hint.config(text="换一个文件夹, 或者把筛选类型改回「全部」")
+            self.empty_hint.config(text="换一个文件夹, 或者把筛选类型改回'全部'")
         else:
             self.empty_title.config(text="还没有选择文件夹")
-            self.empty_hint.config(text="点击左上角的「选择文件夹」开始扫描")
+            self.empty_hint.config(text="点击左上角的'选择文件夹'开始扫描")
         self.grid_box.pack_forget()
         self.empty_state.pack(side="top", fill="both", expand=True)
 
@@ -189,12 +185,12 @@ class DedupePage(ToolPage):
         self.lbl_progress_text.pack(side="left")
 
     def _build_details(self):
-        """底部详细信息窗格; 在状态栏之后构建, 因此排在状态栏上方。"""
+        """底部详细信息窗格; 在状态栏之后构建, 因此排在状态栏上方"""
         self.details = DetailsPane(self, self.theme)
 
     # -------------------------- 视图切换 --------------------------
     def toggle_preview(self):
-        """显示或收起右侧预览窗格。"""
+        """显示或收起右侧预览窗格"""
         self.preview_visible = not self.preview_visible
         if self.preview_visible:
             self.paned.add(self.preview, weight=0)
@@ -203,7 +199,7 @@ class DedupePage(ToolPage):
         self._sync_view_controls()
 
     def toggle_details(self):
-        """显示或收起底部详细信息窗格。"""
+        """显示或收起底部详细信息窗格"""
         self.details_visible = not self.details_visible
         if self.details_visible:
             self.details.pack(side="bottom", fill="x")
@@ -212,14 +208,14 @@ class DedupePage(ToolPage):
         self._sync_view_controls()
 
     def _sync_view_controls(self):
-        """把两个窗格的开关状态同步到右下角与工具条上的按钮。"""
+        """把两个窗格的开关状态同步到右下角与工具条上的按钮"""
         self.toggles.set_state(self.details_visible, self.preview_visible)
         self.btn_preview.configure(
             style="SegmentOn.TButton" if self.preview_visible
             else "Secondary.TButton")
 
     def _on_view_change(self, view):
-        """切换列表与缩略图展示; 同一展示方式会被忽略。"""
+        """切换列表与缩略图展示; 同一展示方式会被忽略"""
         if view == self.view:
             return
         self.view = view
@@ -227,7 +223,7 @@ class DedupePage(ToolPage):
         self.view_switch.set_state(self.view, self.tier)
 
     def _on_tier_change(self, tier):
-        """切换缩略图档位; 在列表展示下点档位即切回缩略图展示。"""
+        """切换缩略图档位; 在列表展示下点档位即切回缩略图展示"""
         changed = tier != self.tier
         self.tier = tier
         self.grid.set_tier(tier)
@@ -238,7 +234,7 @@ class DedupePage(ToolPage):
             return
         self.view_switch.set_state(self.view, self.tier)
     def on_hide(self):
-        """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动。"""
+        """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动"""
         unbind_mousewheel(self.grid.canvas)
 
     def on_theme_changed(self):
@@ -247,7 +243,7 @@ class DedupePage(ToolPage):
 
     # -------------------------- 文件操作 --------------------------
     def _on_select_file(self, path):
-        """选中项变化时同步右侧预览与底部详细信息。"""
+        """选中项变化时同步右侧预览与底部详细信息"""
         self.details.show(path)
         self.preview.show(path)
 
@@ -307,7 +303,7 @@ class DedupePage(ToolPage):
     def _counts_text(self):
         text = f"{len(self.all_files)} 个项目"
         if len(self.filtered_files) != len(self.all_files):
-            text += f" · 已筛选 {len(self.filtered_files)} 个"
+            text += f" | 已筛选 {len(self.filtered_files)} 个"
         return text
 
     # -------------------------- 重复查找 --------------------------

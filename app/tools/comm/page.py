@@ -2,7 +2,7 @@
 
 顶部一行连接配置: 左边切换串口通信与网络通信, 右边是当前链路的参数与开关按钮;
 下方接收区与发送区上下排列, 每个区域的左侧是数据视图, 右侧是配置列, 展示的内容
-随当前链路切换。两条链路的会话互相独立, 读线程只把收到的数据与状态变化放进队列,
+随当前链路切换. 两条链路的会话互相独立, 读线程只把收到的数据与状态变化放进队列,
 主线程按固定间隔取出来刷新界面, 因此后台线程不会碰到 tkinter 对象; 打开串口
 测试连接与端口检查同样放在后台线程, 避免连接超时把界面卡住
 """
@@ -802,7 +802,7 @@ class CommPage(ToolPage):
             session.stop()
             return
         self._messages.put(("link", LINK_NET, "open", session, {
-            "note": "%s: %s" % (CHECK_OK, " · ".join(notes)),
+            "note": "%s: %s" % (CHECK_OK, " | ".join(notes)),
             "clients": _client_addresses(session),
         }))
 

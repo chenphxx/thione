@@ -1,4 +1,4 @@
-"""统一管理 Tk 界面的浅色外观。"""
+"""统一管理 Tk 界面的浅色外观"""
 
 import tkinter as tk
 from tkinter import font as tkfont
@@ -96,17 +96,17 @@ PALETTES = {"light": PALETTE, "dark": DARK_PALETTE}
 
 
 def sans(size=FONT_SIZE, bold=False, italic=False):
-    """返回界面统一使用的无衬线字体配置。"""
+    """返回界面统一使用的无衬线字体配置"""
     return (FONT_SANS, size, "bold" if bold else "normal", "italic" if italic else "roman")
 
 
 def mono(size=FONT_SIZE, bold=False):
-    """返回界面统一使用的等宽字体配置。"""
+    """返回界面统一使用的等宽字体配置"""
     return (FONT_MONO, size, "bold" if bold else "normal")
 
 
 class ThemeManager:
-    """管理浅色与深色配色, 并同步更新 ttk 和 Tk 原生控件。"""
+    """管理浅色与深色配色, 并同步更新 ttk 和 Tk 原生控件"""
 
     def __init__(self, root, mode="light"):
         self.root = root
@@ -313,7 +313,7 @@ class ThemeManager:
         self.root.option_add("*TCombobox*Listbox.selectForeground", p["text"])
 
     def set_mode(self, mode):
-        """切换界面配色并刷新所有已登记窗口。
+        """切换界面配色并刷新所有已登记窗口
 
         @param mode: 配色名称, 支持 light 和 dark
         @return: 配色发生变化时返回 True, 否则返回 False
@@ -344,12 +344,12 @@ class ThemeManager:
         return True
 
     def register(self, window):
-        """登记顶层窗口, 以便应用统一外观。"""
+        """登记顶层窗口, 以便应用统一外观"""
         if window not in self._windows:
             self._windows.append(window)
 
     def apply_theme(self, window):
-        """使用当前配色刷新窗口中的 Tk 原生表面。"""
+        """使用当前配色刷新窗口中的 Tk 原生表面"""
         self.register(window)
         self._walk(window)
 

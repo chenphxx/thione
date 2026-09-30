@@ -1,12 +1,12 @@
-"""翻译服务 Provider 的统一接口, 元数据与注册表。
+"""翻译服务 Provider 的统一接口, 元数据与注册表
 
 每个 Provider 只负责自己那一家服务的细节: 接口地址, 请求方式, 认证, 参数
-转换, 响应解析与第三方异常转换。业务层只通过本模块的元数据与
-`TranslationProvider.translate()` 使用翻译能力, 不出现具体供应商的判断。
+转换, 响应解析与第三方异常转换. 业务层只通过本模块的元数据与
+`TranslationProvider.translate()` 使用翻译能力, 不出现具体供应商的判断
 
 `translate()` 的语言参数一律是本项目的领域语言代码 (见 `language.LANGUAGE_LABELS`)
 例如中文是 `zh`; 各服务自己的语言代码 (华为云 `zh-tw`, 60s API `zh-CHT`,
-uapipro `zh-TW`) 由 Provider 内部转换, 不向业务层暴露。
+uapipro `zh-TW`) 由 Provider 内部转换, 不向业务层暴露
 """
 
 from abc import ABC, abstractmethod
@@ -95,15 +95,15 @@ UAPI_SOURCE_LANGUAGES = frozenset({AUTO_LANG})
 
 
 class TranslationError(RuntimeError):
-    """翻译调用失败, 各 Provider 共用的异常。"""
+    """翻译调用失败, 各 Provider 共用的异常"""
 
 
 class TranslationProvider(ABC):
-    """翻译能力的统一接口, 业务层只依赖这个抽象。"""
+    """翻译能力的统一接口, 业务层只依赖这个抽象"""
 
     @abstractmethod
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
-        """把文本翻译成目标语言。
+        """把文本翻译成目标语言
 
         @param text: 待翻译文本
         @param source_lang: 源语言的领域语言代码, `auto` 表示交给服务端识别
@@ -115,7 +115,7 @@ class TranslationProvider(ABC):
 
 @dataclass(frozen=True)
 class ProviderSpec:
-    """一家翻译服务对外的元数据与构造方式。"""
+    """一家翻译服务对外的元数据与构造方式"""
 
     name: str
     label: str
@@ -126,7 +126,7 @@ class ProviderSpec:
     factory: "Callable[[Config], TranslationProvider]"
 
     def code_of(self, lang: str) -> str:
-        """把领域语言代码换成该服务的语言代码。
+        """把领域语言代码换成该服务的语言代码
 
         @param lang: 目标语言的领域语言代码
         @return: 该服务自己的语言代码
@@ -136,12 +136,12 @@ class ProviderSpec:
         if code is None:
             raise TranslationError(
                 f"{self.label} 不支持{language_label(lang)}, "
-                "请改选其它语言或其它服务。"
+                "请改选其它语言或其它服务"
             )
         return code
 
     def source_code_of(self, lang: str) -> str:
-        """源语言的领域语言代码换成该服务的语言代码。
+        """源语言的领域语言代码换成该服务的语言代码
 
         @param lang: 源语言的领域语言代码
         @return: 该服务自己的语言代码, `auto` 原样返回
@@ -152,27 +152,27 @@ class ProviderSpec:
         if lang not in self.source_languages:
             raise TranslationError(
                 f"{self.label} 不支持指定{language_label(lang)}为源语言, "
-                "请改用自动识别或其它服务。"
+                "请改用自动识别或其它服务"
             )
         return self.languages[lang]
 
 
 def _build_huawei(config: "Config") -> TranslationProvider:
-    """构建华为云实现; 延迟导入, 没选它时不必加载 SDK。"""
+    """构建华为云实现; 延迟导入, 没选它时不必加载 SDK"""
     from .huawei import HuaweiTranslator
 
     return HuaweiTranslator(config)
 
 
 def _build_uapi(config: "Config") -> TranslationProvider:
-    """构建 uapipro 实现; SDK 由实现自己在第一次翻译时导入。"""
+    """构建 uapipro 实现; SDK 由实现自己在第一次翻译时导入"""
     from .uapi import UapiTranslator
 
     return UapiTranslator()
 
 
 def _build_sixty(config: "Config") -> TranslationProvider:
-    """构建 60s API 实现。"""
+    """构建 60s API 实现"""
     from .sixty import SixtyTranslator
 
     return SixtyTranslator()
@@ -217,7 +217,7 @@ _SPECS_BY_NAME = {spec.name: spec for spec in PROVIDER_SPECS}
 
 
 def spec_for(name: str) -> ProviderSpec:
-    """取某个服务的元数据, 未知或缺失的服务名回落到默认服务。
+    """取某个服务的元数据, 未知或缺失的服务名回落到默认服务
 
     @param name: 服务名, 取值见 PROVIDER_NAMES
     @return: 对应的元数据
@@ -227,7 +227,7 @@ def spec_for(name: str) -> ProviderSpec:
 
 
 def build_provider(config: "Config") -> TranslationProvider:
-    """按配置里选定的服务构建翻译实现。
+    """按配置里选定的服务构建翻译实现
 
     @param config: 运行配置, 其中 provider 决定使用哪个服务
     @return: 具有 translate(text, source_lang, target_lang) 的实现

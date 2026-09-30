@@ -1,8 +1,4 @@
-"""底部详细信息窗格: 展示当前选中对象的属性。
-
-字段与 Windows 资源管理器的详细信息窗格保持一致 (名称 类型 大小 修改时间
-位置), 图片额外带上像素尺寸, 便于查重时判断两张图是不是同一张
-"""
+"""底部详细信息窗格: 展示当前选中对象的属性"""
 
 import os
 import time
@@ -25,12 +21,12 @@ VALUE_LIMIT = 46
 
 
 def _shorten(text, limit=VALUE_LIMIT):
-    """超长时保留尾部, 路径与长文件名都能看出关键信息。"""
+    """超长时保留尾部, 路径与长文件名都能看出关键信息"""
     return text if len(text) <= limit else "..." + text[-(limit - 3):]
 
 
 class DetailsPane(ttk.Frame):
-    """显示选中文件的属性; 选中为空时所有字段显示占位符。"""
+    """显示选中文件的属性; 选中为空时所有字段显示占位符"""
 
     def __init__(self, master, theme):
         super().__init__(master, style="Panel.TFrame", padding=(16, 8))
@@ -53,7 +49,7 @@ class DetailsPane(ttk.Frame):
         self.show(None)
 
     def show(self, path):
-        """按选中文件刷新各字段; path 为空或不存在时回到占位状态。"""
+        """按选中文件刷新各字段; path 为空或不存在时回到占位状态"""
         if not path or not os.path.isfile(path):
             for label in self._values.values():
                 label.config(text="-")
@@ -84,7 +80,7 @@ class DetailsPane(ttk.Frame):
         return time.strftime("%Y-%m-%d %H:%M", time.localtime(stamp))
 
     def _kind_text(self, path, ext):
-        """类型描述; 图片额外带上像素尺寸。"""
+        """类型描述; 图片额外带上像素尺寸"""
         if ext in IMAGE_EXTS:
             kind = f"{ext.lstrip('.').upper()} 图片"
             size = image_size(path)

@@ -1,4 +1,4 @@
-"""视图控件: 展示方式 缩略图大小分档与右下角的窗格开关。"""
+"""视图控件: 展示方式 缩略图大小分档与右下角的窗格开关"""
 
 from tkinter import ttk
 
@@ -12,9 +12,9 @@ from .constants import (
 
 
 class ViewSwitch(ttk.Frame):
-    """展示方式与缩略图档位: 列表 小 中 大。
+    """展示方式与缩略图档位: 列表 小 中 大
 
-    对应 Windows 资源管理器的「查看」菜单, 选中 小 中 大 即回到缩略图展示,
+    对应 Windows 资源管理器的'查看'菜单, 选中 小 中 大 即回到缩略图展示,
     同一时刻只有一项处于打开状态
     """
 
@@ -41,7 +41,7 @@ class ViewSwitch(ttk.Frame):
         self.set_state(view, tier)
 
     def set_state(self, view, tier):
-        """同步选中态; 由页面在每次切换后调用, 不触发回调。"""
+        """同步选中态; 由页面在每次切换后调用, 不触发回调"""
         for name, button in self._buttons.items():
             if name == "list":
                 opened = view == "list"
@@ -53,7 +53,7 @@ class ViewSwitch(ttk.Frame):
 
 
 class PaneToggles(ttk.Frame):
-    """右下角的两个窗格开关: 详细信息窗格与预览窗格。"""
+    """右下角的两个窗格开关: 详细信息窗格与预览窗格"""
 
     def __init__(self, master, on_toggle_details, on_toggle_preview):
         super().__init__(master, style="Panel.TFrame")
@@ -67,7 +67,7 @@ class PaneToggles(ttk.Frame):
         self._preview.pack(side="left")
 
     def set_state(self, details, preview):
-        """同步两个开关的打开状态, 由页面在切换窗格后调用。"""
+        """同步两个开关的打开状态, 由页面在切换窗格后调用"""
         self._details.configure(
             style="SegmentOn.TButton" if details else "Segment.TButton"
         )

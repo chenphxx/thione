@@ -1,6 +1,6 @@
-"""提供虚拟滚动和后台缩略图加载的文件视图。
+"""提供虚拟滚动和后台缩略图加载的文件视图
 
-仅读取和解码可见文件, 用户切换视图或缩放档位时仍可复用已缓存的缩略图。
+仅读取和解码可见文件, 用户切换视图或缩放档位时仍可复用已缓存的缩略图
 """
 
 import os
@@ -37,7 +37,7 @@ from .constants import (
 
 
 def _fit_text(font, name, max_width):
-    """按像素宽度截断文件名, 超长时补省略号。"""
+    """按像素宽度截断文件名, 超长时补省略号"""
     if max_width <= 0 or font.measure(name) <= max_width:
         return name
     low, high = 0, len(name)
@@ -51,7 +51,7 @@ def _fit_text(font, name, max_width):
 
 
 def _is_image(path):
-    """按扩展名判断是否真的去读图; 其余类型直接给占位图。
+    """按扩展名判断是否真的去读图; 其余类型直接给占位图
 
     这一步避开了对文本与表格文件的读取, 也不会在额外的
     类型上占用文件句柄
@@ -60,7 +60,7 @@ def _is_image(path):
 
 
 class FileGrid(ttk.Frame):
-    """把一组文件按列表或缩略图排列, 支持选中, 双击与右键。
+    """把一组文件按列表或缩略图排列, 支持选中, 双击与右键
 
     参数:
         master:      父容器
@@ -123,25 +123,25 @@ class FileGrid(ttk.Frame):
     # ---------------- 对外接口 ----------------
     @property
     def tier(self):
-        """当前档位。"""
+        """当前档位"""
         return self._tier
 
     @property
     def view(self):
-        """当前展示方式。"""
+        """当前展示方式"""
         return self._view
 
     @property
     def loading(self):
-        """是否仍在后台读取缩略图。"""
+        """是否仍在后台读取缩略图"""
         return self._loading
 
     def selected_path(self):
-        """当前选中的文件路径, 未选中时返回 None。"""
+        """当前选中的文件路径, 未选中时返回 None"""
         return self._selected
 
     def set_files(self, paths):
-        """重新加载一组文件, 清空缓存与选中; 不触发 on_select。"""
+        """重新加载一组文件, 清空缓存与选中; 不触发 on_select"""
         self._stop_pump()
         self._paths = list(paths)
         self._pil_cache.clear()
@@ -151,11 +151,11 @@ class FileGrid(ttk.Frame):
         self._rebuild_cells()
 
     def clear(self):
-        """清空内容。"""
+        """清空内容"""
         self.set_files([])
 
     def set_tier(self, tier):
-        """切换缩略图大小档位; 已缓存的图片直接按新尺寸重画。"""
+        """切换缩略图大小档位; 已缓存的图片直接按新尺寸重画"""
         if tier not in TIER_SPECS or tier == self._tier:
             return
         self._tier = tier
@@ -167,7 +167,7 @@ class FileGrid(ttk.Frame):
         self._rebuild_cells()
 
     def set_view(self, view):
-        """切换列表视图与缩略图视图; 已缓存的图片直接按新布局重画。"""
+        """切换列表视图与缩略图视图; 已缓存的图片直接按新布局重画"""
         if view not in VIEWS or view == self._view:
             return
         self._view = view
@@ -178,7 +178,7 @@ class FileGrid(ttk.Frame):
         self._rebuild_cells()
 
     def select(self, path):
-        """设置选中项并触发 on_select; path 为 None 表示取消选中。"""
+        """设置选中项并触发 on_select; path 为 None 表示取消选中"""
         if path == self._selected:
             return
         previous, self._selected = self._selected, path
@@ -188,7 +188,7 @@ class FileGrid(ttk.Frame):
             self._on_select(path)
 
     def apply_palette(self):
-        """按当前主题刷新画布背景, 文件文字与占位缩略图。"""
+        """按当前主题刷新画布背景, 文件文字与占位缩略图"""
         p = self.theme.palette
         try:
             self.canvas.configure(bg=p[self._surface])
@@ -204,7 +204,7 @@ class FileGrid(ttk.Frame):
 
     # ---------------- 单元格 ----------------
     def _label_size(self):
-        """名称字号; 列表视图固定, 缩略图视图随档位变化。"""
+        """名称字号; 列表视图固定, 缩略图视图随档位变化"""
         if self._view == "list":
             return LIST_FONT_SIZE
         return TIER_SPECS[self._tier][1]
@@ -272,7 +272,7 @@ class FileGrid(ttk.Frame):
             self._paint_selection(path)
 
     def _relayout_list(self):
-        """列表视图: 每行一项, 小图标在左 名称在右。"""
+        """列表视图: 每行一项, 小图标在左 名称在右"""
         width = max(1, self.canvas.winfo_width())
         row_width = max(LIST_ICON * 2, width - GRID_PAD * 2)
         font = self._label_font()
@@ -344,7 +344,7 @@ class FileGrid(ttk.Frame):
             self._pump_job = self.after(POLL_MS, self._pump)
 
     def _visible_range(self):
-        """当前视口覆盖到的下标范围, 上下各多留 OVERSCAN_ROWS 行。
+        """当前视口覆盖到的下标范围, 上下各多留 OVERSCAN_ROWS 行
 
         @return: (起始下标, 结束下标), 结束下标不包含在内
         """
@@ -363,7 +363,7 @@ class FileGrid(ttk.Frame):
                 min((last_row + 1) * cols, len(self._paths)))
 
     def _ensure_visible(self):
-        """补齐视口内的缩略图: 已缓存的直接贴, 没读过的排给后台线程。
+        """补齐视口内的缩略图: 已缓存的直接贴, 没读过的排给后台线程
 
         滚动 换档 换展示方式与容器尺寸变化都走这里, 因此只有看得见的图会去读盘;
         已经有一批在读取时先不急, 等它读完会再走一次本方法
@@ -387,7 +387,7 @@ class FileGrid(ttk.Frame):
             self._pump_job = self.after(POLL_MS, self._pump)
 
     def _schedule_visible(self):
-        """把补载推迟到滚动停下来之后, 连续滚动时不必反复算可见范围。"""
+        """把补载推迟到滚动停下来之后, 连续滚动时不必反复算可见范围"""
         if self._visible_job is not None:
             try:
                 self.after_cancel(self._visible_job)
@@ -400,7 +400,7 @@ class FileGrid(ttk.Frame):
         self._ensure_visible()
 
     def _prune_cache(self):
-        """缓存超出上限时丢掉视口之外最久没贴过的缩略图, 免得内存一直涨。
+        """缓存超出上限时丢掉视口之外最久没贴过的缩略图, 免得内存一直涨
 
         视口内的不淘汰: 否则刚贴上的图会被丢掉又立刻重排一次, 来回读盘
         """
@@ -416,7 +416,7 @@ class FileGrid(ttk.Frame):
             self._photo_cache.pop(path, None)
 
     def _paint(self, path):
-        """把缩略图贴到格子; 用到就重新插到缓存尾部, 字典顺序即最近使用顺序。"""
+        """把缩略图贴到格子; 用到就重新插到缓存尾部, 字典顺序即最近使用顺序"""
         cell = self._cells.get(path)
         if cell is None:
             return
@@ -461,7 +461,7 @@ class FileGrid(ttk.Frame):
 
     # ---------------- 交互 ----------------
     def _hit(self, x, y):
-        """把控件坐标换算成画布坐标后判断点到了哪一项。
+        """把控件坐标换算成画布坐标后判断点到了哪一项
 
         event.x/y 是相对控件的坐标, 画布滚动过之后与画布坐标相差一个偏移量,
         不换算就会点中另一项
@@ -507,7 +507,7 @@ class FileGrid(ttk.Frame):
             self._on_context(path, event)
 
     def _on_yscroll(self, first, last):
-        """滚动条位置变化时同步滑块, 并安排补载新进入视口的缩略图。"""
+        """滚动条位置变化时同步滑块, 并安排补载新进入视口的缩略图"""
         self.scroll.set(first, last)
         self._schedule_visible()
 

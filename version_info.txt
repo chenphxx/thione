@@ -1,10 +1,8 @@
 # UTF-8
 #
-# thione 的 PyInstaller 版本资源。
-# 写入 exe 属性后, 任务栏/资源管理器的悬浮提示与文件属性会显示这些信息,
-# 而不是默认的 python.exe 描述。
-#
-# 用法: pyinstaller thione.spec  (spec 的 EXE(...) 中已引用 version='version_info.txt')
+# thione的PyInstaller版本资源 
+# 写入 exe 属性后, 任务栏/资源管理器的悬浮提示与文件属性会显示这些信息 
+# thione.spec中引用
 
 VSVersionInfo(
     ffi=FixedFileInfo(

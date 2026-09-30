@@ -1,11 +1,11 @@
-"""用户级配置的读写。
+"""用户级配置的读写
 
 配置主落点是 `%APPDATA%\\thione\\config.ini`, 用户无需关心程序被装在哪里,
-也不需要手工编辑文件 —— 在划词翻译页面填好保存即可。
+也不需要手工编辑文件 - 在划词翻译页面填好保存即可
 
 文件里有两个段: `[translate]` 记录用哪个翻译服务与翻成哪种语言, `[huawei]`
-记录华为云的凭据。两者分开存放, 因此切换服务时不必动凭据, 删除凭据也不会
-丢掉服务选择。使用免费接口时不需要凭据, 缺凭据不算错误。
+记录华为云的凭据. 两者分开存放, 因此切换服务时不必动凭据, 删除凭据也不会
+丢掉服务选择. 使用免费接口时不需要凭据, 缺凭据不算错误
 
 读取优先级 (高 -> 低):
     1. 环境变量 HUAWEI_AK / HUAWEI_SK / HUAWEI_PROJECT_ID / HUAWEI_REGION
@@ -16,7 +16,7 @@
     6. 当前工作目录的 .env
     7. IAM_transpy-accessKeys.csv             (只提供 AK/SK)
 
-所有落点都找不到时抛出 MissingConfigError, 由界面提示用户配置。
+所有落点都找不到时抛出 MissingConfigError, 由界面提示用户配置
 """
 
 import configparser
@@ -50,13 +50,13 @@ LEGACY_APP_DIR_NAME = "transpy"
 
 
 class ConfigError(RuntimeError):
-    """配置缺失或格式错误。"""
+    """配置缺失或格式错误"""
 
 
 class MissingConfigError(ConfigError):
-    """未找到可用的凭据, 需要引导用户配置。
+    """未找到可用的凭据, 需要引导用户配置
 
-    attributes 里带上已搜索过的位置, 便于在对话框/日志中说明。
+    attributes 里带上已搜索过的位置, 便于在对话框/日志中说明
     """
 
     def __init__(self, message, searched=()):
@@ -65,12 +65,12 @@ class MissingConfigError(ConfigError):
 
 
 def config_path():
-    """返回 config.ini 的完整路径 (不保证文件已存在)。"""
+    """返回 config.ini 的完整路径 (不保证文件已存在)"""
     return os.path.join(user_data_dir(), constants.CONFIG_FILE_NAME)
 
 
 def legacy_config_path():
-    """返回独立版 transpy 的配置路径, 用作向后兼容来源。"""
+    """返回独立版 transpy 的配置路径, 用作向后兼容来源"""
     appdata = (
         os.environ.get("APPDATA")
         or os.environ.get("LOCALAPPDATA")
@@ -80,22 +80,22 @@ def legacy_config_path():
 
 
 def renamed_config_path():
-    """返回更名前 (thpy) 保存在 %APPDATA%\\thpy 下的配置路径, 用作兼容来源。"""
+    """返回更名前 (thpy) 保存在 %APPDATA%\\thpy 下的配置路径, 用作兼容来源"""
     return os.path.join(legacy_user_data_dir(), constants.CONFIG_FILE_NAME)
 
 
 def _read_ini(path, section=SECTION):
-    """读取 config.ini 里某一段, 返回 {key: value}; 文件不存在或损坏时返回 {}。
+    """读取 config.ini 里某一段, 返回 {key: value}; 文件不存在或损坏时返回 {}
 
     @param path: 配置文件路径
     @param section: 段名, 默认是存放华为云凭据的那一段
-    @return: 键名大写、值去空白的字典
+    @return: 键名大写, 值去空白的字典
     """
     if not os.path.isfile(path):
         return {}
     parser = configparser.ConfigParser()
     try:
-        # utf-8-sig: 兼容记事本「UTF-8」另存后带 BOM 的文件
+        # utf-8-sig: 兼容记事本'UTF-8'另存后带 BOM 的文件
         parser.read(path, encoding="utf-8-sig")
     except (configparser.Error, OSError, UnicodeDecodeError):
         # 配置损坏不应让程序无法启动, 走后续兜底来源
@@ -106,7 +106,7 @@ def _read_ini(path, section=SECTION):
 
 
 def _read_env_file(path):
-    """读取 KEY=VALUE 样式的 .env 文件, 返回 dict。跳过注释与空行。"""
+    """读取 KEY=VALUE 样式的 .env 文件, 返回 dict. 跳过注释与空行"""
     env = {}
     if not os.path.isfile(path):
         return env
@@ -124,7 +124,7 @@ def _read_env_file(path):
 
 
 def _read_access_key_csv(path):
-    """从华为云下载的 accessKeys csv 读取 (ak, sk)。兼容带 BOM 的文件。"""
+    """从华为云下载的 accessKeys csv 读取 (ak, sk). 兼容带 BOM 的文件"""
     if not os.path.isfile(path):
         return None, None
     try:
@@ -141,7 +141,7 @@ def _read_access_key_csv(path):
 
 
 def _normalize_provider(value):
-    """把配置里的服务名收敛到已知取值, 未知值回落到默认服务。
+    """把配置里的服务名收敛到已知取值, 未知值回落到默认服务
 
     @param value: 配置文件里读到的原始字符串
     @return: providers.PROVIDER_NAMES 中的一个
@@ -155,10 +155,10 @@ def _normalize_provider(value):
 
 
 def _normalize_languages(provider, source_lang, target_lang):
-    """把语言选择收敛到当前服务支持的范围, 不支持时回落到默认值。
+    """把语言选择收敛到当前服务支持的范围, 不支持时回落到默认值
 
     目标语言的 auto 表示按源语言自动选择, 不属于任何服务的语言代码表,
-    因此单独放行。
+    因此单独放行
 
     @param provider: 服务名, 决定支持哪些语言
     @param source_lang: 配置里读到的源语言
@@ -182,10 +182,10 @@ def _normalize_languages(provider, source_lang, target_lang):
 
 
 def current_provider():
-    """返回当前选择的翻译服务, 从未配置过时返回默认值。
+    """返回当前选择的翻译服务, 从未配置过时返回默认值
 
     兼容来源与新配置一样参与查找: 更名前 (thpy) 与独立版 (transpy) 留下的
-    文件里如果写了服务选择, 同样会被读到。
+    文件里如果写了服务选择, 同样会被读到
 
     @return: providers.PROVIDER_NAMES 中的一个
     """
@@ -197,10 +197,10 @@ def current_provider():
 
 
 def current_languages():
-    """返回当前保存的源语言与目标语言, 没有配置过时返回默认值。
+    """返回当前保存的源语言与目标语言, 没有配置过时返回默认值
 
     与 current_provider() 一样按 新配置 -> 更名前配置 -> 旧版配置 的顺序查找,
-    先配置过的优先; 旧版留下的文件没有这两项, 因此会回落到默认值。
+    先配置过的优先; 旧版留下的文件没有这两项, 因此会回落到默认值
 
     @return: (源语言, 目标语言) 领域语言代码
     """
@@ -215,7 +215,7 @@ def current_languages():
 
 
 def legacy_dirs():
-    """返回兼容来源的查找目录 (程序目录 + 当前工作目录)。"""
+    """返回兼容来源的查找目录 (程序目录 + 当前工作目录)"""
     dirs = [app_root()]
     cwd = os.getcwd()
     if cwd not in dirs:
@@ -224,7 +224,7 @@ def legacy_dirs():
 
 
 def load():
-    """加载运行配置, 返回 Config。缺少凭据时抛出 MissingConfigError。"""
+    """加载运行配置, 返回 Config. 缺少凭据时抛出 MissingConfigError"""
     ini_path = config_path()
     ini = _read_ini(ini_path)
     # 更名前由 thpy 保存的配置: 仅作为主配置文件的兜底
@@ -246,7 +246,7 @@ def load():
     )
 
     def pick(name):
-        """按 环境变量 -> 新配置 -> 更名前配置 -> 旧版配置 -> .env 取值。"""
+        """按 环境变量 -> 新配置 -> 更名前配置 -> 旧版配置 -> .env 取值"""
         sources = (
             ("环境变量", os.environ.get(f"{constants.ENV_PREFIX}{name}")),
             (ini_path, ini.get(name)),
@@ -322,7 +322,7 @@ def load():
 
 
 def save(config):
-    """把配置写入 %APPDATA%\\thione\\config.ini。"""
+    """把配置写入 %APPDATA%\\thione\\config.ini"""
     path = config_path()
     ensure_dir(os.path.dirname(path))
 
@@ -354,10 +354,10 @@ def save(config):
 
 
 def current_values():
-    """返回当前可用的服务选择与凭据取值, 缺项时留空 (供界面预填, 不抛异常)。
+    """返回当前可用的服务选择与凭据取值, 缺项时留空 (供界面预填, 不抛异常)
 
     与 load() 的区别只有一点: 这里不要求各项齐全, 目的是让用户在已有部分
-    来源 (环境变量 / 旧版配置 / .env / csv) 的基础上补齐剩余字段。
+    来源 (环境变量 / 旧版配置 / .env / csv) 的基础上补齐剩余字段
     """
     ini = _read_ini(config_path())
     renamed_ini = _read_ini(renamed_config_path())

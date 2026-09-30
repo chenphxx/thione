@@ -1,4 +1,4 @@
-"""右侧预览窗格: 图片 / 文本 / 表格, 未知类型尝试以文本模式预览。
+"""右侧预览窗格: 图片/文本/表格, 未知类型尝试以文本模式预览
 
 可预览的类型见 constants, 与 Windows 资源管理器的预览窗格覆盖范围一致
 """
@@ -21,7 +21,7 @@ from .constants import (
 
 
 class PreviewPane(ttk.Frame):
-    """文件预览窗格; 通过 show(path) 展示内容, 随窗格大小自适应。"""
+    """文件预览窗格; 通过 show(path) 展示内容, 随窗格大小自适应"""
 
     def __init__(self, master, theme):
         super().__init__(master, style="Panel.TFrame", padding=(12, 8))
@@ -50,11 +50,11 @@ class PreviewPane(ttk.Frame):
     # ---------------- 对外接口 ----------------
     @property
     def path(self):
-        """当前预览的文件路径。"""
+        """当前预览的文件路径"""
         return self._preview_path
 
     def show(self, path):
-        """根据文件路径刷新预览; path 为空时显示占位提示。"""
+        """根据文件路径刷新预览; path 为空时显示占位提示"""
         self._preview_path = path
         self._clear_body()
         self._preview_img = None
@@ -86,7 +86,7 @@ class PreviewPane(ttk.Frame):
             self._try_text_fallback(path, message)
 
     def refresh(self):
-        """使用当前主题重新绘制正在显示的预览内容。"""
+        """使用当前主题重新绘制正在显示的预览内容"""
         self.show(self._preview_path)
 
     def _clear_body(self):
@@ -127,7 +127,7 @@ class PreviewPane(ttk.Frame):
         label.bind("<Double-1>", lambda e: self._open_preview_file(path))
         current = self.lbl_info.cget("text")
         if "双击打开" not in current:
-            self.lbl_info.config(text=f"{current} · 双击打开")
+            self.lbl_info.config(text=f"{current} | 双击打开")
 
     def _open_preview_file(self, path):
         open_path(path, parent=self.winfo_toplevel())
@@ -166,7 +166,7 @@ class PreviewPane(ttk.Frame):
         text.pack(side="left", fill="both", expand=True)
 
     def _try_text_fallback(self, path, fail_message):
-        """无法按原类型预览时, 尝试把文件当作文本读取。"""
+        """无法按原类型预览时, 尝试把文件当作文本读取"""
         try:
             with open(path, "rb") as f:
                 data = f.read(MAX_PREVIEW_BYTES)
@@ -178,7 +178,7 @@ class PreviewPane(ttk.Frame):
             return
         text = data.decode("utf-8", errors="replace")
         current = self.lbl_info.cget("text")
-        self.lbl_info.config(text=f"{current} · 文本模式")
+        self.lbl_info.config(text=f"{current} | 文本模式")
         self._show_text_content(text)
 
     @staticmethod
@@ -227,7 +227,7 @@ class PreviewPane(ttk.Frame):
                     break
             wb.close()
             current = self.lbl_info.cget("text")
-            self.lbl_info.config(text=f"{current} · 工作表: {sheet}")
+            self.lbl_info.config(text=f"{current} | 工作表: {sheet}")
             return rows
         except Exception:
             self._try_text_fallback(path, "Excel 文件读取失败")
@@ -288,5 +288,5 @@ class PreviewPane(ttk.Frame):
 
 
 def _shorten(name, limit=32):
-    """标题一行放不下时保留尾部, 便于看出真实文件名。"""
+    """标题一行放不下时保留尾部, 便于看出真实文件名"""
     return name if len(name) <= limit else "..." + name[-(limit - 3):]

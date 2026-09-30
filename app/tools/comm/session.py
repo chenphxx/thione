@@ -1,7 +1,7 @@
 """串口与网络会话: 后台收发线程与统一的回调接口
 
 页面只与 BaseSession 打交道: start 打开 stop 关闭 send 发送 收到的数据与状态变化
-都通过回调交回页面, 由页面投递到主线程。所有读线程都是守护线程, 关闭会话时先置
+都通过回调交回页面, 由页面投递到主线程. 所有读线程都是守护线程, 关闭会话时先置
 停止标志再关闭套接字或者串口, 因此阻塞中的读操作会立刻返回
 
 @brief 串口 TCP Client TCP Server UDP 四种会话的实现
@@ -286,7 +286,7 @@ class TcpClientSession(BaseSession):
     def _peer_text(self):
         """本端看到的对端地址
 
-        @return: "地址:端口"
+        @return: "地址: 端口"
         """
         try:
             peer = self._socket.getpeername()
@@ -423,7 +423,7 @@ class TcpServerSession(BaseSession):
     def client_addresses(self):
         """当前所有客户端的地址
 
-        @return: "地址:端口" 列表
+        @return: "地址: 端口" 列表
         """
         return ["%s:%d" % address for address in self._clients.values()]
 
@@ -431,7 +431,7 @@ class TcpServerSession(BaseSession):
         """给全部或者指定的客户端发送数据
 
         @param payload: 字节串
-        @param targets: "地址:端口" 列表, None 表示全部
+        @param targets: "地址: 端口" 列表, None 表示全部
         @throws SessionError: 一个都没发出去时
         """
         if not self.is_open:

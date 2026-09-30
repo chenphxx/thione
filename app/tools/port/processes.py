@@ -1,9 +1,9 @@
-"""进程信息的查询与强制结束。
+"""进程信息的查询与强制结束
 
 连接表只给出 PID, 因此这里补上进程名 可执行文件路径 命令行 启动时间 内存
 与父进程, 供界面展示; 结束进程走 TerminateProcess, 与任务管理器的 结束任务
 等价, 需要对该进程有 PROCESS_TERMINATE 权限, 权限不足时由调用方提示用户
-以管理员身份重新运行。
+以管理员身份重新运行
 """
 
 import ctypes
@@ -92,7 +92,7 @@ class UNICODE_STRING(ctypes.Structure):
 
 
 class ProcessEntry(NamedTuple):
-    """进程快照里的基本信息。"""
+    """进程快照里的基本信息"""
 
     pid: int
     name: str
@@ -100,7 +100,7 @@ class ProcessEntry(NamedTuple):
 
 
 class ProcessDetail(NamedTuple):
-    """界面展示用的进程详情, 读不到的字段为空字符串。"""
+    """界面展示用的进程详情, 读不到的字段为空字符串"""
 
     pid: int
     name: str
@@ -146,7 +146,7 @@ _ntdll.NtQueryInformationProcess.argtypes = [
 
 
 def snapshot():
-    """取一份进程快照, 用于把 PID 换成进程名与父进程。
+    """取一份进程快照, 用于把 PID 换成进程名与父进程
 
     @return: {pid: ProcessEntry} 的字典
     """
@@ -173,7 +173,7 @@ def snapshot():
 
 
 def describe(pid, entries=None):
-    """汇总一个进程的详细信息。
+    """汇总一个进程的详细信息
 
     @param pid: 进程 ID
     @param entries: 可选的进程快照, 一次取多份详情时传进来避免重复枚举
@@ -215,7 +215,7 @@ def describe(pid, entries=None):
 
 
 def terminate(pid):
-    """强制结束进程。
+    """强制结束进程
 
     @param pid: 目标进程 ID
     @throws OSError: 系统进程 权限不足或者进程已经退出, 消息可直接展示给用户
@@ -235,12 +235,12 @@ def terminate(pid):
 
 
 def _open(pid, access):
-    """按给定权限打开进程, 失败时返回 None 而不是抛异常。"""
+    """按给定权限打开进程, 失败时返回 None 而不是抛异常"""
     return _kernel32.OpenProcess(access, False, pid) or None
 
 
 def _image_path(handle):
-    """取可执行文件完整路径。"""
+    """取可执行文件完整路径"""
     size = wintypes.DWORD(32768)
     buffer = ctypes.create_unicode_buffer(size.value)
     if not _kernel32.QueryFullProcessImageNameW(handle, 0, buffer,
@@ -250,7 +250,7 @@ def _image_path(handle):
 
 
 def _start_time(handle):
-    """取进程启动时间并换成本地时间。"""
+    """取进程启动时间并换成本地时间"""
     creation = wintypes.FILETIME()
     exit_time = wintypes.FILETIME()
     kernel = wintypes.FILETIME()
@@ -269,7 +269,7 @@ def _start_time(handle):
 
 
 def _memory(handle):
-    """取工作集大小。"""
+    """取工作集大小"""
     counters = PROCESS_MEMORY_COUNTERS()
     counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS)
     if not _psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters),
@@ -279,10 +279,10 @@ def _memory(handle):
 
 
 def _command_line(handle):
-    """从目标进程的 PEB 里读命令行。
+    """从目标进程的 PEB 里读命令行
 
     进程参数在 PEB 中的偏移与位数有关, 32 位目标进程 (WOW64) 的布局也不同,
-    因此只有本进程是 64 位且目标不是 WOW64 时才尝试, 读不到就返回空串。
+    因此只有本进程是 64 位且目标不是 WOW64 时才尝试, 读不到就返回空串
 
     @param handle: 以 PROCESS_QUERY_INFORMATION | PROCESS_VM_READ 打开的句柄
     @return: 命令行文本, 失败时为空字符串
@@ -318,7 +318,7 @@ def _command_line(handle):
 
 
 def _is_wow64(handle):
-    """判断目标进程是不是 32 位 (WOW64), 判断失败按 False 处理。"""
+    """判断目标进程是不是 32 位 (WOW64), 判断失败按 False 处理"""
     value = ctypes.c_void_p()
     length = wintypes.ULONG()
     status = _ntdll.NtQueryInformationProcess(
@@ -328,14 +328,14 @@ def _is_wow64(handle):
 
 
 def _read(handle, address, buffer, size):
-    """读目标进程的内存, 失败返回 False。"""
+    """读目标进程的内存, 失败返回 False"""
     read = ctypes.c_size_t()
     return bool(_kernel32.ReadProcessMemory(handle, ctypes.c_void_p(address),
                                             buffer, size, ctypes.byref(read)))
 
 
 def _last_error():
-    """把 GetLastError 换成可读文本, 常见错误给出更明确的说法。"""
+    """把 GetLastError 换成可读文本, 常见错误给出更明确的说法"""
     error = ctypes.WinError(ctypes.get_last_error())
     hint = ERROR_HINTS.get(error.winerror)
     if hint:

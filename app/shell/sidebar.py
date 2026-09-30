@@ -1,4 +1,4 @@
-"""提供应用外壳中的工具导航栏。"""
+"""提供应用外壳中的工具导航栏"""
 
 from tkinter import ttk
 
@@ -16,7 +16,7 @@ THEME_TEXT_MIN_WIDTH = 220
 
 
 class Sidebar(ttk.Frame):
-    """显示可用工具 当前选中的导航项与底部的主题 日志入口。"""
+    """显示可用工具 当前选中的导航项与底部的主题 日志入口"""
 
     def __init__(self, master, items, on_select, on_toggle_theme, on_open_log):
         super().__init__(master, style="Panel.TFrame", width=NAV_WIDTH)
@@ -55,12 +55,12 @@ class Sidebar(ttk.Frame):
                                        command=self._on_toggle_theme)
         self.theme_button.pack(side="left", fill="x", expand=True,
                                padx=(0, 8))
-        ttk.Label(footer, text=f"thione  ·  v{APP_VERSION}",
+        ttk.Label(footer, text=f"thione | v{APP_VERSION}",
                   style="SidebarMuted.TLabel").pack(anchor="w")
         self.set_theme("light")
 
     def set_width(self, width):
-        """将侧栏宽度限制在允许范围内。"""
+        """将侧栏宽度限制在允许范围内"""
         width = max(NAV_MIN_WIDTH, min(int(width), NAV_MAX_WIDTH))
         if width != self._width:
             self._width = width
@@ -68,7 +68,7 @@ class Sidebar(ttk.Frame):
             self.set_theme(self._mode)
 
     def set_active(self, key):
-        """突出显示当前选中的工具。"""
+        """突出显示当前选中的工具"""
         if key == self._active_key:
             return
         self._active_key = key
@@ -78,7 +78,7 @@ class Sidebar(ttk.Frame):
             )
 
     def set_theme(self, mode):
-        """显示切换到另一种配色的按钮文案。
+        """显示切换到另一种配色的按钮文案
 
         侧栏拖窄之后完整文案放不下, 因此窄侧栏用两字短文案
 

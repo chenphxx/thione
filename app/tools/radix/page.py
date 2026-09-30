@@ -1,8 +1,8 @@
-"""进制转换页面: 上方是待转换数字与转换结果, 下方是常用进制对照表。
+"""进制转换页面: 上方是待转换数字与转换结果, 下方是常用进制对照表
 
 输入框的内容或者任一进制选择发生变化都会立即重新转换, 因此不额外放转换
-按钮; 结果框只读, 复制由相邻的按钮完成。输入不合法时结果清空, 原因写在
-输入框下方, 不弹窗打断输入。
+按钮; 结果框只读, 复制由相邻的按钮完成. 输入不合法时结果清空, 原因写在
+输入框下方, 不弹窗打断输入
 """
 
 import tkinter as tk
@@ -41,7 +41,7 @@ COMMON_SIDES = (COMMON_BASES[:2], COMMON_BASES[2:])
 
 
 class RadixPage(ToolPage):
-    """在 2 到 36 进制之间转换数字的工具页面。"""
+    """在 2 到 36 进制之间转换数字的工具页面"""
 
     key = "radix"
     title = PAGE_TITLE
@@ -79,9 +79,9 @@ class RadixPage(ToolPage):
                   style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
 
     def _build_convert_area(self):
-        """页面上半部分: 左侧待转换的数字, 右侧转换结果, 中间是交换按钮。
+        """页面上半部分: 左侧待转换的数字, 右侧转换结果, 中间是交换按钮
 
-        常用进制分在两侧, 与上方的两栏共用同一列, 因此左右两块自然对齐。
+        常用进制分在两侧, 与上方的两栏共用同一列, 因此左右两块自然对齐
         """
         card = ttk.LabelFrame(self, text="进制转换", padding=(16, 12))
         card.pack(side="top", fill="x")
@@ -96,7 +96,7 @@ class RadixPage(ToolPage):
                    command=self._swap_bases).grid(row=0, column=1, padx=14)
 
     def _build_source_area(self, card):
-        """左侧区域: 待转换的数字与它的进制选择。
+        """左侧区域: 待转换的数字与它的进制选择
 
         @param card: 放置该区域的卡片
         """
@@ -122,7 +122,7 @@ class RadixPage(ToolPage):
         self.lbl_hint.grid(row=2, column=0, columnspan=2, sticky="we", pady=(6, 0))
 
     def _build_result_area(self, card):
-        """右侧区域: 转换结果与它的进制选择。
+        """右侧区域: 转换结果与它的进制选择
 
         @param card: 放置该区域的卡片
         """
@@ -149,7 +149,7 @@ class RadixPage(ToolPage):
                                                    sticky="e", pady=(6, 0))
 
     def _build_common_bases(self, card):
-        """目标进制之外的四种常用进制: 左侧两种, 右侧两种。
+        """目标进制之外的四种常用进制: 左侧两种, 右侧两种
 
         @param card: 放置该区块的卡片
         """
@@ -174,7 +174,7 @@ class RadixPage(ToolPage):
                     row=row, column=1, sticky="we", padx=(10, 0), pady=2)
 
     def _build_reference_table(self):
-        """页面下半部分: 0 到 15 的四种进制对照, 高度不够时自己滚动。"""
+        """页面下半部分: 0 到 15 的四种进制对照, 高度不够时自己滚动"""
         card = ttk.LabelFrame(self, text="进制对照表", padding=(16, 12))
         card.pack(side="top", fill="both", expand=True, pady=(12, 0))
 
@@ -208,7 +208,7 @@ class RadixPage(ToolPage):
         self._convert()
 
     def _convert(self):
-        """按当前的两个进制重新转换, 并刷新结果 常用进制与输入框下方的说明。"""
+        """按当前的两个进制重新转换, 并刷新结果 常用进制与输入框下方的说明"""
         try:
             values = convert_many(
                 self._input_var.get(), self._source_base,
@@ -226,12 +226,12 @@ class RadixPage(ToolPage):
         self._set_hint("" if values[0] else EMPTY_HINT)
 
     def _clear_common(self):
-        """清空常用进制的结果, 输入不合法时与主结果一起清掉。"""
+        """清空常用进制的结果, 输入不合法时与主结果一起清掉"""
         for var in self._common_vars.values():
             var.set("")
 
     def _set_hint(self, text, error=False):
-        """更新输入框下方的说明。
+        """更新输入框下方的说明
 
         @param text: 要显示的内容
         @param error: True 时改用危险色, 说明输入不合法
@@ -242,13 +242,13 @@ class RadixPage(ToolPage):
             self.lbl_hint.configure(style=style)
 
     def _sync_combos(self):
-        """把两个下拉框的显示对齐到当前进制。"""
+        """把两个下拉框的显示对齐到当前进制"""
         self.combo_source.set(BASE_LABELS[self._source_base])
         self.combo_target.set(BASE_LABELS[self._target_base])
 
     @staticmethod
     def _base_from_label(label, fallback):
-        """把下拉框里的显示名换回进制数字。
+        """把下拉框里的显示名换回进制数字
 
         @param label: 下拉框当前显示的文本
         @param fallback: 显示名不是已知取值时使用的进制
@@ -260,7 +260,7 @@ class RadixPage(ToolPage):
 
     # ---------------- 交互 ----------------
     def _swap_bases(self):
-        """交换两个进制, 并把上一次的结果放进输入框接着转换。"""
+        """交换两个进制, 并把上一次的结果放进输入框接着转换"""
         previous = self._result_var.get()
         self._source_base, self._target_base = self._target_base, self._source_base
         self._sync_combos()
@@ -272,7 +272,7 @@ class RadixPage(ToolPage):
         self.entry_input.focus_set()
 
     def _copy_result(self):
-        """把结果写进系统剪贴板, 供其它程序粘贴。"""
+        """把结果写进系统剪贴板, 供其它程序粘贴"""
         result = self._result_var.get()
         if not result:
             return
@@ -280,12 +280,12 @@ class RadixPage(ToolPage):
         self.set_status(f"已复制转换结果: {_shorten(result)}")
 
     def on_show(self):
-        """切到本页时把光标放进输入框, 打开就能输入。"""
+        """切到本页时把光标放进输入框, 打开就能输入"""
         self.entry_input.focus_set()
 
 
 def _shorten(text):
-    """状态栏里的回显不要过长。
+    """状态栏里的回显不要过长
 
     @param text: 转换结果
     @return: 超过 STATUS_MAX_CHARS 时截断并加省略标记

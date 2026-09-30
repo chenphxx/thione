@@ -1,7 +1,7 @@
-"""翻译结果弹窗。
+"""翻译结果弹窗
 
 窗口用 Toplevel 而不是 Tk: 整个进程里只能有一个 Tk 根窗口, 且它必须由主
-线程创建, 所以根窗口由外壳持有, 这里只负责弹出子窗口。
+线程创建, 所以根窗口由外壳持有, 这里只负责弹出子窗口
 """
 
 import tkinter as tk
@@ -22,7 +22,7 @@ PADDING = 14        # 内容与窗口边框的间距
 
 
 class ResultWindow(tk.Toplevel):
-    """显示翻译结果, 支持一键复制并关闭, 窗口出现在鼠标位置。
+    """显示翻译结果, 支持一键复制并关闭, 窗口出现在鼠标位置
 
     参数:
         theme: ThemeManager, 用于取当前配色与字体; 缺省时退回系统默认外观
@@ -83,10 +83,10 @@ class ResultWindow(tk.Toplevel):
             pass
 
     def _place_at_pointer(self):
-        """把窗口定位到光标处, 并保证整个窗口都在屏幕内。
+        """把窗口定位到光标处, 并保证整个窗口都在屏幕内
 
         尺寸取内容实际需要的大小 (长译文的窗口更高), 位置和尺寸一起在
-        deiconify 之前设置好, 否则系统会用默认尺寸重新摆放窗口。
+        deiconify 之前设置好, 否则系统会用默认尺寸重新摆放窗口
         """
         try:
             screen_w = self.winfo_screenwidth()

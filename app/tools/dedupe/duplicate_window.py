@@ -1,4 +1,4 @@
-"""重复分组窗口: 逐组勾选保留图片, 支持删除与保存整理。"""
+"""重复分组窗口: 逐组勾选保留图片, 支持删除与保存整理"""
 
 import os
 import shutil
@@ -13,9 +13,9 @@ from .constants import DUP_SUBFOLDER_NAME, THUMB_SIZE
 
 
 def _short_name(path, limit=16):
-    """截断文件名, 超出部分用省略号代替。"""
+    """截断文件名, 超出部分用省略号代替"""
     name = os.path.basename(path)
-    return name if len(name) <= limit else name[:limit - 1] + "…"
+    return name if len(name) <= limit else name[:limit - 1] + "..."
 
 
 class DuplicateGroupWindow(tk.Toplevel):
@@ -114,17 +114,17 @@ class DuplicateGroupWindow(tk.Toplevel):
         self._layout_job = self.after(120, self._relayout)
 
     def populate_groups(self):
-        """重建分组卡片 (重置勾选为每组第一个)。"""
+        """重建分组卡片 (重置勾选为每组第一个)"""
         self._relayout(preserve=False)
 
     def on_theme_changed(self):
-        """刷新当前主题下的分组窗口与占位缩略图。"""
+        """刷新当前主题下的分组窗口与占位缩略图"""
         self.thumb_cache.clear()
         self.thumb_pil_cache.clear()
         self._relayout(preserve=True)
 
     def _relayout(self, preserve=True):
-        """根据当前窗口宽度重算列数与图片大小并重建卡片。"""
+        """根据当前窗口宽度重算列数与图片大小并重建卡片"""
         self._layout_job = None
         for w in self.inner_frame.winfo_children():
             w.destroy()
@@ -213,7 +213,7 @@ class DuplicateGroupWindow(tk.Toplevel):
                 self.selected[idx] = None
 
     def _all_checkbuttons(self):
-        """递归收集所有图片勾选框。"""
+        """递归收集所有图片勾选框"""
         for child in self.inner_frame.winfo_children():
             for slot in child.winfo_children():
                 for w in slot.winfo_children():
@@ -254,7 +254,7 @@ class DuplicateGroupWindow(tk.Toplevel):
             return
         if not messagebox.askyesno(
                 "删除确认",
-                f"确定要删除 {len(to_delete)} 个已勾选文件吗？"):
+                f"确定要删除 {len(to_delete)} 个已勾选文件吗?"):
             return
         for path, idx in to_delete:
             try:
@@ -275,7 +275,7 @@ class DuplicateGroupWindow(tk.Toplevel):
     def delete_file(self, path, checkbox):
         if messagebox.askyesno(
                 "删除确认",
-                f"确定要从磁盘删除 {os.path.basename(path)} 吗？"):
+                f"确定要从磁盘删除 {os.path.basename(path)} 吗?"):
             try:
                 os.remove(path)
                 if path in self.thumb_cache:
@@ -301,7 +301,7 @@ class DuplicateGroupWindow(tk.Toplevel):
             os.makedirs(self.target_folder)
         if os.listdir(self.target_folder):
             if not messagebox.askyesno(
-                    "提示", "目标文件夹不为空，是否清空？"):
+                    "提示", "目标文件夹不为空, 是否清空?"):
                 return
             for f in os.listdir(self.target_folder):
                 fp = os.path.join(self.target_folder, f)

@@ -1,16 +1,16 @@
-"""划词翻译的常量, 以及各翻译服务的可公开配置。
+"""划词翻译的常量, 以及各翻译服务的可公开配置
 
-注意: 此处仅存放区域、功能参数等可公开信息。AK/SK 密钥与 project_id 等
-涉密信息由 storage 单独加载, 不会写入版本库。
+注意: 此处仅存放区域, 功能参数等可公开信息. AK/SK 密钥与 project_id 等
+涉密信息由 storage 单独加载, 不会写入版本库
 
 可选服务与各家服务的语言代码表在 `providers.provider` 里, 这里只放各服务的
-接口地址与超时时间。
+接口地址与超时时间
 """
 
 PAGE_TITLE = "划词翻译"
-APP_TIP = "thione 运行中 · 双击 Ctrl 翻译"
+APP_TIP = "thione 运行中 | 双击 Ctrl 翻译"
 
-# 华为云自然语言处理 (NLP) 服务区域。区域标识并非机密信息。
+# 华为云自然语言处理 (NLP) 服务区域. 区域标识并非机密信息
 REGION = "cn-north-4"
 SERVICE_ENDPOINT = f"https://nlp-ext.{REGION}.myhuaweicloud.com"
 

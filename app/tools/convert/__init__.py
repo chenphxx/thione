@@ -1,4 +1,4 @@
-"""文件格式转换工具包。"""
+"""文件格式转换工具包"""
 
 from .page import ConvertPage
 

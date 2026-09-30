@@ -1,8 +1,8 @@
-"""本机 TCP 与 UDP 连接的枚举。
+"""本机 TCP 与 UDP 连接的枚举
 
 数据取自 IP 助手 API 的 GetExtendedTcpTable 与 GetExtendedUdpTable, 这两支
 接口直接按拥有者 PID 返回连接表, 因此不需要解析 netstat 的文本输出, 也不会
-受系统显示语言影响。
+受系统显示语言影响
 """
 
 import ctypes
@@ -86,7 +86,7 @@ class MIB_UDP6ROW_OWNER_PID(ctypes.Structure):
 
 
 class Connection(NamedTuple):
-    """一条连接记录; UDP 没有远端与状态。"""
+    """一条连接记录; UDP 没有远端与状态"""
 
     protocol: str
     local_addr: str
@@ -109,7 +109,7 @@ _iphlpapi.GetExtendedUdpTable.argtypes = [
 
 
 def list_connections():
-    """列出本机全部 TCP 与 UDP 连接。
+    """列出本机全部 TCP 与 UDP 连接
 
     @return: Connection 列表, 按本地端口升序排列
     @throws OSError: 系统接口返回错误时
@@ -127,9 +127,9 @@ def list_connections():
 
 
 def is_listening(connection):
-    """这条连接是不是一个正在监听的端口。
+    """这条连接是不是一个正在监听的端口
 
-    UDP 没有连接状态, 一条 UDP 记录就代表该端口已被绑定, 因此按监听算。
+    UDP 没有连接状态, 一条 UDP 记录就代表该端口已被绑定, 因此按监听算
 
     @param connection: Connection
     @return: 是否属于监听中的端口
@@ -147,10 +147,10 @@ def _udp_row(family):
 
 
 def _table(function, family, table_class, row_type):
-    """取一张连接表并解析成结构体列表。
+    """取一张连接表并解析成结构体列表
 
     先按空缓冲区问一次长度, 再按返回的长度申请缓冲区取数据; 表头是一个
-    DWORD 的行数, 后面紧跟定长的行结构。
+    DWORD 的行数, 后面紧跟定长的行结构
 
     @param function: GetExtendedTcpTable 或 GetExtendedUdpTable
     @param family: AF_INET 或 AF_INET6
@@ -203,7 +203,7 @@ def _udp_connection(row, suffix):
 
 
 def _ipv4(value):
-    """IPv4 地址在表里是网络序的双字, 按内存顺序还原成点分文本。"""
+    """IPv4 地址在表里是网络序的双字, 按内存顺序还原成点分文本"""
     return socket.inet_ntoa(value.to_bytes(4, "little"))
 
 

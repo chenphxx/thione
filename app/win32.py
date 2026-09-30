@@ -1,4 +1,4 @@
-"""Windows 平台相关的原生调用。
+"""Windows 平台相关的原生调用
 
 单实例 任务栏图标分组 第二个实例唤起已有实例都属于进程级行为, 打开文件 打开
 目录 定位文件各工具都要用, 因此统一放在外壳层而不是某个工具里
@@ -23,10 +23,10 @@ APP_USER_MODEL_ID = "thione.agent.1"
 
 
 def set_app_user_model_id(app_id=APP_USER_MODEL_ID):
-    """设置进程的 AppUserModelID。
+    """设置进程的 AppUserModelID
 
     不设置的话, 翻译弹窗在任务栏上会显示为孤立的 python 图标且不与进程
-    分组; 设置后任务栏使用 exe 自带的图标。
+    分组; 设置后任务栏使用 exe 自带的图标
     """
     if not _IS_WINDOWS:
         return False
@@ -47,9 +47,9 @@ _MUTEX_HANDLE = None  # 必须持有到进程结束, 否则互斥量会被释放
 
 
 def acquire_single_instance(name="Global\\thione.single-instance"):
-    """尝试获取单实例互斥量。
+    """尝试获取单实例互斥量
 
-    返回 True 表示这是第一个实例; False 表示已有实例在运行。
+    返回 True 表示这是第一个实例; False 表示已有实例在运行
     """
     global _MUTEX_HANDLE
     if not _IS_WINDOWS:
@@ -94,10 +94,10 @@ def _bind_activation_socket():
 
 
 def start_activation_server(on_activate):
-    """在后台线程监听激活请求。
+    """在后台线程监听激活请求
 
     第二个实例启动时会向这里发一条消息, 由 on_activate 决定如何响应
-    (通常是弹窗告诉用户程序已在运行)。服务器套接字绑定失败时返回 None。
+    (通常是弹窗告诉用户程序已在运行). 服务器套接字绑定失败时返回 None
     """
     import threading
 
@@ -129,7 +129,7 @@ def start_activation_server(on_activate):
 
 
 def notify_existing_instance(timeout=1.0):
-    """作为第二个实例, 通知已有实例; 返回是否通知成功。"""
+    """作为第二个实例, 通知已有实例; 返回是否通知成功"""
     try:
         with socket.create_connection(("127.0.0.1", _ACTIVATION_PORT), timeout) as s:
             s.sendall(_ACTIVATION_TOKEN)
@@ -184,9 +184,9 @@ def reveal_file(path):
     """打开文件所在目录并选中该文件
 
     explorer 的 `/select,` 对参数写法挑剔: 只认反斜杠形式的完整路径, 引号也只能
-    加在路径本身。传正斜杠 (文件对话框给出的就是这种路径) 或把整个开关一起加引号
+    加在路径本身. 传正斜杠 (文件对话框给出的就是这种路径) 或把整个开关一起加引号
     (子进程按参数列表拼命令行时会这样) 都会退回到默认目录, 因此这里先规范化
-    路径, 再用字符串命令行只给路径加引号。
+    路径, 再用字符串命令行只给路径加引号
 
     @param path: 文件的完整路径
     @return: 是否成功
