@@ -6,14 +6,19 @@
 
 `translate()` 的语言参数一律是本项目的领域语言代码 (见 `language.LANGUAGE_LABELS`)
 例如中文是 `zh`; 各服务自己的语言代码 (华为云 `zh-tw`, 60s API `zh-CHT`,
-uapipro `zh-TW`) 由 Provider 内部转换, 不向业务层暴露
+uapipro `zh-TW`, Google `zh-CN`) 由 Provider 内部转换, 不向业务层暴露
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Mapping
 
-from ..constants import MAX_TEXT_LENGTH, UAPI_MAX_TEXT_LENGTH
+from ..constants import (
+    MAX_TEXT_LENGTH,
+    TRANSMART_MAX_TEXT_LENGTH,
+    UAPI_MAX_TEXT_LENGTH,
+    YOUDAO_MAX_TEXT_LENGTH,
+)
 from ..language import AUTO_LANG, language_label
 
 if TYPE_CHECKING:  # 仅用于类型标注, 避免与 config 形成循环导入
@@ -87,11 +92,65 @@ UAPI_LANGUAGES = {
     "hi": "hi",
 }
 
+#: 腾讯交互翻译支持的语言, 取值见 https://transmart.qq.com 的网页端请求
+#: (繁体中文用 zh-TW), 不支持印度尼西亚语 荷兰语 波兰语 印地语
+TRANSMART_LANGUAGES = {
+    "zh": "zh",
+    "zh-Hant": "zh-TW",
+    "en": "en",
+    "ja": "ja",
+    "ko": "ko",
+    "fr": "fr",
+    "de": "de",
+    "es": "es",
+    "pt": "pt",
+    "ru": "ru",
+    "ar": "ar",
+    "th": "th",
+    "vi": "vi",
+    "tr": "tr",
+    "it": "it",
+}
+
+#: Google 翻译免费端点的语言取值 (简体中文是 zh-CN, 繁体中文是 zh-TW)
+GOOGLE_LANGUAGES = {
+    "zh": "zh-CN",
+    "zh-Hant": "zh-TW",
+    "en": "en",
+    "ja": "ja",
+    "ko": "ko",
+    "fr": "fr",
+    "de": "de",
+    "es": "es",
+    "pt": "pt",
+    "ru": "ru",
+    "ar": "ar",
+    "th": "th",
+    "vi": "vi",
+    "tr": "tr",
+    "it": "it",
+    "id": "id",
+    "nl": "nl",
+    "pl": "pl",
+    "hi": "hi",
+}
+
+#: 有道 AI 体验接口只提供中英日三种语言, 翻译至少一侧为中文, 取值见
+#: https://aidemo.youdao.com
+YOUDAO_LANGUAGES = {
+    "zh": "zh-CHS",
+    "en": "en",
+    "ja": "ja",
+}
+
 #: 可作为源语言的领域语言代码, 一律包含 auto (自动识别); uapipro 的接口由
 #: 服务端识别源语言, 因此只支持 auto
 HUAWEI_SOURCE_LANGUAGES = frozenset(HUAWEI_LANGUAGES) | {AUTO_LANG}
 SIXTY_SOURCE_LANGUAGES = frozenset(SIXTY_LANGUAGES) | {AUTO_LANG}
 UAPI_SOURCE_LANGUAGES = frozenset({AUTO_LANG})
+TRANSMART_SOURCE_LANGUAGES = frozenset(TRANSMART_LANGUAGES) | {AUTO_LANG}
+GOOGLE_SOURCE_LANGUAGES = frozenset(GOOGLE_LANGUAGES) | {AUTO_LANG}
+YOUDAO_SOURCE_LANGUAGES = frozenset(YOUDAO_LANGUAGES) | {AUTO_LANG}
 
 
 class TranslationError(RuntimeError):
@@ -178,6 +237,27 @@ def _build_sixty(config: "Config") -> TranslationProvider:
     return SixtyTranslator()
 
 
+def _build_transmart(config: "Config") -> TranslationProvider:
+    """构建腾讯交互翻译实现"""
+    from .transmart import TransmartTranslator
+
+    return TransmartTranslator()
+
+
+def _build_google(config: "Config") -> TranslationProvider:
+    """构建 Google 翻译免费端点实现"""
+    from .google import GoogleTranslator
+
+    return GoogleTranslator()
+
+
+def _build_youdao(config: "Config") -> TranslationProvider:
+    """构建有道 AI 体验接口实现"""
+    from .youdao import YoudaoTranslator
+
+    return YoudaoTranslator()
+
+
 #: 界面上按此顺序给出可选服务
 PROVIDER_SPECS = (
     ProviderSpec(
@@ -207,6 +287,35 @@ PROVIDER_SPECS = (
         languages=SIXTY_LANGUAGES,
         source_languages=SIXTY_SOURCE_LANGUAGES,
         factory=_build_sixty,
+    ),
+    ProviderSpec(
+        name="transmart",
+        label="腾讯交互翻译",
+        hint=(f"公共免费接口, 无需凭据, 单次最多 {TRANSMART_MAX_TEXT_LENGTH} 字符, "
+              "源语言与目标语言均可指定"),
+        requires_credentials=False,
+        languages=TRANSMART_LANGUAGES,
+        source_languages=TRANSMART_SOURCE_LANGUAGES,
+        factory=_build_transmart,
+    ),
+    ProviderSpec(
+        name="google",
+        label="Google 翻译",
+        hint="公共免费端点, 无需凭据, 可选语言最多, 源语言与目标语言均可指定",
+        requires_credentials=False,
+        languages=GOOGLE_LANGUAGES,
+        source_languages=GOOGLE_SOURCE_LANGUAGES,
+        factory=_build_google,
+    ),
+    ProviderSpec(
+        name="youdao",
+        label="有道翻译",
+        hint=(f"公共免费接口, 无需凭据, 翻译至少一侧为中文, "
+              f"单次最多 {YOUDAO_MAX_TEXT_LENGTH} 字符, 有频率限制"),
+        requires_credentials=False,
+        languages=YOUDAO_LANGUAGES,
+        source_languages=YOUDAO_SOURCE_LANGUAGES,
+        factory=_build_youdao,
     ),
 )
 

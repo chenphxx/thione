@@ -24,6 +24,23 @@ UAPI_TIMEOUT = 15.0             # 单次请求的超时时间 (秒)
 SIXTY_BASE_URL = "https://60s.viki.moe"
 SIXTY_TIMEOUT = 15.0            # 单次请求的超时时间 (秒)
 
+# 腾讯交互翻译 (https://transmart.qq.com): 源语言与目标语言都可以指定,
+# 服务端限制单次 6000 字符, 本地先按同一上限拦一次
+TRANSMART_URL = "https://transmart.qq.com/api/imt"
+TRANSMART_MAX_TEXT_LENGTH = 6000    # 服务端给出的单次最大字符数
+TRANSMART_TIMEOUT = 20.0        # 单次请求的超时时间 (秒)
+
+# Google 翻译的网页端免费端点 (https://translate.googleapis.com): 长文本由
+# 服务端自行拆句, 因此只依赖服务端自己的校验
+GOOGLE_URL = "https://translate.googleapis.com/translate_a/single"
+GOOGLE_TIMEOUT = 20.0           # 单次请求的超时时间 (秒)
+
+# 有道翻译 AI 体验接口 (https://aidemo.youdao.com): 只提供中英日三种目标
+# 语言, 单次最多 1000 字符, 并有访问频率限制
+YOUDAO_URL = "https://aidemo.youdao.com/trans"
+YOUDAO_MAX_TEXT_LENGTH = 1000   # 实测超过 1000 字符即报错
+YOUDAO_TIMEOUT = 15.0           # 单次请求的超时时间 (秒)
+
 # 凭据来源文件名
 CREDENTIAL_FILE = "IAM_transpy-accessKeys.csv"   # 华为云控制台下载的 csv
 CONFIG_FILE_NAME = "config.ini"                  # %APPDATA%\thione 下的主配置
