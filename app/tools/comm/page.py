@@ -5,6 +5,9 @@
 随当前链路切换. 两条链路的会话互相独立, 读线程只把收到的数据与状态变化放进队列,
 主线程按固定间隔取出来刷新界面, 因此后台线程不会碰到 tkinter 对象; 打开串口
 测试连接与端口检查同样放在后台线程, 避免连接超时把界面卡住
+
+串口枚举与取本机地址只读系统信息, 在主线程里做; 串口占用探测要真的打开串口, 主机名
+解析要等 DNS, 两者都放在后台线程, 结果经队列回到主线程再刷新下拉框
 """
 
 import logging
@@ -237,6 +240,7 @@ class CommPage(ToolPage):
         self._open_port = ""
         self._port_devices = {}
         self._config_loaded = False
+        self._scan_request = 0
         self._active_link = LINK_SERIAL
         # 每条链路各自保留最近一条提示, 切换回来时显示的还是它自己的状态
         self._hints = {LINK_SERIAL: (HINT_SERIAL_IDLE, False),
@@ -297,7 +301,7 @@ class CommPage(ToolPage):
         # 配置行只留参数控件
         self.btn_ports = ttk.Button(self._actions, text=BTN_REFRESH_PORTS,
                                     style="Secondary.TButton",
-                                    command=self.refresh_ports)
+                                    command=self._rescan_ports)
 
         switch = ttk.Frame(row, style="CardFlat.TFrame")
         switch.pack(side="left", padx=(0, 12))
@@ -461,12 +465,16 @@ class CommPage(ToolPage):
 
     # ---------------- 生命周期 ----------------
     def on_show(self):
-        """首次进入本页时才枚举串口与本机地址, 不拖慢程序启动"""
+        """首次进入本页时才枚举串口与本机地址, 都不拖慢程序启动
+
+        枚举与取本机地址都很快, 在主线程里做; 串口占用探测与主机名解析要等设备与 DNS,
+        交给后台线程, 结果回来后再刷新下拉框
+        """
         if self._config_loaded:
             return
         self._config_loaded = True
-        self.refresh_ports()
         self.refresh_addresses()
+        self.refresh_ports()
 
     def on_theme_changed(self):
         """主题切换后刷新四个数据面板的颜色"""
@@ -528,24 +536,89 @@ class CommPage(ToolPage):
         self._show_hint()
 
     # ---------------- 配置区 ----------------
-    def refresh_ports(self):
-        """重新枚举本机串口, 可用的排在前面"""
-        infos = ports.list_serial_ports(self._open_port)
+    def refresh_ports(self, force=False):
+        """重新枚举本机串口, 占用状态交给后台探测补齐
+
+        枚举不打开串口, 因此这个调用本身很快; 探测结果回来后会按串口号重新刷新一次
+        下拉框, 当前选中的串口不会因此丢失
+
+        @param force: True 时忽略占用探测缓存, 重新探测每一个串口
+        """
+        self._apply_port_items(ports.enumerate_serial_ports(self._open_port))
+        self._start_port_scan(force)
+
+    def _rescan_ports(self):
+        """工具条上的 刷新串口: 重新枚举并忽略缓存重新探测"""
+        self.refresh_ports(force=True)
+
+    def _apply_port_items(self, infos):
+        """按一串串口信息刷新下拉框
+
+        探测前后同一个串口的展示文本会变 (括号里的占用状态), 因此按串口号而不是显示
+        文本去保留当前选中的那一个
+
+        @param infos: SerialPortInfo 列表
+        """
+        current = self._selected_port()
         labels = [ports.serial_label(info) for info in infos]
         self._port_devices = {label: info.device
                               for label, info in zip(labels, infos)}
         self.combo_port.configure(values=labels)
-        if self._port_var.get() not in labels:
+        chosen = ""
+        for label, info in zip(labels, infos):
+            if info.device == current:
+                chosen = label
+                break
+        if chosen:
+            self._port_var.set(chosen)
+        elif self._port_var.get() not in labels:
             self._port_var.set(labels[0] if labels else "")
         if not labels:
             self._report_config(HINT_NO_PORTS, link=LINK_SERIAL)
 
-    def refresh_addresses(self):
-        """刷新本机地址下拉框, 默认选中系统识别出来的地址"""
-        addresses = ports.local_ipv4_addresses()
+    def refresh_addresses(self, addresses=None):
+        """刷新本机地址下拉框, 默认选中系统识别出来的地址
+
+        @param addresses: 已经取到的地址列表; 省略时只取不用等解析的那一份
+        """
+        if addresses is None:
+            addresses = ports.local_ipv4_addresses()
         self.combo_local.configure(values=[ALL_ADDRESSES] + addresses)
         if self._local_var.get() not in addresses:
             self._local_var.set(addresses[0] if addresses else ALL_ADDRESSES)
+
+    def _start_port_scan(self, force=False):
+        """在后台线程里补齐串口占用状态与本机地址
+
+        @param force: True 时忽略占用探测缓存
+        """
+        self._scan_request += 1
+        request = self._scan_request
+        held = self._open_port
+        self._start_worker(self._scan_ports_worker, (request, held, force),
+                           "comm-scan-ports")
+        self._start_worker(self._scan_addresses_worker, (request,),
+                           "comm-scan-addresses")
+
+    def _scan_ports_worker(self, request, held, force):
+        """后台线程: 探测串口的占用状态
+
+        @param request: 本次扫描的序号, 主线程用它丢弃过期结果
+        @param held: 发起扫描时本程序已经打开的串口号
+        @param force: True 时忽略占用探测缓存
+        """
+        items = ports.enumerate_serial_ports(held)
+        if items:
+            items = ports.probe_serial_ports(items, held, force=force)
+        self._messages.put(("ports", request, items))
+
+    def _scan_addresses_worker(self, request):
+        """后台线程: 取本机地址, 包括要等 DNS 的那些
+
+        @param request: 本次扫描的序号, 主线程用它丢弃过期结果
+        """
+        self._messages.put(
+            ("addresses", request, ports.extended_ipv4_addresses()))
 
     def _current_proto(self):
         """当前协议"""
@@ -733,6 +806,8 @@ class CommPage(ToolPage):
 
         @param note: 写进接收区的说明
         """
+        # 刚放开的串口要重新判定占用情况, 否则缓存里的旧状态还会挂一会儿
+        ports.forget_port(self._open_port)
         self._stop_session(LINK_SERIAL)
         self._open_port = ""
         self.recv_serial.note(note)
@@ -965,6 +1040,15 @@ class CommPage(ToolPage):
             self.recv_net.note(text, error=not ok)
             self._report_config(text, error=not ok, link=LINK_NET)
             self._sync_controls()
+        elif tag == "ports":
+            # 过期的扫描结果直接丢掉: 后面已经发起了更新的扫描
+            _tag, request, items = message
+            if request == self._scan_request:
+                self._apply_port_items(items)
+        elif tag == "addresses":
+            _tag, request, addresses = message
+            if request == self._scan_request:
+                self.refresh_addresses(addresses)
 
     def _handle_event(self, link, kind, payload):
         """处理会话线程报告的状态变化
@@ -981,6 +1065,7 @@ class CommPage(ToolPage):
             return
         reason = payload or "连接已结束"
         if link == LINK_SERIAL:
+            ports.forget_port(self._open_port)
             self._serial_session = None
             self._open_port = ""
             self.refresh_ports()
@@ -1013,6 +1098,8 @@ class CommPage(ToolPage):
             if link == LINK_SERIAL:
                 self._serial_session = session
                 self._open_port = info.get("port", "")
+                # 让下拉框立刻把它标成 本程序使用中, 且探测时不再打开它
+                self.refresh_ports()
             else:
                 self._net_session = session
                 self.send_net.set_targets(info.get("clients", []))

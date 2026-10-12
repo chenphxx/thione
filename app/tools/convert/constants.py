@@ -182,6 +182,8 @@ ENGINE_LABEL = "引擎"
 ENGINE_DETECTING = "正在检测"
 ENGINE_MISSING = "未找到 ffmpeg"
 ENGINE_CHOOSE = "选择 ffmpeg"
+#: 开始转换前等待后台检测 ffmpeg 的最长时间 (秒), 超时后同步兜底检测一次
+ENGINE_WAIT_TIMEOUT = 5.0
 
 # 转换结束后的总结: 状态栏 与 页面底部
 SUMMARY_DONE = "转换完成: 成功 {ok} 个, 跳过 {skip} 个, 失败 {fail} 个"

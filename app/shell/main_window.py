@@ -27,6 +27,7 @@ class ShellWindow:
         self._indicators = {}
         self._queue = queue.Queue()
         self._queue_job = None
+        self._show_job = None
         self._splitter_origin = None
         self._closing = False
 
@@ -119,7 +120,35 @@ class ShellWindow:
         self.sidebar.set_active(key)
         self.settings.page = key
         self.set_status(page.subtitle)
-        page.on_show()
+        self._schedule_show(key)
+
+    def _schedule_show(self, key):
+        """把页面的 on_show 推迟到本次事件处理完再执行
+
+        页面首次显示时可能要做一些准备 (读配置 列设备 找外部程序), 排在空闲时执行 Tk
+        会先把新页面画出来, 用户看到的是立刻切换, 而不是一段没有反应的等待
+
+        @param key: 刚切换到的页面标识
+        """
+        self._show_job = self.root.after_idle(lambda: self._run_show(key))
+
+    def _run_show(self, key):
+        """执行页面的 on_show, 页面已经切换走时跳过
+
+        @param key: 页面标识
+        """
+        self._show_job = None
+        if key != self._current_key:
+            return
+        page = self._pages.get(key)
+        if page is None:
+            return
+        # 先把待处理的绘制做掉, 钩子里耗时的准备才不会把页面挡在屏幕外
+        self.root.update_idletasks()
+        try:
+            page.on_show()
+        except Exception:
+            logger.exception("页面显示失败: %s", key)
 
     def toggle_theme(self, _event=None):
         """切换浅色与深色外观并保存用户选择"""
@@ -193,6 +222,12 @@ class ShellWindow:
             except Exception:
                 logger.exception("Shell action failed")
         self._closing = True
+        if self._show_job is not None:
+            try:
+                self.root.after_cancel(self._show_job)
+            except tk.TclError:
+                pass
+            self._show_job = None
         if self._queue_job is not None:
             try:
                 self.root.after_cancel(self._queue_job)

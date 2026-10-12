@@ -127,6 +127,9 @@ PORT_AVAILABLE = "可用"
 PORT_BUSY = "占用中"
 PORT_IN_USE_BY_US = "本程序使用中"
 
+#: 串口占用探测结果的缓存时间 (秒): 短时间内重复刷新不再打开同一个串口
+PROBE_CACHE_SECONDS = 30.0
+
 #: 配置检查的结果前缀
 CHECK_OK = "配置可用"
 CHECK_FAIL = "配置有问题"

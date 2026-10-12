@@ -33,6 +33,7 @@ from .constants import (
     ENGINE_DETECTING,
     ENGINE_LABEL,
     ENGINE_MISSING,
+    ENGINE_WAIT_TIMEOUT,
     FFMPEG_MISSING,
     FILE_COLUMNS,
     FORMAT_CHOICES,
@@ -100,6 +101,8 @@ class ConvertPage(ToolPage):
         self._dest_dir = ""
         self._ffmpeg_path = ""
         self._engine_checked = False
+        self._engine_thread = None
+        self._engine_request = 0
         self._messages = queue.Queue()
         self._worker = None
         self._stop_event = None
@@ -665,25 +668,70 @@ class ConvertPage(ToolPage):
         self.entry_dest.configure(state="disabled")
 
     # ---------------- 转换引擎 ----------------
-    def _refresh_engine(self):
-        """找一次 ffmpeg, 并把结果显示在状态栏上"""
-        self._engine_checked = True
-        self._ffmpeg_path = ffmpeg.find_ffmpeg(self._ffmpeg_path)
-        if not self._ffmpeg_path:
+    def _detect_engine(self):
+        """在后台线程里找 ffmpeg, 结果经消息队列回到主线程
+
+        随包的 ffmpeg 第一次执行要等系统与杀毒软件读一遍, 在主线程里做会把界面卡住
+        数秒; 因此定位与读版本号都放在后台线程, 期间状态栏先显示 正在检测
+        """
+        self._engine_request += 1
+        self._engine_var.set(f"{ENGINE_LABEL}: {ENGINE_DETECTING}")
+        self.lbl_engine.configure(style="PanelMuted.TLabel")
+        thread = threading.Thread(
+            target=self._detect_engine_worker,
+            args=(self._engine_request,),
+            name="convert-engine", daemon=True)
+        self._engine_thread = thread
+        thread.start()
+
+    def _detect_engine_worker(self, request):
+        """后台线程: 定位 ffmpeg 并读一次版本号, 只通过队列与主线程通信
+
+        @param request: 本次检测的序号, 主线程用它丢弃过期结果
+        """
+        path, version = self._locate_engine()
+        self._messages.put(("engine", request, path, version))
+
+    @staticmethod
+    def _locate_engine():
+        """定位 ffmpeg 并读它的版本号, 不碰界面
+
+        @return: (ffmpeg 路径, 版本号); 找不到时都是空串
+        """
+        path = ffmpeg.find_ffmpeg()
+        if not path:
+            return "", ""
+        return path, ffmpeg.version(path)
+
+    def _apply_engine(self, path, version):
+        """把检测结果显示在状态栏
+
+        @param path: ffmpeg 路径, 空串表示没找到
+        @param version: 版本号, 读不到时为空串
+        """
+        self._ffmpeg_path = path
+        if not path:
             self._engine_var.set(f"{ENGINE_LABEL}: {ENGINE_MISSING}")
             self.lbl_engine.configure(style="PanelError.TLabel")
             return
-        version = ffmpeg.version(self._ffmpeg_path)
         self._engine_var.set(f"{ENGINE_LABEL}: ffmpeg {version}".rstrip())
         self.lbl_engine.configure(style="PanelMuted.TLabel")
 
     def _ensure_engine(self):
         """确认有可用的转换引擎
 
+        首次进入时的后台检测可能还没结束, 这里等它一会儿; 仍然没有结果就同步找一次,
+        因为这时用户已经在等转换开始了
+
         @return: 可以开始转换时为 True, 否则提示用户后返回 False
         """
         if not self._ffmpeg_path:
-            self._refresh_engine()
+            thread = self._engine_thread
+            if thread is not None and thread.is_alive():
+                thread.join(timeout=ENGINE_WAIT_TIMEOUT)
+            self._drain_messages()
+        if not self._ffmpeg_path:
+            self._apply_engine(*self._locate_engine())
         if self._ffmpeg_path:
             return True
         show_error(FFMPEG_MISSING, title="找不到 ffmpeg", parent=self.window)
@@ -698,12 +746,14 @@ class ConvertPage(ToolPage):
             parent=self.window)
         if not path:
             return
-        if not ffmpeg.version(path):
+        version = ffmpeg.version(path)
+        if not version:
             show_error("这个文件不是可用的 ffmpeg", title="选择 ffmpeg 失败",
                        parent=self.window)
             return
-        self._ffmpeg_path = os.path.normpath(path)
-        self._refresh_engine()
+        # 手动选择优先于还在跑的自动检测, 序号加一让它的结果失效
+        self._engine_request += 1
+        self._apply_engine(os.path.normpath(path), version)
         self.set_status(f"已选择 ffmpeg: {self._ffmpeg_path}")
 
     # ---------------- 转换流程 ----------------
@@ -879,17 +929,26 @@ class ConvertPage(ToolPage):
 
     def _poll_messages(self):
         """在主线程里消费后台线程的消息"""
+        self._drain_messages()
+        self._poll_job = self.root.after(POLL_INTERVAL_MS, self._poll_messages)
+
+    def _drain_messages(self):
+        """把队列里积压的消息全部处理掉
+
+        除了定时轮询, 等待引擎检测结果时也会调用一次, 否则结果压在队列里要等下一次
+        轮询才会生效
+        """
         try:
             while True:
                 self._handle(self._messages.get_nowait())
         except queue.Empty:
             pass
-        self._poll_job = self.root.after(POLL_INTERVAL_MS, self._poll_messages)
 
     def _handle(self, message):
         """处理一条后台消息
 
-        @param message: (类型, ...) 组成的元组, 类型见 _run 里的投递
+        @param message: (类型, ...) 组成的元组, 类型见 _run 与 _detect_engine_worker
+                        里的投递
         """
         kind = message[0]
         if kind == "start":
@@ -930,6 +989,10 @@ class ConvertPage(ToolPage):
             self._finish()
         elif kind == "stopped":
             self._finish(stopped=True)
+        elif kind == "engine":
+            # 过期的检测结果直接丢掉: 手动选择或者重新检测已经给出更新的答案
+            if message[1] == self._engine_request:
+                self._apply_engine(message[2], message[3])
 
     def _failure_text(self, message):
         """把失败消息压缩成状态列里一行
@@ -1009,9 +1072,11 @@ class ConvertPage(ToolPage):
 
     # ---------------- 生命周期 ----------------
     def on_show(self):
-        """首次进入本页时才去找 ffmpeg, 不拖慢程序启动"""
-        if not self._engine_checked:
-            self._refresh_engine()
+        """首次进入本页时才去找 ffmpeg, 而且放在后台线程里, 不卡住界面"""
+        if self._engine_checked:
+            return
+        self._engine_checked = True
+        self._detect_engine()
 
     def on_theme_changed(self):
         """主题切换后重新应用状态列的颜色"""
@@ -1032,4 +1097,6 @@ class ConvertPage(ToolPage):
                 logger.warning("结束 ffmpeg 子进程失败", exc_info=True)
         if self._worker is not None and self._worker.is_alive():
             self._worker.join(timeout=CLOSE_JOIN_TIMEOUT)
+        if self._engine_thread is not None and self._engine_thread.is_alive():
+            self._engine_thread.join(timeout=CLOSE_JOIN_TIMEOUT)
         return True

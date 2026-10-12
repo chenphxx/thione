@@ -1,12 +1,17 @@
 """串口列表 本机地址与端口可用性检查
 
 串口可用性用一次短打开来判定: 能打开说明没有被别的程序占用, 打不开则给出原因
+打开串口本身可能很慢 (蓝牙与虚拟串口尤其明显), 因此枚举与探测分成两步:
+enumerate_serial_ports() 只列出系统里的串口, probe_serial_ports() 才逐个探测占用
+情况, 由调用方放到后台线程里执行; 探测结果按串口号缓存一小段时间, 短时间内重复
+刷新不会反复打开同一个串口
 端口占用者复用 端口与占用 工具的连接表与进程快照, 因此两个工具对 谁占用了这个
 端口 的说法是一致的
 """
 
 import logging
 import socket
+import time
 from typing import NamedTuple
 
 import serial
@@ -18,6 +23,7 @@ from .constants import (
     PORT_AVAILABLE,
     PORT_BUSY,
     PORT_IN_USE_BY_US,
+    PROBE_CACHE_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,21 +34,31 @@ UNKNOWN_OWNER = "占用它的程序未知"
 #: 判定串口占用时不必真的读数据, 打开后立刻关闭
 PORT_PROBE_TIMEOUT = 0.05
 
+#: 串口占用探测结果的缓存: 串口号 -> (记下的时间, 是否可用, 说明)
+_probe_cache = {}
+
 
 class SerialPortInfo(NamedTuple):
-    """一个串口的展示信息"""
+    """一个串口的展示信息
+
+    available 为 None 表示占用状态还没有探测
+    """
 
     device: str
     description: str
-    available: bool
+    available: bool | None
     note: str
 
 
-def list_serial_ports(held=""):
-    """列出本机串口, 可用的排在前面
+def enumerate_serial_ports(held=""):
+    """列出本机串口, 不做占用探测
 
-    @param held: 本程序当前已经打开的串口号, 单独标注
-    @return: SerialPortInfo 列表
+    枚举只读系统里的串口信息, 本身很快, 因此可以放在主线程里做; 占用状态要真的打开
+    一次串口才能确定, 交给 probe_serial_ports() 在后台线程里补齐
+
+    @param held: 本程序当前已经打开的串口号, 直接标注为 本程序使用中
+    @return: SerialPortInfo 列表, available 为 None 表示占用状态还没探测; 缓存里
+             还有结果的串口直接带上缓存里的状态
     """
     items = []
     try:
@@ -52,14 +68,57 @@ def list_serial_ports(held=""):
         return []
     for info in found:
         device = info.device
+        description = info.description or device
         if device == held:
-            items.append(SerialPortInfo(device, info.description or device,
-                                        True, PORT_IN_USE_BY_US))
+            items.append(SerialPortInfo(device, description, True,
+                                        PORT_IN_USE_BY_US))
             continue
-        ok, note = _probe_port(device)
-        items.append(SerialPortInfo(device, info.description or device, ok, note))
-    items.sort(key=lambda item: (not item.available, _port_index(item.device)))
+        cached = _cached_probe(device)
+        if cached is None:
+            items.append(SerialPortInfo(device, description, None, ""))
+        else:
+            items.append(SerialPortInfo(device, description, cached[0],
+                                        cached[1]))
+    _sort_ports(items)
     return items
+
+
+def probe_serial_ports(items, held="", force=False):
+    """补齐串口的占用状态, 应当在后台线程里调用
+
+    每个串口都要真的打开一次才能确定是否被占用, 打开蓝牙或者虚拟串口可能要几百毫秒
+    到几秒, 因此这里只负责探测, 结果由调用方带回主线程刷新界面
+
+    @param items: enumerate_serial_ports() 的返回值
+    @param held: 本程序当前已经打开的串口号, 保持 本程序使用中 的标注
+    @param force: True 时忽略缓存, 重新探测每一个串口
+    @return: 占用状态已经确定的 SerialPortInfo 列表, 可用的排在前面
+    """
+    probed = []
+    for item in items:
+        if item.device == held:
+            probed.append(item)
+            continue
+        cached = None if force else _cached_probe(item.device)
+        if cached is None:
+            available, note = _probe_port(item.device)
+            _remember_probe(item.device, available, note)
+        else:
+            available, note = cached
+        probed.append(item._replace(available=available, note=note))
+    _sort_ports(probed)
+    return probed
+
+
+def forget_port(device):
+    """丢掉一个串口的探测缓存
+
+    本程序刚放开这个串口时调用, 免得缓存在有效期内一直用旧的占用状态
+
+    @param device: 串口号
+    """
+    if device:
+        _probe_cache.pop(device, None)
 
 
 def _port_index(device):
@@ -70,6 +129,40 @@ def _port_index(device):
     """
     digits = "".join(char for char in device if char.isdigit())
     return (0, int(digits), "") if digits else (1, 0, device)
+
+
+def _sort_ports(items):
+    """可用的串口排在前面, 其余按串口号排序
+
+    @param items: SerialPortInfo 列表, 原地排序
+    """
+    items.sort(key=lambda item: (item.available is not True,
+                                _port_index(item.device)))
+
+
+def _cached_probe(device):
+    """取缓存里的占用探测结果
+
+    @param device: 串口号
+    @return: (是否可用, 说明); 没有缓存或者已经过期时返回 None
+    """
+    entry = _probe_cache.get(device)
+    if entry is None:
+        return None
+    if time.monotonic() - entry[0] > PROBE_CACHE_SECONDS:
+        del _probe_cache[device]
+        return None
+    return entry[1], entry[2]
+
+
+def _remember_probe(device, available, note):
+    """记下这次的占用探测结果
+
+    @param device: 串口号
+    @param available: 是否可用
+    @param note: 说明文本
+    """
+    _probe_cache[device] = (time.monotonic(), available, note)
 
 
 def _probe_port(device):
@@ -103,10 +196,14 @@ def _short_reason(exc):
 def serial_label(info):
     """下拉框里展示串口的一行文本
 
+    占用状态还没探测出来时括号里就没有内容, 探测结果回来后会再刷新一次
+
     @param info: SerialPortInfo
     @return: 展示文本
     """
-    parts = [info.device, "(%s)" % info.note]
+    parts = [info.device]
+    if info.note:
+        parts.append("(%s)" % info.note)
     description = _short_description(info)
     if description:
         parts.append(description)
@@ -131,14 +228,34 @@ def _short_description(info):
 
 
 def local_ipv4_addresses():
-    """本机可用的 IPv4 地址, 主用地址排在最前
+    """本机 IPv4 地址里不用等解析的那一份, 主用地址排在最前
 
-    主用地址取一条不发包的 UDP 连接的本地地址, 连不通时退回主机名解析的结果
+    主用地址取一条不发包的 UDP 连接的本地地址, 因此这个调用本身很快; 网卡上其余的
+    地址由 extended_ipv4_addresses() 在后台线程里补齐
 
     @return: 地址列表, 至少包含 127.0.0.1
     """
+    return _merge_addresses([_primary_address()])
+
+
+def extended_ipv4_addresses():
+    """在 local_ipv4_addresses() 之外补齐主机名解析出来的地址
+
+    主机名解析要等 DNS, 网络不通时可能阻塞好几秒, 因此只应当在后台线程里调用
+
+    @return: 地址列表, 主用地址排在最前
+    """
+    return _merge_addresses([_primary_address(), *_host_addresses()])
+
+
+def _merge_addresses(candidates):
+    """去重并保证 127.0.0.1 在最后
+
+    @param candidates: 候选地址, 其中的空串会被丢掉
+    @return: 地址列表
+    """
     addresses = []
-    for candidate in (_primary_address(), *_host_addresses()):
+    for candidate in candidates:
         if candidate and candidate not in addresses:
             addresses.append(candidate)
     if "127.0.0.1" not in addresses:
@@ -164,6 +281,8 @@ def _primary_address():
 
 def _host_addresses():
     """通过主机名解析本机地址
+
+    解析要等 DNS, 网络不通时可能阻塞几秒, 因此只应当在后台线程里调用
 
     @return: 地址列表
     """

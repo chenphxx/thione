@@ -2,6 +2,8 @@
 
 转换本身全部交给 ffmpeg, 不需要再引入音频编解码库; 程序按 用户指定 -> 系统 PATH -> 随包副本 ->
 常见安装位置 的顺序找 ffmpeg, 找不到时由页面引导用户手动选择
+候选按需生成, 定位与版本号读取由页面放在后台线程里执行, 因为随包副本第一次执行时
+系统与杀毒软件要读一遍, 在主线程里做会把界面卡住
 
 加密容器还原出来的曲目信息与封面由调用方传进来, 转换成 -metadata 与附加图片流写进
 输出文件; 封面只在支持附加图片的容器里写, 见 constants.COVER_FORMATS
@@ -49,10 +51,15 @@ class ConvertError(RuntimeError):
 def find_ffmpeg(configured=""):
     """按优先级找一个可用的 ffmpeg
 
+    候选按需生成: 用户指定或者系统 PATH 里已经有可用程序时, 就不会再去问随包的
+    副本, 因此也不会白启动一次随包的 ffmpeg
+
     @param configured: 用户在页面里指定的路径, 可以是空串
     @return: ffmpeg 可执行文件路径; 一个都找不到时返回空串
     """
-    for candidate in (configured, *_candidates()):
+    if configured and os.path.isfile(configured):
+        return configured
+    for candidate in _candidates():
         if candidate and os.path.isfile(candidate):
             return candidate
     return ""
@@ -60,6 +67,9 @@ def find_ffmpeg(configured=""):
 
 def version(ffmpeg_path):
     """取 ffmpeg 的版本号, 用于确认选择的程序确实可用
+
+    读版本号要真的启动一次 ffmpeg, 首次执行随包的副本还要等系统与杀毒软件读一遍,
+    因此调用方应当放在后台线程里
 
     @param ffmpeg_path: ffmpeg 可执行文件路径
     @return: 例如 7.1; 无法执行时返回空串
@@ -245,7 +255,12 @@ def _common_paths():
 
 
 def _bundled_path():
-    """随程序附带的 ffmpeg 副本, 来自可选的 imageio-ffmpeg 依赖"""
+    """随程序附带的 ffmpeg 副本, 来自可选的 imageio-ffmpeg 依赖
+
+    imageio_ffmpeg 自己会先跑一次 `ffmpeg -version` 校验副本可用, 因此这个调用不便宜
+
+    @return: 随包副本的路径; 没有这个依赖或者副本不可用时为空串
+    """
     try:
         import imageio_ffmpeg
     except ImportError:
