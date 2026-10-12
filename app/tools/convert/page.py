@@ -679,32 +679,42 @@ class ConvertPage(ToolPage):
         self.lbl_engine.configure(style="PanelMuted.TLabel")
         thread = threading.Thread(
             target=self._detect_engine_worker,
-            args=(self._engine_request,),
+            args=(self._engine_request, self._cached_engine_path()),
             name="convert-engine", daemon=True)
         self._engine_thread = thread
         thread.start()
 
-    def _detect_engine_worker(self, request):
+    def _detect_engine_worker(self, request, cached):
         """后台线程: 定位 ffmpeg 并读一次版本号, 只通过队列与主线程通信
 
         @param request: 本次检测的序号, 主线程用它丢弃过期结果
+        @param cached: 设置里缓存的路径, 交给 find_ffmpeg 优先采用
         """
-        path, version = self._locate_engine()
+        path, version = self._locate_engine(cached)
         self._messages.put(("engine", request, path, version))
 
     @staticmethod
-    def _locate_engine():
+    def _locate_engine(cached):
         """定位 ffmpeg 并读它的版本号, 不碰界面
 
+        @param cached: 上次用过的路径, 可以是空串
         @return: (ffmpeg 路径, 版本号); 找不到时都是空串
         """
-        path = ffmpeg.find_ffmpeg()
+        path = ffmpeg.find_ffmpeg(cached)
         if not path:
             return "", ""
         return path, ffmpeg.version(path)
 
+    def _cached_engine_path(self):
+        """设置里缓存的 ffmpeg 路径, 文件已经不存在时不再使用
+
+        @return: 可用的缓存路径, 空串表示没有可用缓存
+        """
+        path = self.shell.settings.ffmpeg_path
+        return path if path and os.path.isfile(path) else ""
+
     def _apply_engine(self, path, version):
-        """把检测结果显示在状态栏
+        """把检测结果显示在状态栏, 并把路径记进设置
 
         @param path: ffmpeg 路径, 空串表示没找到
         @param version: 版本号, 读不到时为空串
@@ -716,6 +726,18 @@ class ConvertPage(ToolPage):
             return
         self._engine_var.set(f"{ENGINE_LABEL}: ffmpeg {version}".rstrip())
         self.lbl_engine.configure(style="PanelMuted.TLabel")
+        self._remember_engine(path)
+
+    def _remember_engine(self, path):
+        """记住这次用的 ffmpeg, 下次启动直接采用
+
+        @param path: ffmpeg 可执行文件路径
+        """
+        settings = self.shell.settings
+        if settings.ffmpeg_path == path:
+            return
+        settings.ffmpeg_path = path
+        settings.save()
 
     def _ensure_engine(self):
         """确认有可用的转换引擎
@@ -731,7 +753,7 @@ class ConvertPage(ToolPage):
                 thread.join(timeout=ENGINE_WAIT_TIMEOUT)
             self._drain_messages()
         if not self._ffmpeg_path:
-            self._apply_engine(*self._locate_engine())
+            self._apply_engine(*self._locate_engine(self._cached_engine_path()))
         if self._ffmpeg_path:
             return True
         show_error(FFMPEG_MISSING, title="找不到 ffmpeg", parent=self.window)
