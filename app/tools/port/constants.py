@@ -2,48 +2,57 @@
 
 PAGE_TITLE = "端口与占用"
 
-# 两种查询视图, 顺序即分段按钮的顺序
+# 顶栏里工具名下方的说明
+SUBTITLE = "查看端口被哪个程序占用, 也可以反过来查文件"
+
+# 两种查询视图, 顺序即分段控件的顺序
 VIEW_PORTS = "ports"
 VIEW_FILES = "files"
-VIEW_LABELS = ((VIEW_PORTS, "端口占用"), (VIEW_FILES, "文件占用"))
+VIEW_LABELS = ((VIEW_PORTS, "端口"), (VIEW_FILES, "文件"))
 
-# 表格的列: 列标识 标题 初始宽度 对齐方式
-# 宽度之和控制在默认布局的列表宽度以内, 超宽时表格会被裁掉右侧的列
+# 占用列表的列: 键 标题 权重 对齐 等宽 颜色
+# 列与设计稿一致: 协议 本地地址 状态 PID 程序
 PORT_COLUMNS = (
-    ("proto", "协议", 54, "center"),
-    ("local", "本地地址", 112, "center"),
-    ("port", "端口", 54, "center"),
-    ("state", "状态", 74, "center"),
-    ("remote", "远程地址", 112, "center"),
-    ("pid", "PID", 60, "center"),
-    ("process", "进程", 140, "w"),
+    {"key": "proto", "title": "协议", "weight": 0.7},
+    {"key": "local", "title": "本地地址", "weight": 2.4, "mono": True},
+    {"key": "state", "title": "状态", "weight": 2.1},
+    {"key": "pid", "title": "PID", "weight": 0.9, "mono": True},
+    {"key": "process", "title": "程序", "weight": 4.0},
 )
 
+# 占用文件的进程列表的列
 FILE_COLUMNS = (
-    ("pid", "PID", 60, "center"),
-    ("process", "进程", 146, "w"),
-    ("type", "类型", 92, "center"),
-    ("path", "路径", 308, "w"),
+    {"key": "pid", "title": "PID", "weight": 1.0, "mono": True},
+    {"key": "process", "title": "进程", "weight": 2.4},
+    {"key": "type", "title": "类型", "weight": 1.8},
+    {"key": "path", "title": "路径", "weight": 6.0},
 )
 
 # 进程详情的字段: 键 标题
+# 前 5 项与设计稿一致, 命令行与父进程是设计稿没有画到的既有信息
 DETAIL_FIELDS = (
-    ("process", "进程"),
+    ("process", "进程名"),
+    ("pid", "PID"),
+    ("started", "启动时间"),
+    ("memory", "内存"),
     ("path", "路径"),
     ("cmdline", "命令行"),
-    ("started", "启动"),
-    ("memory", "内存"),
     ("parent", "父进程"),
 )
 
 #: 详情里缺省显示的占位符
 EMPTY_VALUE = "-"
 
-# 端口输入框宽度 (字符数)
-PORT_ENTRY_WIDTH = 10
+# 端口输入框宽度 (像素)
+PORT_ENTRY_WIDTH = 96
 
-# 详情栏的初始宽度 (像素), 之后可以由分隔条拖动调整
-DETAIL_WIDTH = 330
+# 详情栏的宽度 (像素), 与设计稿一致; 拖动分隔条时可在这个范围内调整
+DETAIL_WIDTH = 304
+DETAIL_MIN_WIDTH = 240
+DETAIL_MAX_WIDTH = 560
+
+# 详情字段标签列的宽度 (像素)
+DETAIL_LABEL_WIDTH = 74
 
 # 空状态文案: 标题 与 下一步动作
 EMPTY_STATES = {

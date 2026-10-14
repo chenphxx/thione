@@ -6,7 +6,12 @@
 @brief 图片缩放与占位图工具
 """
 
+import math
+
 from PIL import Image
+
+#: 生成渐变时先按这个步长采样, 再插值放大, 免得逐像素计算太慢
+GRADIENT_STEP = 4
 
 
 def load_thumbnail(path, size):
@@ -49,3 +54,39 @@ def make_placeholder(size, color):
     @return: PIL Image 对象
     """
     return Image.new("RGB", size, color)
+
+
+def make_gradient(size, start, end, angle=140):
+    """生成一张线性渐变图, 用作缩略图的占位底
+
+    角度与 CSS 的 linear-gradient 一致: 0 度朝上, 顺时针增加; 起始色在渐变线的
+    起点一侧. 界面上的缩略图占位用的是设计稿里的 140 度 ph1 -> ph2
+
+    @param size: (宽, 高)
+    @param start: 起始色 (r, g, b)
+    @param end: 结束色 (r, g, b)
+    @param angle: 渐变方向的角度
+    @return: PIL Image 对象
+    """
+    width, height = max(int(size[0]), 1), max(int(size[1]), 1)
+    radians = math.radians(angle)
+    step_x, step_y = math.sin(radians), -math.cos(radians)
+    projections = [x * step_x + y * step_y
+                   for x in (0, width) for y in (0, height)]
+    low, high = min(projections), max(projections)
+    span = (high - low) or 1.0
+
+    small_width = max(2, width // GRADIENT_STEP)
+    small_height = max(2, height // GRADIENT_STEP)
+    small = Image.new("RGB", (small_width, small_height))
+    pixels = small.load()
+    for row in range(small_height):
+        y = row * GRADIENT_STEP
+        for column in range(small_width):
+            x = column * GRADIENT_STEP
+            ratio = ((x * step_x + y * step_y) - low) / span
+            pixels[column, row] = tuple(
+                round(start[channel] + (end[channel] - start[channel]) * ratio)
+                for channel in range(3)
+            )
+    return small.resize((width, height), Image.BILINEAR)

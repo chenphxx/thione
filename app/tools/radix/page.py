@@ -1,20 +1,24 @@
 """进制转换页面: 上方是待转换数字与转换结果, 下方是常用进制对照表
 
 输入框的内容或者任一进制选择发生变化都会立即重新转换, 因此不额外放转换
-按钮; 结果框只读, 复制由相邻的按钮完成. 输入不合法时结果清空, 原因写在
-输入框下方, 不弹窗打断输入
+按钮; 结果框只读, 复制由顶栏之外的按钮完成. 输入不合法时结果清空, 原因写在
+状态栏, 不弹窗打断输入
 """
 
 import tkinter as tk
-from tkinter import ttk
 
-import pyperclip
-
+from ... import kit
 from ...shell.page import ToolPage
-from ...theme import mono
+from ...theme import (
+    BODY_GAP,
+    SIZE_LABEL,
+    SIZE_SECTION,
+    SIZE_TITLE,
+    SIZE_VALUE,
+    tint,
+)
 from .constants import (
     BASE_CHOICES,
-    BASE_COMBO_WIDTH,
     BASE_LABELS,
     BASES,
     COMMON_BASES,
@@ -22,30 +26,20 @@ from .constants import (
     DEFAULT_SOURCE_BASE,
     DEFAULT_TARGET_BASE,
     EMPTY_HINT,
-    NUMBER_FONT_SIZE,
-    PAGE_TITLE,
     REFERENCE_COLUMNS,
+    REFERENCE_HALVES,
     REFERENCE_LIMIT,
+    STATUS_HINT,
     SUBTITLE,
 )
 from .converter import ConvertError, convert_many, reference_rows
-
-# 状态栏里回显结果时的最大长度, 二进制结果可能很长
-STATUS_MAX_CHARS = 48
-
-#: 常用进制一栏的标题
-COMMON_TITLE = "常用进制"
-
-#: 常用进制分左右两侧展示, 每侧两项
-COMMON_SIDES = (COMMON_BASES[:2], COMMON_BASES[2:])
-
 
 class RadixPage(ToolPage):
     """在 2 到 36 进制之间转换数字的工具页面"""
 
     key = "radix"
-    title = PAGE_TITLE
-    icon = "🔢"
+    title = "进制转换"
+    icon = "\uE8EF"
     subtitle = SUBTITLE
 
     def __init__(self, master, shell):
@@ -53,193 +47,187 @@ class RadixPage(ToolPage):
 
         self._source_base = DEFAULT_SOURCE_BASE
         self._target_base = DEFAULT_TARGET_BASE
-        # 主题管理器按系统可用字体解析字体族, 因此在这里取而不是在模块级取
-        self._number_font = mono(NUMBER_FONT_SIZE)
-        self._input_var = tk.StringVar()
-        self._result_var = tk.StringVar()
-        self._hint_var = tk.StringVar(value=EMPTY_HINT)
-        self._common_vars = {base: tk.StringVar() for base in COMMON_BASES}
+        self._cell_values = {}
+        self._cell_tokens = {}
 
-        self._build_toolbar()
-        self.add_divider()
-        self._build_convert_area()
-        self._build_reference_table()
+        self._build_panels()
+        self.status.set_kind("idle")
+        self.status.set_text(STATUS_HINT)
 
-        # 换进制与改输入都走同一条转换路径, 下拉框的显示在这里对齐
-        self._input_var.trace_add("write", lambda *_args: self._convert())
         self._sync_combos()
         self._convert()
 
     # ---------------- 界面构建 ----------------
-    def _build_toolbar(self):
-        _bar, head, _actions = self.build_toolbar()
-        ttk.Label(head, text=PAGE_TITLE,
-                  style="PanelHeader.TLabel").pack(side="left")
-        ttk.Label(head, text="输入数字即可转换, 结果随输入与进制实时刷新",
-                  style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
+    def _build_panels(self):
+        """上半部分是转换区, 下半部分是常用进制对照表"""
+        panel = self.add_panel(title="进制转换", grow=False)
+        row = tk.Frame(panel.body, bd=0, highlightthickness=0)
+        tint(row, bg="panel")
+        row.configure(bg=self.theme.rgb("panel"))
+        row.pack(side="top", fill="x")
 
-    def _build_convert_area(self):
-        """页面上半部分: 左侧待转换的数字, 右侧转换结果, 中间是交换按钮
+        source = self._build_block(row, "待转换数字", accent=False)
+        source.pack(side="left", fill="x", expand=True)
+        self._build_swap(row).pack(side="left", fill="y", padx=BODY_GAP)
+        target = self._build_block(row, "转换结果", accent=True)
+        target.pack(side="left", fill="x", expand=True)
 
-        常用进制分在两侧, 与上方的两栏共用同一列, 因此左右两块自然对齐
+        cells = tk.Frame(panel.body, bd=0, highlightthickness=0)
+        tint(cells, bg="panel")
+        cells.configure(bg=self.theme.rgb("panel"))
+        cells.pack(side="top", fill="x", pady=(BODY_GAP, 0))
+        for base in COMMON_BASES:
+            self._build_common_cell(cells, base).pack(
+                side="left", fill="x", expand=True, padx=(0, 10))
+
+        table_panel = self.add_panel(title="进制对照表", body_pad=(14, 0))
+        columns = []
+        for offset in range(REFERENCE_HALVES):
+            for key, title, _width in REFERENCE_COLUMNS:
+                columns.append({"key": f"{key}{offset}", "title": title,
+                                "weight": 1, "mono": True})
+        self.table = kit.Table(
+            table_panel.body, self.theme, columns, surface="panel")
+        self.table.pack(side="top", fill="both", expand=True, pady=(10, 0))
+        self.table.set_rows(self._reference_rows())
+
+    def _build_block(self, parent, caption, accent):
+        """建立一个进制输入块: 说明 + 数字框 + 进制选择
+
+        @param parent: 父容器
+        @param caption: 块上方的说明文字
+        @param accent: True 表示结果块 (文字用强调色, 只读)
+        @return: 块控件
         """
-        card = ttk.LabelFrame(self, text="进制转换", padding=(16, 12))
-        card.pack(side="top", fill="x")
-        card.columnconfigure(0, weight=1)
-        card.columnconfigure(2, weight=1)
+        block = tk.Frame(parent, bd=0, highlightthickness=0)
+        tint(block, bg="panel")
+        block.configure(bg=self.theme.rgb("panel"))
+        kit.text(block, self.theme, value=caption, size=SIZE_LABEL,
+                 token="muted", surface="panel").pack(anchor="w", pady=(0, 6))
+        area = kit.Area(block, self.theme, height=120, surface="panel",
+                        size=SIZE_TITLE, token="accent" if accent else "text",
+                        editable=not accent,
+                        placeholder="" if accent else EMPTY_HINT)
+        area.pack(fill="x")
+        combo = kit.Dropdown(block, self.theme, values=list(BASE_CHOICES),
+                             command=self._on_base_change,
+                             surface="panel")
+        combo.pack(fill="x", pady=(6, 0))
+        if accent:
+            self.area_result = area
+            self.combo_target = combo
+        else:
+            self.area_input = area
+            self.combo_source = combo
+            self.area_input.widget.bind("<KeyRelease>", self._on_input)
+            self.area_input.widget.bind("<<Paste>>", self._on_input)
+            self.area_input.widget.bind("<<Cut>>", self._on_input)
+        return block
 
-        self._build_source_area(card)
-        self._build_result_area(card)
-        self._build_common_bases(card)
+    def _build_swap(self, parent):
+        """两个进制之间的交换按钮
 
-        ttk.Button(card, text="⇄", width=3, style="Secondary.TButton",
-                   command=self._swap_bases).grid(row=0, column=1, padx=14)
-
-    def _build_source_area(self, card):
-        """左侧区域: 待转换的数字与它的进制选择
-
-        @param card: 放置该区域的卡片
+        @param parent: 父容器
+        @return: 按钮控件
         """
-        area = ttk.Frame(card, style="CardFlat.TFrame")
-        area.grid(row=0, column=0, sticky="nsew")
-        area.columnconfigure(0, weight=1)
+        swap = tk.Frame(parent, width=32, bd=0, highlightthickness=1,
+                        cursor="hand2")
+        tint(swap, bg="fill", hl="hair", hlc="hair")
+        swap.configure(bg=self.theme.rgb("fill"),
+                       highlightbackground=self.theme.rgb("hair"),
+                       highlightcolor=self.theme.rgb("hair"))
+        swap.pack_propagate(False)
+        glyph = kit.text(swap, self.theme, value="\uE8AB", size=SIZE_VALUE,
+                         token="muted", icon_font=True, surface="fill",
+                         anchor="center")
+        glyph.pack(fill="both", expand=True)
+        for widget in (swap, glyph):
+            widget.bind("<Button-1>", lambda _e: self._swap_bases())
+        return swap
 
-        ttk.Label(area, text="待转换数字",
-                  style="Card.TLabel").grid(row=0, column=0, sticky="w")
-        self.combo_source = ttk.Combobox(
-            area, state="readonly", width=BASE_COMBO_WIDTH, values=list(BASE_CHOICES)
-        )
-        self.combo_source.grid(row=0, column=1, sticky="e", padx=(10, 0))
-        self.combo_source.bind("<<ComboboxSelected>>", self._on_source_base_change)
+    def _build_common_cell(self, parent, base):
+        """建立一个常用进制的小格子
 
-        self.entry_input = ttk.Entry(area, textvariable=self._input_var,
-                                     font=self._number_font)
-        self.entry_input.grid(row=1, column=0, columnspan=2, sticky="we",
-                              pady=(8, 0))
-
-        self.lbl_hint = ttk.Label(area, textvariable=self._hint_var, anchor="w",
-                                  style="CardMuted.TLabel")
-        self.lbl_hint.grid(row=2, column=0, columnspan=2, sticky="we", pady=(6, 0))
-
-    def _build_result_area(self, card):
-        """右侧区域: 转换结果与它的进制选择
-
-        @param card: 放置该区域的卡片
+        @param parent: 父容器
+        @param base: 进制
+        @return: 格子控件
         """
-        area = ttk.Frame(card, style="CardFlat.TFrame")
-        area.grid(row=0, column=2, sticky="nsew")
-        # 第 0 列放标题与常用进制的名称, 第 1 列放取值的输入框
-        area.columnconfigure(1, weight=1)
+        cell = tk.Frame(parent, bd=0, highlightthickness=1)
+        tint(cell, bg="fill", hl="hair", hlc="hair")
+        cell.configure(bg=self.theme.rgb("fill"),
+                       highlightbackground=self.theme.rgb("hair"),
+                       highlightcolor=self.theme.rgb("hair"))
+        inner = tk.Frame(cell, bd=0, highlightthickness=0)
+        tint(inner, bg="fill")
+        inner.configure(bg=self.theme.rgb("fill"))
+        inner.pack(fill="both", expand=True, padx=10, pady=7)
+        kit.text(inner, self.theme, value=COMMON_LABELS[base],
+                 size=SIZE_SECTION, token="muted", surface="fill").pack(
+            anchor="w")
+        value = kit.text(inner, self.theme, value="", size=SIZE_VALUE,
+                         mono_font=True, surface="fill")
+        value.pack(anchor="w", pady=(4, 0))
+        self._cell_values[base] = value
+        return cell
 
-        ttk.Label(area, text="转换结果",
-                  style="Card.TLabel").grid(row=0, column=0, sticky="w")
-        self.combo_target = ttk.Combobox(
-            area, state="readonly", width=BASE_COMBO_WIDTH, values=list(BASE_CHOICES)
-        )
-        self.combo_target.grid(row=0, column=1, sticky="e", padx=(10, 0))
-        self.combo_target.bind("<<ComboboxSelected>>", self._on_target_base_change)
+    def _reference_rows(self):
+        """对照表的 8 行数据: 每行左右各一组 十进制/二进制/八进制/十六进制
 
-        self.entry_result = ttk.Entry(area, textvariable=self._result_var,
-                                      font=self._number_font, state="readonly")
-        self.entry_result.grid(row=1, column=0, columnspan=2, sticky="we",
-                               pady=(8, 0))
-
-        ttk.Button(area, text="复制结果", style="Secondary.TButton",
-                   command=self._copy_result).grid(row=2, column=0, columnspan=2,
-                                                   sticky="e", pady=(6, 0))
-
-    def _build_common_bases(self, card):
-        """目标进制之外的四种常用进制: 左侧两种, 右侧两种
-
-        @param card: 放置该区块的卡片
+        @return: 表格数据行
         """
-        for column, bases in ((0, COMMON_SIDES[0]), (2, COMMON_SIDES[1])):
-            area = ttk.Frame(card, style="CardFlat.TFrame")
-            area.grid(row=1, column=column, sticky="nsew", pady=(12, 0))
-            area.columnconfigure(1, weight=1)
-
-            ttk.Separator(area, orient="horizontal").grid(
-                row=0, column=0, columnspan=2, sticky="we")
-            ttk.Label(area, text=COMMON_TITLE,
-                      style="CardMuted.TLabel").grid(row=1, column=0,
-                                                     columnspan=2, sticky="w",
-                                                     pady=(10, 0))
-            for index, base in enumerate(bases):
-                row = index + 2
-                ttk.Label(area, text=COMMON_LABELS[base],
-                          style="Card.TLabel").grid(row=row, column=0,
-                                                    sticky="w", pady=2)
-                ttk.Entry(area, textvariable=self._common_vars[base],
-                          font=self._number_font, state="readonly").grid(
-                    row=row, column=1, sticky="we", padx=(10, 0), pady=2)
-
-    def _build_reference_table(self):
-        """页面下半部分: 0 到 15 的四种进制对照, 高度不够时自己滚动"""
-        card = ttk.LabelFrame(self, text="进制对照表", padding=(16, 12))
-        card.pack(side="top", fill="both", expand=True, pady=(12, 0))
-
-        self.table = ttk.Treeview(
-            card, show="headings", style="Card.Treeview",
-            columns=[key for key, _title, _width in REFERENCE_COLUMNS],
-        )
-        for key, title, width in REFERENCE_COLUMNS:
-            self.table.heading(key, text=title, anchor="center")
-            self.table.column(key, width=width, minwidth=80, anchor="center",
-                              stretch=True)
-        # 四列都是数字, 统一用等宽字体便于逐位比对
-        self.table.tag_configure("value", font=self._number_font)
-        for row in reference_rows(REFERENCE_LIMIT):
-            self.table.insert("", "end", values=row, tags=("value",))
-
-        scroll = ttk.Scrollbar(card, orient="vertical", command=self.table.yview)
-        self.table.configure(yscrollcommand=scroll.set)
-        self.table.pack(side="left", fill="both", expand=True)
-        scroll.pack(side="right", fill="y")
+        rows = []
+        values = reference_rows(REFERENCE_LIMIT)
+        half = REFERENCE_LIMIT // REFERENCE_HALVES
+        for index in range(half):
+            cells = {}
+            for offset, row in enumerate((values[index], values[index + half])):
+                for position, (key, _title, _width) in enumerate(
+                        REFERENCE_COLUMNS):
+                    cells[f"{key}{offset}"] = row[position]
+            rows.append(cells)
+        return rows
 
     # ---------------- 转换与提示 ----------------
-    def _on_source_base_change(self, _event=None):
-        self._source_base = self._base_from_label(self.combo_source.get(),
-                                                  DEFAULT_SOURCE_BASE)
+    def _on_input(self, _event=None):
         self._convert()
 
-    def _on_target_base_change(self, _event=None):
-        self._target_base = self._base_from_label(self.combo_target.get(),
+    def _on_base_change(self, _label):
+        """下拉框换值后重新转换
+
+        @param _label: 下拉框显示的新文本
+        """
+        self._source_base = self._base_from_label(self.combo_source.value(),
+                                                  DEFAULT_SOURCE_BASE)
+        self._target_base = self._base_from_label(self.combo_target.value(),
                                                   DEFAULT_TARGET_BASE)
         self._convert()
 
     def _convert(self):
-        """按当前的两个进制重新转换, 并刷新结果 常用进制与输入框下方的说明"""
+        """按当前的两个进制重新转换, 并刷新结果 常用进制与状态栏提示"""
         try:
             values = convert_many(
-                self._input_var.get(), self._source_base,
+                self.area_input.get(), self._source_base,
                 (self._target_base, *COMMON_BASES),
             )
         except ConvertError as exc:
-            self._result_var.set("")
+            self.area_result.set("")
             self._clear_common()
-            self._set_hint(str(exc), error=True)
+            self.status.set_kind("fail")
+            self.status.set_text(str(exc))
             return
-        self._result_var.set(values[0])
+        self.area_result.set(values[0])
         for base, value in zip(COMMON_BASES, values[1:]):
-            self._common_vars[base].set(value)
-        # 还没输入时给引导, 转换成功就不用再解释
-        self._set_hint("" if values[0] else EMPTY_HINT)
+            self._cell_values[base].configure(text=value)
+            token = "accent" if base == self._target_base else "text"
+            tint(self._cell_values[base], bg="fill", fg=token)
+            self._cell_values[base].configure(fg=self.theme.rgb(token))
+        self.status.set_kind("idle")
+        self.status.set_text(STATUS_HINT)
 
     def _clear_common(self):
         """清空常用进制的结果, 输入不合法时与主结果一起清掉"""
-        for var in self._common_vars.values():
-            var.set("")
-
-    def _set_hint(self, text, error=False):
-        """更新输入框下方的说明
-
-        @param text: 要显示的内容
-        @param error: True 时改用危险色, 说明输入不合法
-        """
-        self._hint_var.set(text)
-        style = "CardError.TLabel" if error else "CardMuted.TLabel"
-        if self.lbl_hint.cget("style") != style:
-            self.lbl_hint.configure(style=style)
+        for label in self._cell_values.values():
+            label.configure(text="")
 
     def _sync_combos(self):
         """把两个下拉框的显示对齐到当前进制"""
@@ -261,35 +249,21 @@ class RadixPage(ToolPage):
     # ---------------- 交互 ----------------
     def _swap_bases(self):
         """交换两个进制, 并把上一次的结果放进输入框接着转换"""
-        previous = self._result_var.get()
-        self._source_base, self._target_base = self._target_base, self._source_base
+        previous = self.area_result.get()
+        self._source_base, self._target_base = self._target_base, \
+            self._source_base
         self._sync_combos()
         if previous:
-            # 写回输入框会触发一次重新转换
-            self._input_var.set(previous)
+            self.area_input.set(previous)
+            self._convert()
         else:
             self._convert()
-        self.entry_input.focus_set()
-
-    def _copy_result(self):
-        """把结果写进系统剪贴板, 供其它程序粘贴"""
-        result = self._result_var.get()
-        if not result:
-            return
-        pyperclip.copy(result)
-        self.set_status(f"已复制转换结果: {_shorten(result)}")
+        self.area_input.focus_set()
 
     def on_show(self):
         """切到本页时把光标放进输入框, 打开就能输入"""
-        self.entry_input.focus_set()
+        self.area_input.focus_set()
 
-
-def _shorten(text):
-    """状态栏里的回显不要过长
-
-    @param text: 转换结果
-    @return: 超过 STATUS_MAX_CHARS 时截断并加省略标记
-    """
-    if len(text) <= STATUS_MAX_CHARS:
-        return text
-    return text[:STATUS_MAX_CHARS] + "..."
+    def on_theme_changed(self):
+        """主题切换后重画常用进制的取值颜色"""
+        self._convert()

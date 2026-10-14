@@ -11,9 +11,11 @@ import logging
 import tkinter as tk
 from tkinter import ttk
 
-from ...theme import mono, sans
+from ... import kit
+from ...theme import SIZE_BODY, SIZE_LABEL, mono, sans, tint
 from .codec import ParseError, StreamDecoder, format_bytes, parse_payload
 from .constants import (
+    BYTES_PER_LINE_HINT,
     CONTROL_HINT_WRAP,
     DEFAULT_ENCODING,
     DEFAULT_INTERVAL_MS,
@@ -23,6 +25,8 @@ from .constants import (
     ENCODINGS,
     MAX_VIEW_CHARS,
     MIN_INTERVAL_MS,
+    RECEIVE_CONTROLS_WIDTH,
+    SEND_CONTROLS_WIDTH,
     MODE_COMBO_WIDTH,
     ENCODING_COMBO_WIDTH,
     INTERVAL_ENTRY_WIDTH,
@@ -73,31 +77,35 @@ def _key_of(choices, label):
     return choices[0][0]
 
 
-class DataView(ttk.Frame):
-    """等宽文本视图: 接收区只读, 发送区可编辑"""
+class DataView(tk.Frame):
+    """等宽文本视图: 接收区只读, 发送区可编辑
+
+    外观与设计稿的 .view 一致: fill 底色 + 1 像素描边, 12 像素等宽字体
+    """
 
     def __init__(self, master, theme, editable=False, height=7):
-        super().__init__(master, style="CardFlat.TFrame")
+        super().__init__(master, bd=0, highlightthickness=1)
         self.theme = theme
         self.editable = editable
         palette = theme.palette
+        tint(self, bg="fill", hl="hair", hlc="hair")
+        self.configure(bg=palette["fill"], highlightbackground=palette["hair"],
+                       highlightcolor=palette["hair"])
         self.text = tk.Text(
             self, height=height, wrap="char", relief="flat", borderwidth=0,
-            highlightthickness=1, highlightbackground=palette["border"],
-            highlightcolor=palette["accent"], background=palette["input"],
+            highlightthickness=0, background=palette["fill"],
             foreground=palette["text"], insertbackground=palette["text"],
-            selectbackground=palette["selected"], selectforeground=palette["text"],
-            font=mono(), padx=8, pady=6, undo=editable, maxundo=200,
+            selectbackground=palette["accent"],
+            selectforeground=palette["on_accent"],
+            font=mono(SIZE_LABEL), padx=10, pady=10, undo=editable,
+            maxundo=200,
         )
-        self.scroll = ttk.Scrollbar(self, orient="vertical",
-                                    command=self.text.yview)
-        self.text.configure(yscrollcommand=self.scroll.set)
-        # 滚动条先占住自己的宽度, 否则窗口较小时会被可伸缩的文本区挤掉
-        self.scroll.pack(side="right", fill="y")
+        tint(self.text, bg="fill", fg="text", insert="text", sel_bg="accent",
+             sel_fg="on_accent")
         self.text.pack(side="left", fill="both", expand=True)
         self.text.tag_configure(TAG_SYSTEM, foreground=palette["muted"])
         self.text.tag_configure(TAG_ERROR, foreground=palette["danger"])
-        self.text.tag_configure(TAG_SOURCE, foreground=palette["link"])
+        self.text.tag_configure(TAG_SOURCE, foreground=palette["accent"])
         if not editable:
             self.text.configure(state="disabled")
             # 只读视图仍然要能全选与复制, 因此单独绑定这两个快捷键
@@ -147,13 +155,13 @@ class DataView(ttk.Frame):
         """主题切换后刷新自绘颜色"""
         palette = self.theme.palette
         self.text.configure(
-            highlightbackground=palette["border"], highlightcolor=palette["accent"],
-            background=palette["input"], foreground=palette["text"],
-            insertbackground=palette["text"], selectbackground=palette["selected"],
-            selectforeground=palette["text"])
+            background=palette["fill"], foreground=palette["text"],
+            insertbackground=palette["text"],
+            selectbackground=palette["accent"],
+            selectforeground=palette["on_accent"], padx=10, pady=10)
         self.text.tag_configure(TAG_SYSTEM, foreground=palette["muted"])
         self.text.tag_configure(TAG_ERROR, foreground=palette["danger"])
-        self.text.tag_configure(TAG_SOURCE, foreground=palette["link"])
+        self.text.tag_configure(TAG_SOURCE, foreground=palette["accent"])
 
     def _unlock(self):
         """只读视图临时切回可写
@@ -194,11 +202,11 @@ class DataView(ttk.Frame):
         return "break"
 
 
-class ReceivePanel(ttk.LabelFrame):
+class ReceivePanel(tk.Frame):
     """接收卡片: 展示模式 编码 自动换行 保存 开始暂停 清屏 与接收计数"""
 
     def __init__(self, master, theme, page, title, default_mode, show_source=False):
-        super().__init__(master, text=title, padding=(12, 8))
+        super().__init__(master, bd=0, highlightthickness=0)
         self.theme = theme
         self.page = page
         self.show_source = show_source
@@ -216,17 +224,31 @@ class ReceivePanel(ttk.LabelFrame):
         self.wrap_var = tk.BooleanVar(value=True)
         self.count_var = tk.StringVar(value=self._count_text())
 
-        # 配置列先占住右侧, 剩下的宽度全部留给数据视图; 列宽由页面按两个区域
-        # 需要的最宽值统一设置, 接收与发送的数据视图因此左右对齐
-        self.controls = ttk.Frame(self, style="CardFlat.TFrame")
-        self.controls.grid(row=0, column=1, sticky="nsew")
+        self.panel = kit.Panel(self, theme, title=title, right=display_default,
+                               body_pad=(14, 14))
+        self.panel.pack(fill="both", expand=True)
+        self.panel.body.columnconfigure(0, weight=1)
+        self.panel.body.rowconfigure(0, weight=1)
+        # 面板头部右侧依次是接收字节数与展示模式
+        self.lbl_count = kit.text(self.panel.head, theme, size=SIZE_LABEL,
+                                  mono_font=True, token="muted",
+                                  surface="panel", anchor="e")
+        self.panel.add_head(self.lbl_count, side="right", padx=(0, 10))
+
+        # 配置列先占住右侧, 剩下的宽度全部留给数据视图
+        self.controls = tk.Frame(self.panel.body, bd=0, highlightthickness=0,
+                                 width=RECEIVE_CONTROLS_WIDTH)
+        tint(self.controls, bg="panel")
+        self.controls.configure(bg=theme.rgb("panel"))
+        self.controls.grid(row=0, column=1, sticky="nsew", padx=(14, 0))
+        # 配置列的宽度由面板的列最小值固定, 高度仍然跟着内容走
+        self.panel.body.columnconfigure(1, minsize=RECEIVE_CONTROLS_WIDTH)
         self._build_controls(display_labels)
-        self.view = DataView(self, theme, editable=False)
+        self.view = DataView(self.panel.body, theme, editable=False)
         # 间距算在视图这一列, 配置列的宽度因此等于控件的实际宽度
-        self.view.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)
+        self.view.grid(row=0, column=0, sticky="nsew")
         self._show_placeholder()
+        self._refresh_count()
 
     # ---------------- 界面 ----------------
     def _build_controls(self, display_labels):
@@ -239,44 +261,86 @@ class ReceivePanel(ttk.LabelFrame):
         """
         bar = self.controls
         bar.columnconfigure(0, weight=1)
-        row1 = ttk.Frame(bar, style="CardFlat.TFrame")
-        row1.grid(row=0, column=0, sticky="ew")
-        ttk.Label(row1, text="展示", style="CardMuted.TLabel").pack(side="left")
-        self.combo_mode = ttk.Combobox(row1, state="readonly",
-                                       width=MODE_COMBO_WIDTH,
-                                       values=display_labels,
-                                       textvariable=self.mode_var)
-        self.combo_mode.pack(side="left", padx=(4, 16))
-        self.combo_mode.bind("<<ComboboxSelected>>", self._on_mode_change)
-        ttk.Label(row1, text="编码", style="CardMuted.TLabel").pack(side="left")
-        self.combo_encoding = ttk.Combobox(row1, state="readonly",
-                                           width=ENCODING_COMBO_WIDTH,
-                                           values=list(ENCODINGS),
-                                           textvariable=self.encoding_var)
-        self.combo_encoding.pack(side="left", padx=(4, 10))
-        self.combo_encoding.bind("<<ComboboxSelected>>", self._on_encoding_change)
-        ttk.Checkbutton(row1, text="自动换行", style="Card.TCheckbutton",
-                        variable=self.wrap_var).pack(side="left")
+        self._setting(bar, 0, "展示", display_labels, self.mode_var,
+                      self._on_mode_change)
+        self._setting(bar, 1, "编码", list(ENCODINGS), self.encoding_var,
+                      self._on_encoding_change)
+        self.check_wrap = kit.Check(bar, self.theme, value="自动换行",
+                                    variable=self.wrap_var, surface="panel")
+        self.check_wrap.grid(row=2, column=0, sticky="w", pady=(12, 0))
+        kit.text(bar, self.theme, value=BYTES_PER_LINE_HINT,
+                 size=SIZE_LABEL, token="muted",
+                 surface="panel").grid(row=3, column=0, sticky="w",
+                                       pady=(6, 0))
 
-        actions = ttk.Frame(bar, style="CardFlat.TFrame")
-        actions.grid(row=2, column=0, sticky="ew")
+        actions = tk.Frame(bar, bd=0, highlightthickness=0)
+        tint(actions, bg="panel")
+        actions.configure(bg=self.theme.rgb("panel"))
+        actions.grid(row=5, column=0, sticky="ew")
         for column in range(3):
             actions.columnconfigure(column, weight=1, uniform="recv_action")
-        ttk.Button(actions, text="保存为 txt", style="Secondary.TButton",
+        ttk.Button(actions, text="保存为 txt", style="TButton",
                    command=self._save).grid(row=0, column=0, sticky="ew")
         self.btn_capture = ttk.Button(actions, text="暂停接收",
-                                      style="Secondary.TButton",
+                                      style="TButton",
                                       command=self._toggle_capture)
         self.btn_capture.grid(row=0, column=1, sticky="ew", padx=(8, 0))
-        ttk.Button(actions, text="清屏", style="Secondary.TButton",
+        ttk.Button(actions, text="清屏", style="TButton",
                    command=self.clear).grid(row=0, column=2, sticky="ew",
                                             padx=(8, 0))
 
-        ttk.Label(bar, textvariable=self.count_var,
-                  style="CardMuted.TLabel").grid(row=3, column=0, sticky="w",
-                                                 pady=(6, 0))
+        kit.text(bar, self.theme, variable=self.count_var, size=SIZE_LABEL,
+                 token="muted", surface="panel").grid(row=6, column=0,
+                                                      sticky="w",
+                                                      pady=(6, 0))
         # 中间的空档吸收多余高度, 动作按钮因此贴着列底
-        bar.rowconfigure(1, weight=1)
+        bar.rowconfigure(4, weight=1)
+
+    def _setting(self, parent, row, caption, values, variable, command):
+        """建立一列下拉设置: 标签在上, 控件框样式的下拉在下
+
+        @param parent: 父容器
+        @param row: 行号
+        @param caption: 标签文字
+        @param values: 可选项
+        @param variable: 绑定的 StringVar
+        @param command: 选中后的回调
+        @return: 建立好的下拉控件
+        """
+        holder = tk.Frame(parent, bd=0, highlightthickness=0)
+        tint(holder, bg="panel")
+        holder.configure(bg=self.theme.rgb("panel"))
+        holder.grid(row=row, column=0, sticky="ew",
+                    pady=(0 if row == 0 else 10, 0))
+        kit.text(holder, self.theme, value=caption, size=SIZE_LABEL,
+                 token="muted", surface="panel").pack(anchor="w",
+                                                      pady=(0, 5))
+        combo = kit.Dropdown(holder, self.theme, values=values,
+                             surface="panel",
+                             command=lambda label: self._on_setting(
+                                 variable, label, command))
+        combo.set(variable.get())
+        combo.pack(fill="x")
+        return combo
+
+    @staticmethod
+    def _on_setting(variable, label, command):
+        """下拉框选中后先同步变量, 再调用页面回调
+
+        @param variable: 绑定的 StringVar
+        @param label: 新选中的显示值
+        @param command: 页面回调, 接收 tkinter 事件或者无参
+        """
+        variable.set(label)
+        if command is not None:
+            command(None)
+
+    def set_controls_width(self, width):
+        """固定配置列的宽度, 让接收与发送两边的数据视图左右对齐
+
+        @param width: 配置列宽度 (像素)
+        """
+        self.panel.body.columnconfigure(1, minsize=width)
 
     def _show_placeholder(self):
         """空视图里给一句引导"""
@@ -382,6 +446,13 @@ class ReceivePanel(ttk.LabelFrame):
         """当前视图里的文本"""
         return self.view.content()
 
+    def total_bytes(self):
+        """本次接收到的字节数
+
+        @return: 字节数
+        """
+        return self._total
+
     def on_theme_changed(self):
         """主题切换后刷新视图颜色"""
         self.view.on_theme_changed()
@@ -410,9 +481,11 @@ class ReceivePanel(ttk.LabelFrame):
 
     def _refresh_count(self):
         self.count_var.set(self._count_text())
+        self.lbl_count.configure(text="RX %d B" % self._total)
 
     def _on_mode_change(self, _event=None):
         mode = _key_of(DISPLAY_MODES, self.mode_var.get())
+        self.panel.set_right(self.mode_var.get())
         leftover = self._decoder.set_mode(mode)
         if leftover:
             self.view.append(leftover)
@@ -431,12 +504,12 @@ class ReceivePanel(ttk.LabelFrame):
         self.page.save_receive(self)
 
 
-class SendPanel(ttk.LabelFrame):
+class SendPanel(tk.Frame):
     """发送卡片: 发送模式 编码 载入文本 后缀 循环发送 开始暂停 清屏 与发送计数"""
 
     def __init__(self, master, theme, page, title, kind="serial", with_targets=False,
                  targets_parent=None):
-        super().__init__(master, text=title, padding=(12, 8))
+        super().__init__(master, bd=0, highlightthickness=0)
         self.theme = theme
         self.page = page
         self.kind = kind
@@ -460,91 +533,113 @@ class SendPanel(ttk.LabelFrame):
         self.count_var = tk.StringVar(value="本次发送 0 字节")
         self.hint_var = tk.StringVar()
 
-        # 配置列先占住右侧, 剩下的宽度全部留给输入视图; 列宽由页面按两个区域
-        # 需要的最宽值统一设置, 接收与发送的数据视图因此左右对齐
-        self.controls = ttk.Frame(self, style="CardFlat.TFrame")
-        self.controls.grid(row=0, column=1, sticky="nsew")
+        self.panel = kit.Panel(self, theme, title=title, right="TX 0 B",
+                               body_pad=(14, 14))
+        self.panel.pack(fill="both", expand=True)
+        # 行 0 吸收多余高度, 数据视图才会跟着发送区一起长高
+        self.panel.body.columnconfigure(0, weight=1)
+        self.panel.body.rowconfigure(0, weight=1)
+
+        # 配置列先占住右侧, 剩下的宽度全部留给输入视图
+        self.controls = tk.Frame(self.panel.body, bd=0, highlightthickness=0,
+                                 width=SEND_CONTROLS_WIDTH)
+        tint(self.controls, bg="panel")
+        self.controls.configure(bg=theme.rgb("panel"))
+        self.controls.grid(row=0, column=1, sticky="nsew", padx=(14, 0))
+        # 配置列的宽度由面板的列最小值固定, 高度仍然跟着内容走
+        self.panel.body.columnconfigure(1, minsize=SEND_CONTROLS_WIDTH)
         # 左列: 发送对象排在输入框上方, 其余情况只有输入框
-        self.view_box = ttk.Frame(self, style="CardFlat.TFrame")
+        self.view_box = tk.Frame(self.panel.body, bd=0, highlightthickness=0)
+        tint(self.view_box, bg="panel")
+        self.view_box.configure(bg=theme.rgb("panel"))
         # 间距算在视图这一列, 配置列的宽度因此等于控件的实际宽度
-        self.view_box.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        self.view_box.grid(row=0, column=0, sticky="nsew")
         self._build_controls(send_labels, suffix_labels)
-        self.view = DataView(self.view_box, theme, editable=True)
+        self.view = DataView(self.view_box, theme, editable=True, height=4)
         self.view.pack(side="top", fill="both", expand=True)
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)
 
     # ---------------- 界面 ----------------
     def _build_controls(self, send_labels, suffix_labels):
-        """右侧配置列: 发送模式 编码 后缀 循环发送 载入 动作 提示与计数
+        """右侧配置列: 发送 后缀 编码 循环发送 载入 动作 提示与计数
 
-        参数分三行排在上面, 动作与提示贴着列底, 中间的空档由列自己吸收,
-        因此接收与发送两边的动作按钮排在同一个高度
+        参数排在上面, 动作与提示贴着列底, 中间的空档由列自己吸收, 因此接收与
+        发送两边的动作按钮排在同一个高度, 发送区被拖高时也不会散开
 
         @param send_labels: 发送模式的显示值列表
         @param suffix_labels: 后缀的显示值列表
         """
         bar = self.controls
         bar.columnconfigure(0, weight=1)
-        row1 = ttk.Frame(bar, style="CardFlat.TFrame")
+        row1 = tk.Frame(bar, bd=0, highlightthickness=0)
+        tint(row1, bg="panel")
+        row1.configure(bg=self.theme.rgb("panel"))
         row1.grid(row=0, column=0, sticky="ew")
-        ttk.Label(row1, text="发送", style="CardMuted.TLabel").pack(side="left")
-        self.combo_mode = ttk.Combobox(row1, state="readonly", width=MODE_COMBO_WIDTH,
-                                       values=send_labels, textvariable=self.mode_var)
-        self.combo_mode.pack(side="left", padx=(4, 10))
-        ttk.Label(row1, text="编码", style="CardMuted.TLabel").pack(side="left")
-        self.combo_encoding = ttk.Combobox(row1, state="readonly",
-                                           width=ENCODING_COMBO_WIDTH,
-                                           values=list(ENCODINGS),
-                                           textvariable=self.encoding_var)
-        self.combo_encoding.pack(side="left", padx=(4, 0))
+        for column in range(3):
+            row1.columnconfigure(column, weight=1, uniform="send_pair")
+        self.combo_mode = self._pair_setting(
+            row1, 0, "发送", send_labels, self.mode_var)
+        self.combo_suffix = self._pair_setting(
+            row1, 1, "后缀", suffix_labels, self.suffix_var,
+            self._on_suffix_change)
+        self.combo_encoding = self._pair_setting(
+            row1, 2, "编码", list(ENCODINGS), self.encoding_var)
 
-        row2 = ttk.Frame(bar, style="CardFlat.TFrame")
-        row2.grid(row=1, column=0, sticky="ew", pady=(6, 0))
-        ttk.Label(row2, text="后缀", style="CardMuted.TLabel").pack(side="left")
-        combo_suffix = ttk.Combobox(row2, state="readonly",
-                                    width=SUFFIX_COMBO_WIDTH,
-                                    values=suffix_labels, textvariable=self.suffix_var)
-        combo_suffix.pack(side="left", padx=(4, 4))
-        combo_suffix.bind("<<ComboboxSelected>>", self._on_suffix_change)
-        self.entry_suffix = ttk.Entry(row2, textvariable=self.suffix_text_var,
-                                      width=SUFFIX_TEXT_WIDTH)
-        self.entry_suffix.pack(side="left")
-        self.entry_suffix.configure(state="disabled")
+        # 只有选了 自定义 后缀才需要输入框, 平时把这一行收起来
+        self.row_suffix_text = tk.Frame(bar, bd=0, highlightthickness=0)
+        tint(self.row_suffix_text, bg="panel")
+        self.row_suffix_text.configure(bg=self.theme.rgb("panel"))
+        self.entry_suffix = kit.EntryField(
+            self.row_suffix_text, self.theme, variable=self.suffix_text_var,
+            width=120, mono_font=False)
+        self.entry_suffix.pack(side="left", fill="x", expand=True)
+        self.row_suffix_text.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        self.row_suffix_text.grid_remove()
 
-        row3 = ttk.Frame(bar, style="CardFlat.TFrame")
-        row3.grid(row=2, column=0, sticky="ew", pady=(6, 0))
-        ttk.Checkbutton(row3, text="循环", style="Card.TCheckbutton",
-                        variable=self.loop_var).pack(side="left")
-        ttk.Label(row3, text="间隔", style="CardMuted.TLabel").pack(side="left", padx=(6, 0))
-        ttk.Entry(row3, textvariable=self.interval_var,
-                  width=INTERVAL_ENTRY_WIDTH).pack(side="left", padx=(4, 2))
-        ttk.Label(row3, text="毫秒", style="CardMuted.TLabel").pack(side="left")
+        row2 = tk.Frame(bar, bd=0, highlightthickness=0)
+        tint(row2, bg="panel")
+        row2.configure(bg=self.theme.rgb("panel"))
+        row2.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        self.check_loop = kit.Check(row2, self.theme, value="循环发送",
+                                    variable=self.loop_var, surface="panel")
+        self.check_loop.pack(side="left")
+        self.entry_interval = kit.EntryField(row2, self.theme,
+                                             variable=self.interval_var,
+                                             width=64, height=24,
+                                             size=SIZE_LABEL)
+        self.entry_interval.pack(side="left", padx=(8, 6))
+        kit.text(row2, self.theme, value="毫秒", size=SIZE_LABEL,
+                 token="muted", surface="panel").pack(side="left")
+        self._on_suffix_change()
 
-        actions = ttk.Frame(bar, style="CardFlat.TFrame")
+        actions = tk.Frame(bar, bd=0, highlightthickness=0)
+        tint(actions, bg="panel")
+        actions.configure(bg=self.theme.rgb("panel"))
         actions.grid(row=4, column=0, sticky="ew")
         for column in range(3):
             actions.columnconfigure(column, weight=1, uniform="send_action")
-        ttk.Button(actions, text="载入文本", style="Secondary.TButton",
+        ttk.Button(actions, text="载入文本", style="TButton",
                    command=self._load_text).grid(row=0, column=0, sticky="ew")
         self.btn_send = ttk.Button(actions, text="开始发送",
-                                   style="Accent.TButton",
+                                   style="Primary.TButton",
                                    command=self._toggle_send)
         self.btn_send.grid(row=0, column=1, sticky="ew", padx=(8, 0))
-        ttk.Button(actions, text="清屏", style="Secondary.TButton",
+        ttk.Button(actions, text="清屏", style="TButton",
                    command=self.view_clear).grid(row=0, column=2, sticky="ew",
                                                  padx=(8, 0))
 
         # 提示与计数贴着列底, 提示按剩余宽度折行
-        row4 = ttk.Frame(bar, style="CardFlat.TFrame")
+        row4 = tk.Frame(bar, bd=0, highlightthickness=0)
+        tint(row4, bg="panel")
+        row4.configure(bg=self.theme.rgb("panel"))
         row4.grid(row=5, column=0, sticky="ew", pady=(6, 0))
-        self.lbl_hint = ttk.Label(row4, textvariable=self.hint_var, anchor="w",
-                                  style="CardMuted.TLabel",
-                                  wraplength=CONTROL_HINT_WRAP, justify="left")
+        self.lbl_hint = kit.text(row4, self.theme, variable=self.hint_var,
+                                 size=SIZE_LABEL, token="muted",
+                                 surface="panel", wrap=CONTROL_HINT_WRAP)
         self.lbl_hint.pack(side="left", fill="x", expand=True)
-        ttk.Label(row4, textvariable=self.count_var,
-                  style="CardMuted.TLabel").pack(side="right", padx=(8, 0))
-        # 参数与动作之间的空档吸收多余高度, 动作按钮因此贴着列底
+        kit.text(row4, self.theme, variable=self.count_var, size=SIZE_LABEL,
+                 token="muted", surface="panel").pack(side="right",
+                                                      padx=(8, 0))
+        # 参数与动作之间的空档吸收多余高度, 动作按钮因此和接收区一样贴着列底
         bar.rowconfigure(3, weight=1)
 
         if self.with_targets:
@@ -565,6 +660,45 @@ class SendPanel(ttk.LabelFrame):
             self.row_targets = row
             self._target_place = place
             row.pack(**place)
+
+    def _pair_setting(self, parent, column, caption, values, variable,
+                      extra=None):
+        """在上半部分排一列 标签 + 下拉框
+
+        @param parent: 父容器
+        @param column: 列号
+        @param caption: 标签文字
+        @param values: 可选项
+        @param variable: 绑定的 StringVar
+        @param extra: 选中后的额外回调
+        @return: 建立好的下拉控件
+        """
+        holder = tk.Frame(parent, bd=0, highlightthickness=0)
+        tint(holder, bg="panel")
+        holder.configure(bg=self.theme.rgb("panel"))
+        holder.grid(row=0, column=column, sticky="ew",
+                    padx=(0, 10) if column == 0 else (0, 0))
+        kit.text(holder, self.theme, value=caption, size=SIZE_LABEL,
+                 token="muted", surface="panel").pack(anchor="w",
+                                                      pady=(0, 5))
+
+        def choose(label):
+            variable.set(label)
+            if extra is not None:
+                extra(None)
+
+        combo = kit.Dropdown(holder, self.theme, values=values,
+                             surface="panel", command=choose)
+        combo.set(variable.get())
+        combo.pack(fill="x")
+        return combo
+
+    def set_controls_width(self, width):
+        """固定配置列的宽度
+
+        @param width: 配置列宽度 (像素)
+        """
+        self.panel.body.columnconfigure(1, minsize=width)
 
 
     # ---------------- 发送 ----------------
@@ -624,11 +758,20 @@ class SendPanel(ttk.LabelFrame):
         """
         self._sent_total += size
         self.count_var.set("本次发送 %d 字节" % self._sent_total)
+        self.panel.set_right("TX %d B" % self._sent_total)
 
     def reset_count(self):
         """清空发送计数"""
         self._sent_total = 0
         self.count_var.set("本次发送 0 字节")
+        self.panel.set_right("TX 0 B")
+
+    def sent_total(self):
+        """本次发送的字节数
+
+        @return: 字节数
+        """
+        return self._sent_total
 
     def view_clear(self):
         """清空输入区"""
@@ -779,7 +922,10 @@ class SendPanel(ttk.LabelFrame):
     def _on_suffix_change(self, _event=None):
         """选了自定义后缀才允许输入"""
         custom = _key_of(SUFFIX_CHOICES, self.suffix_var.get()) == SUFFIX_CUSTOM
-        self.entry_suffix.configure(state="normal" if custom else "disabled")
+        if custom:
+            self.row_suffix_text.grid()
+        else:
+            self.row_suffix_text.grid_remove()
 
     def _choose_targets(self):
         self.page.choose_targets(self)

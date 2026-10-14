@@ -1,17 +1,24 @@
-"""管理应用外壳, 工具页面切换及工作线程到界面的消息队列"""
+"""管理应用外壳, 工具页面切换及工作线程到界面的消息队列
+
+窗口由左侧固定宽度 208 像素的导航栏与右侧主列组成, 主列自上而下是页面内容区
+与 32 像素高的状态栏; 状态栏的内容由当前页面通过 StatusRow 填充
+"""
 
 import logging
 import queue
 import tkinter as tk
 from tkinter import ttk
 
+from .. import kit
 from ..constants import APP_MIN_SIZE, APP_SIZE, APP_TITLE, QUEUE_POLL_MS
 from ..errors import open_path, show_error
 from ..paths import ensure_dir, user_log_dir
-from ..theme import ThemeManager
+from ..theme import BODY_PAD_X, SIZE_LABEL, STATUSBAR_HEIGHT, ThemeManager, tint
 from .sidebar import Sidebar
 
 logger = logging.getLogger(__name__)
+
+#: 侧栏拖拽分隔条的宽度
 SPLITTER_WIDTH = 5
 
 
@@ -36,8 +43,7 @@ class ShellWindow:
         root.minsize(*APP_MIN_SIZE)
 
         self.theme = ThemeManager(root, settings.theme)
-        self._build_statusbar()
-        self._build_body()
+        self._build_layout()
         self._build_pages()
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         root.bind_all("<Control-t>", self.toggle_theme)
@@ -45,81 +51,151 @@ class ShellWindow:
         self.show(self._initial_key())
         self._queue_job = root.after(QUEUE_POLL_MS, self._drain_queue)
 
-    def _build_statusbar(self):
-        bar = ttk.Frame(self.root, style="Panel.TFrame", padding=(18, 9))
-        bar.pack(side="bottom", fill="x")
-        ttk.Separator(bar).place(relx=0, rely=0, relwidth=1)
-        self._status_var = tk.StringVar(value="")
-        ttk.Label(bar, textvariable=self._status_var,
-                  style="PanelMuted.TLabel").pack(side="left")
-        self._indicator_var = tk.StringVar(value="")
-        ttk.Label(bar, textvariable=self._indicator_var,
-                  style="PanelMuted.TLabel").pack(side="right")
-
-    def _build_body(self):
-        body = ttk.Frame(self.root)
+    # ---------------- 布局 ----------------
+    def _build_layout(self):
+        """建立导航栏 内容区与状态栏"""
+        body = tk.Frame(self.root, bd=0, highlightthickness=0)
+        tint(body, bg="canvas")
+        body.configure(bg=self.theme.rgb("canvas"))
         body.pack(side="top", fill="both", expand=True)
+
         self.sidebar = Sidebar(
             body,
+            self.theme,
             [(cls.key, cls.icon, cls.title) for cls in self._page_classes],
             on_select=self.show,
             on_toggle_theme=self.toggle_theme,
             on_open_log=self.open_log_folder,
         )
         self.sidebar.pack(side="left", fill="y")
-        ttk.Separator(body, orient="vertical").pack(side="left", fill="y")
-        self.splitter = ttk.Frame(body, style="Drag.TFrame", width=SPLITTER_WIDTH,
+
+        # 侧栏与主列之间的拖拽条: 平时与页面同色, 指针进入或拖动时用强调色
+        self.splitter = ttk.Frame(body, style="Drag.TFrame",
+                                  width=SPLITTER_WIDTH,
                                   cursor="sb_h_double_arrow")
         self.splitter.pack_propagate(False)
         self.splitter.pack(side="left", fill="y")
         self.splitter.bind("<Button-1>", self._on_splitter_press)
         self.splitter.bind("<B1-Motion>", self._on_splitter_drag)
         self.splitter.bind("<ButtonRelease-1>", self._on_splitter_release)
-        self.splitter.bind("<Enter>", lambda _event: self._hover_splitter(True))
-        self.splitter.bind("<Leave>", lambda _event: self._hover_splitter(False))
-        self.content = ttk.Frame(body, padding=(24, 22, 24, 20))
-        self.content.pack(side="left", fill="both", expand=True)
+        self.splitter.bind("<Enter>", lambda _e: self._hover_splitter(True))
+        self.splitter.bind("<Leave>", lambda _e: self._hover_splitter(False))
 
+        main = tk.Frame(body, bd=0, highlightthickness=0)
+        tint(main, bg="canvas")
+        main.configure(bg=self.theme.rgb("canvas"))
+        main.pack(side="left", fill="both", expand=True)
+        self._build_statusbar(main)
+
+        self.content = tk.Frame(main, bd=0, highlightthickness=0)
+        tint(self.content, bg="canvas")
+        self.content.configure(bg=self.theme.rgb("canvas"))
+        self.content.pack(side="top", fill="both", expand=True)
+
+    # ---------------- 侧栏拖拽 ----------------
     def _on_splitter_press(self, event):
-        self._splitter_origin = (event.x_root, self.sidebar.winfo_width())
+        """记下拖动起点与当时的侧栏宽度
+
+        @param event: 鼠标按下事件
+        """
+        self._splitter_origin = (event.x_root, self.sidebar.width)
 
     def _on_splitter_drag(self, event):
+        """按横向移动量调整侧栏宽度
+
+        @param event: 鼠标拖动事件
+        """
         if self._splitter_origin is None:
             return
         start_x, start_width = self._splitter_origin
         self.sidebar.set_width(start_width + event.x_root - start_x)
 
     def _on_splitter_release(self, _event):
+        """结束拖动, 分隔条回到平时的颜色"""
         self._splitter_origin = None
+        self.splitter.configure(style="Drag.TFrame")
 
     def _hover_splitter(self, hovering):
-        if self._splitter_origin is None:
-            self.splitter.configure(
-                style="DragHover.TFrame" if hovering else "Drag.TFrame"
-            )
+        """指针进入与离开时分隔条换色
+
+        @param hovering: 指针是否在分隔条上
+        """
+        if self._splitter_origin is not None:
+            return
+        self.splitter.configure(
+            style="DragHover.TFrame" if hovering else "Drag.TFrame")
+
+    def _build_statusbar(self, master):
+        """建立状态栏, 左右两端留给当前页面填充内容
+
+        @param master: 主列容器
+        """
+        bar = tk.Frame(master, bd=0, highlightthickness=0,
+                       height=STATUSBAR_HEIGHT)
+        tint(bar, bg="side")
+        bar.configure(bg=self.theme.rgb("side"))
+        bar.pack(side="bottom", fill="x")
+        bar.pack_propagate(False)
+        kit.hairline(bar, self.theme).pack(side="top", fill="x")
+
+        inner = tk.Frame(bar, bd=0, highlightthickness=0)
+        tint(inner, bg="side")
+        inner.configure(bg=self.theme.rgb("side"))
+        inner.pack(fill="both", expand=True, padx=BODY_PAD_X)
+
+        self.status_left = tk.Frame(inner, bd=0, highlightthickness=0)
+        tint(self.status_left, bg="side")
+        self.status_left.configure(bg=self.theme.rgb("side"))
+        self.status_left.pack(side="left", fill="y")
+        self.status_right = tk.Frame(inner, bd=0, highlightthickness=0)
+        tint(self.status_right, bg="side")
+        self.status_right.configure(bg=self.theme.rgb("side"))
+        self.status_right.pack(side="right", fill="y")
+
+        # 与页面无关的常驻提示 (例如翻译是否已启动), 没有内容时整块收起
+        self._indicator_frame = tk.Frame(self.status_left, bd=0,
+                                         highlightthickness=0)
+        tint(self._indicator_frame, bg="side")
+        self._indicator_frame.configure(bg=self.theme.rgb("side"))
+        self._indicator = kit.text(self._indicator_frame, self.theme,
+                                   size=SIZE_LABEL, token="muted", bold=True,
+                                   surface="side")
+        self._indicator.pack(side="left")
+
+    def new_status(self):
+        """为页面建立一块状态栏内容
+
+        @return: kit.StatusRow 实例
+        """
+        return kit.StatusRow(self.status_left, self.status_right, self.theme)
 
     def _build_pages(self):
         for page_class in self._page_classes:
             self._pages[page_class.key] = page_class(self.content, self)
 
+    # ---------------- 页面切换 ----------------
     def _initial_key(self):
         keys = [page_class.key for page_class in self._page_classes]
         return self.settings.page if self.settings.page in keys else keys[0]
 
     def show(self, key):
-        """切换到指定工具并通知页面生命周期钩子"""
+        """切换到指定工具并通知页面生命周期钩子
+
+        @param key: 工具标识
+        """
         if key not in self._pages or key == self._current_key:
             return
         previous = self._pages.get(self._current_key)
         if previous is not None:
             previous.on_hide()
+            previous.status.hide()
             previous.pack_forget()
         page = self._pages[key]
         page.pack(fill="both", expand=True)
+        page.status.show()
         self._current_key = key
         self.sidebar.set_active(key)
         self.settings.page = key
-        self.set_status(page.subtitle)
         self._schedule_show(key)
 
     def _schedule_show(self, key):
@@ -173,18 +249,39 @@ class ShellWindow:
             return
         open_path(folder, parent=self.root)
 
+    # ---------------- 状态栏 ----------------
     def set_status(self, message):
-        self._status_var.set(message or "")
+        """把提示写到当前页面的状态栏
+
+        @param message: 提示文字
+        """
+        page = self._pages.get(self._current_key)
+        if page is not None:
+            page.status.set_text(message or "")
 
     def set_indicator(self, key, text):
+        """设置与页面无关的常驻提示
+
+        @param key: 提示来源标识, 例如 translate
+        @param text: 提示文字, 空串表示清除
+        """
         if text:
             self._indicators[key] = text
         else:
             self._indicators.pop(key, None)
-        self._indicator_var.set("   \u00b7   ".join(self._indicators.values()))
+        value = "   ·   ".join(self._indicators.values())
+        self._indicator.configure(text=value)
+        if value:
+            self._indicator_frame.pack(side="left", padx=(12, 0))
+        else:
+            self._indicator_frame.pack_forget()
 
+    # ---------------- 跨线程消息 ----------------
     def post(self, action):
-        """将回调加入队列, 由 Tk 主线程执行"""
+        """将回调加入队列, 由 Tk 主线程执行
+
+        @param action: 无参可调用对象
+        """
         self._queue.put(action)
 
     def _drain_queue(self):

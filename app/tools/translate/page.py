@@ -10,9 +10,10 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
+from ... import kit
 from ...errors import show_error
 from ...shell.page import ToolPage
-from ...widgets import bind_mousewheel, unbind_mousewheel
+from ...theme import BODY_GAP, SIZE_BODY, SIZE_LABEL, tint
 from . import storage
 from .config import Config
 from .constants import PAGE_TITLE, REGION
@@ -45,9 +46,8 @@ FIELDS = (
 #: 服务选择区里服务名一列的宽度, 让两行的说明文案左对齐
 PROVIDER_LABEL_WIDTH = 140
 
-#: 语言下拉框的宽度 (字符数), 容得下最长的一项显示名
-SOURCE_COMBO_WIDTH = 18
-TARGET_COMBO_WIDTH = 26
+#: 最近一次翻译面板的宽度 (像素), 与设计稿一致
+REPORT_WIDTH = 364
 
 #: 测试连接用的短文本, 只要能走通一次真实翻译即可
 SKIP_TEST_TEXT = "Hello"
@@ -58,14 +58,17 @@ MAX_RESULT_CHARS = 600
 #: 还没有翻译过时结果区显示的引导文案
 EMPTY_RESULT_HINT = "还没有翻译记录 启动翻译后选中任意文本 连续按两次 Ctrl 试试"
 
+#: 还没有翻译过时原文区显示的引导文案
+EMPTY_SOURCE_HINT = "还没有翻译记录"
+
 
 class TranslatePage(ToolPage):
     """选择翻译服务与凭据并常驻划词翻译热键的工具页面"""
 
     key = "translate"
     title = "划词翻译"
-    icon = "🌐"
-    subtitle = "选择翻译服务并启动, 之后选中文本连续按两次 Ctrl 即可翻译"
+    icon = "\uE774"
+    subtitle = "启动后选中文本, 连续按两次 Ctrl 即可翻译"
 
     def __init__(self, master, shell):
         super().__init__(master, shell)
@@ -74,13 +77,12 @@ class TranslatePage(ToolPage):
         self._provider_var = tk.StringVar(value=DEFAULT_PROVIDER)
         self._cred_hint_var = tk.StringVar(value="")
         self._lang_hint_var = tk.StringVar(value="")
+        self._cred_state_var = tk.StringVar(value="")
         # 源语言与目标语言的领域语言代码, 显示名与代码的对应关系随服务变化
         self._source_lang = AUTO_LANG
         self._target_lang = DEFAULT_TARGET_LANG
         self._source_labels = {}
         self._target_labels = {}
-        self._status_var = tk.StringVar(value="")
-        self._result_var = tk.StringVar(value=EMPTY_RESULT_HINT)
         self._test_queue = queue.Queue()
         self._test_poll_id = None
         self._testing = False
@@ -95,10 +97,8 @@ class TranslatePage(ToolPage):
         )
 
         self._build_toolbar()
-        self.add_divider()
-        # 结果区先 pack 并贴住底部, 窗口变矮时挤压的是上面的表单而不是它
-        self._build_report()
-        self._build_form()
+        self._build_statusbar()
+        self._build_body()
 
         self._prefill()
         self._sync_provider_ui()
@@ -106,197 +106,178 @@ class TranslatePage(ToolPage):
         self._refresh_state()
 
     # ---------------- 界面构建 ----------------
+    def _build_toolbar(self):
+        """顶栏按钮: 测试连接 与 启动翻译, 与设计稿一致"""
+        self.btn_test, self.btn_toggle = self.add_actions((
+            ("测试连接", None, self._test_connection),
+            ("启动翻译", "Primary.TButton", self._toggle_running),
+        ))
+
+    def _build_statusbar(self):
+        """状态栏: 圆点 说明 本日次数 与右侧的暂停 停止按钮"""
+        self.status.set_kind("idle")
+        self.status.set_text("翻译未启动")
+        self.metric = kit.text(self.status.tail, self.theme, size=SIZE_LABEL,
+                               mono_font=True, surface="side")
+        self.status.add_tail(self.metric)
+        self.btn_pause = ttk.Button(self.status.actions, text="暂停热键",
+                                    style="TButton", state="disabled",
+                                    command=self._toggle_pause)
+        self.status.add_action(self.btn_pause)
+        self.btn_stop = ttk.Button(self.status.actions, text="停止翻译",
+                                   style="TButton", state="disabled",
+                                   command=self._toggle_running)
+        self.status.add_action(self.btn_stop)
+
+    def _build_body(self):
+        """左栏是服务 语言与凭据, 右栏固定 364 像素宽显示最近一次翻译"""
+        area = tk.Frame(self.body, bd=0, highlightthickness=0)
+        tint(area, bg="canvas")
+        area.configure(bg=self.theme.rgb("canvas"))
+        area.pack(side="top", fill="both", expand=True)
+
+        self._build_report(area)
+        left = tk.Frame(area, bd=0, highlightthickness=0)
+        tint(left, bg="canvas")
+        left.configure(bg=self.theme.rgb("canvas"))
+        left.pack(side="left", fill="both", expand=True, padx=(0, 14))
+        self._build_provider_card(left)
+        self._build_language_card(left)
+        self._build_credential_card(left)
+
     def _build_provider_card(self, body):
         """翻译服务二选一; 换服务后不必重启, 下一次翻译就用新的服务
 
-        @param body: 放置卡片的容器
+        @param body: 放置面板的容器
         """
-        card = ttk.LabelFrame(body, text="翻译服务", padding=(16, 12))
-        card.pack(side="top", fill="x", pady=(0, 10))
-
+        panel = kit.Panel(body, self.theme, title="翻译服务", body_pad=(14, 8))
+        panel.pack(side="top", fill="x", pady=(0, BODY_GAP))
+        self._provider_rows = {}
         for spec in PROVIDER_SPECS:
-            row = ttk.Frame(card, style="Card.TFrame")
-            row.pack(side="top", fill="x", pady=2)
-            # 第一列固定宽度, 三行的说明文案才会对齐
-            row.columnconfigure(0, minsize=PROVIDER_LABEL_WIDTH)
-            ttk.Radiobutton(
-                row, text=spec.label, value=spec.name,
-                variable=self._provider_var, style="Card.TRadiobutton",
-                command=self._on_provider_change,
-            ).grid(row=0, column=0, sticky="w")
-            ttk.Label(row, text=spec.hint, style="CardMuted.TLabel").grid(
-                row=0, column=1, sticky="w", padx=(12, 0)
-            )
-
-    def _build_toolbar(self):
-        bar, head, actions = self.build_toolbar()
-
-        ttk.Label(head, text=PAGE_TITLE, style="PanelHeader.TLabel").pack(
-            side="left"
-        )
-        ttk.Label(head, text="启动后选中文本, 连续按两次 Ctrl 即可翻译",
-                  style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
-
-        # 右侧按 主操作 在最外, 次操作 靠内 的顺序排
-        self.btn_toggle = ttk.Button(
-            actions, text="启动翻译", style="Accent.TButton",
-            command=self._toggle_running,
-        )
-        self.btn_toggle.pack(side="right")
-
-        self.btn_pause = ttk.Button(
-            actions, text="暂停热键", style="Secondary.TButton",
-            command=self._toggle_pause, state="disabled",
-        )
-        self.btn_pause.pack(side="right", padx=(0, 8))
+            row = kit.RadioRow(panel.body, self.theme, value=spec.name,
+                               label=spec.label, hint=spec.hint,
+                               variable=self._provider_var,
+                               command=self._on_provider_change,
+                               surface="panel")
+            row.pack(side="top", fill="x")
+            self._provider_rows[spec.name] = row
 
     def _build_language_card(self, body):
         """源语言与目标语言; 可选范围随当前服务变化, 换语言立即生效
 
-        @param body: 放置卡片的容器
+        @param body: 放置面板的容器
         """
-        card = ttk.LabelFrame(body, text="翻译语言", padding=(16, 12))
-        card.pack(side="top", fill="x", pady=(0, 10))
-
-        row = ttk.Frame(card, style="Card.TFrame")
+        panel = kit.Panel(body, self.theme, title="翻译语言")
+        panel.pack(side="top", fill="x", pady=(0, BODY_GAP))
+        row = tk.Frame(panel.body, bd=0, highlightthickness=0)
+        tint(row, bg="panel")
+        row.configure(bg=self.theme.rgb("panel"))
         row.pack(side="top", fill="x")
+        row.columnconfigure(0, weight=1, uniform="lang")
+        row.columnconfigure(1, weight=1, uniform="lang")
+        self.combo_source = self._language_field(row, 0, "源语言", None)
+        self.combo_target = self._language_field(row, 1, "目标语言", None)
+        kit.text(panel.body, self.theme, variable=self._lang_hint_var,
+                 size=SIZE_LABEL, token="muted",
+                 surface="panel").pack(anchor="w", pady=(10, 0))
 
-        ttk.Label(row, text="源语言", style="Card.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        self.combo_source = ttk.Combobox(
-            row, state="readonly", width=SOURCE_COMBO_WIDTH
-        )
-        self.combo_source.grid(row=0, column=1, sticky="w", padx=(10, 20))
-        self.combo_source.bind("<<ComboboxSelected>>",
-                               lambda e: self._on_language_change())
+    def _build_credential_card(self, body):
+        """华为云凭据: 四个字段排成两列, 右下角是清空与保存
 
-        ttk.Label(row, text="目标语言", style="Card.TLabel").grid(
-            row=0, column=2, sticky="w"
-        )
-        self.combo_target = ttk.Combobox(
-            row, state="readonly", width=TARGET_COMBO_WIDTH
-        )
-        self.combo_target.grid(row=0, column=3, sticky="w", padx=(10, 0))
-        self.combo_target.bind("<<ComboboxSelected>>",
-                               lambda e: self._on_language_change())
-
-        # 提示跟在两个下拉框右边, 少占一行高度
-        ttk.Label(row, textvariable=self._lang_hint_var,
-                  style="CardMuted.TLabel").grid(
-            row=0, column=4, sticky="w", padx=(16, 0)
-        )
-
-    def _build_form(self):
-        """服务选择 语言选择与凭据表单
-
-        表单放在可滚动的画布里: 窗口高度不足时滚动条才出现, 表单不会被裁掉,
-        也不会把下面的结果区挤出可视区
+        @param body: 放置面板的容器
         """
-        outer = ttk.Frame(self)
-        outer.pack(side="top", fill="both", expand=True)
-
-        self.form_canvas = tk.Canvas(outer, highlightthickness=0, bd=0)
-        self.form_canvas._thione_surface = "bg"
-        self.form_scroll = ttk.Scrollbar(
-            outer, orient="vertical", command=self.form_canvas.yview
-        )
-        self.form_canvas.configure(yscrollcommand=self.form_scroll.set)
-        self.form_canvas.pack(side="left", fill="both", expand=True)
-
-        body = ttk.Frame(self.form_canvas, padding=(16, 14))
-        self._form_window = self.form_canvas.create_window(
-            (0, 0), window=body, anchor="nw"
-        )
-        body.bind("<Configure>", self._on_form_content_configure)
-        self.form_canvas.bind("<Configure>", self._on_form_canvas_configure)
-        bind_mousewheel((body, self.form_canvas), self.form_canvas)
-
-        self._build_provider_card(body)
-        self._build_language_card(body)
-
-        card = ttk.LabelFrame(body, text="华为云 NLP 凭据", padding=(16, 12))
-        card.pack(side="top", fill="x")
-        card.columnconfigure(1, weight=1)
-
-        ttk.Label(
-            card,
-            textvariable=self._cred_hint_var,
-            style="CardMuted.TLabel",
-        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
-
-        for index, (key, label) in enumerate(FIELDS, start=1):
-            ttk.Label(card, text=label, style="Card.TLabel").grid(
-                row=index, column=0, sticky="e", padx=(0, 10), pady=3
-            )
-            entry = ttk.Entry(card, textvariable=self._vars[key], width=48)
+        panel = kit.Panel(body, self.theme, title="华为云 NLP 凭据",
+                          right="已保存到 config.ini")
+        panel.pack(side="top", fill="x")
+        grid = tk.Frame(panel.body, bd=0, highlightthickness=0)
+        tint(grid, bg="panel")
+        grid.configure(bg=self.theme.rgb("panel"))
+        grid.pack(side="top", fill="x")
+        grid.columnconfigure(1, weight=1)
+        grid.columnconfigure(3, weight=1)
+        holders = {}
+        for index, (key, label) in enumerate(FIELDS):
+            column = (index % 2) * 2
+            line = index // 2
+            caption = kit.text(grid, self.theme, value=label, size=SIZE_LABEL,
+                               token="muted", surface="panel", anchor="w")
+            caption.grid(row=line, column=column, sticky="w",
+                         padx=(0, 10) if column == 0 else (14, 10),
+                         pady=(0, 8))
+            field = kit.EntryField(grid, self.theme,
+                                   variable=self._vars[key], width=None,
+                                   mono_font=True)
             if key == "sk":
-                entry.configure(show="*")
-            entry.grid(row=index, column=1, sticky="we", pady=3)
+                field.entry.configure(show="*")
+            field.grid(row=line, column=column + 1, sticky="ew", pady=(0, 8))
+            holders[key] = field
+        self._cred_fields = holders
+        kit.text(panel.body, self.theme, variable=self._cred_hint_var,
+                 size=SIZE_LABEL, token="muted",
+                 surface="panel").pack(anchor="w", pady=(2, 10))
+        buttons = tk.Frame(panel.body, bd=0, highlightthickness=0)
+        tint(buttons, bg="panel")
+        buttons.configure(bg=self.theme.rgb("panel"))
+        buttons.pack(side="top", anchor="e")
+        ttk.Button(buttons, text="清空凭据", style="TButton",
+                   command=self._clear_credentials).pack(side="left")
+        ttk.Button(buttons, text="保存凭据", style="Primary.TButton",
+                   command=self._save).pack(side="left", padx=(8, 0))
 
-        buttons = ttk.Frame(card, style="Card.TFrame")
-        buttons.grid(row=len(FIELDS) + 1, column=0, columnspan=2,
-                     sticky="e", pady=(12, 0))
+    def _language_field(self, row, column, caption, previous):
+        """建立一列语言下拉框: 标签在上, 控件框在下
 
-        self.btn_test = ttk.Button(
-            buttons, text="测试连接", style="Secondary.TButton",
-            command=self._test_connection,
-        )
-        self.btn_test.pack(side="left", padx=(0, 6))
-        ttk.Button(buttons, text="保存凭据", style="Accent.TButton",
-                   command=self._save).pack(side="left")
-
-    def _build_report(self):
-        """运行状态与最近一次翻译, 固定贴住页面底部"""
-        body = ttk.Frame(self, padding=(16, 10))
-        body.pack(side="bottom", fill="x")
-
-        ttk.Label(body, textvariable=self._status_var,
-                  style="Muted.TLabel").pack(anchor="w")
-
-        card = ttk.LabelFrame(body, text="最近一次翻译", padding=16)
-        card.pack(side="top", fill="x", pady=(8, 0))
-        self.result_label = ttk.Label(
-            card, textvariable=self._result_var, style="Card.TLabel",
-            justify="left", anchor="nw",
-        )
-        self.result_label.pack(anchor="w", fill="both", expand=True)
-        # 结果文本可能很长, 换行宽度跟着卡片宽度走, 窄窗口下不会被横向裁掉
-        card.bind("<Configure>", self._on_result_card_configure)
-
-    def _on_result_card_configure(self, event):
-        """结果文本按卡片实际宽度换行
-
-        @param event: Tk 的 Configure 事件, width 为卡片宽度
+        @param row: 父容器
+        @param column: 列号
+        @param caption: 标签文字
+        @param previous: 已经建好的下拉控件, 不为空时直接复用
+        @return: 下拉控件
         """
-        self.result_label.configure(wraplength=max(event.width - 32, 200))
+        holder = tk.Frame(row, bd=0, highlightthickness=0)
+        tint(holder, bg="panel")
+        holder.configure(bg=self.theme.rgb("panel"))
+        holder.grid(row=0, column=column, sticky="ew",
+                    padx=(0, 14) if column == 0 else (0, 0))
+        kit.text(holder, self.theme, value=caption, size=SIZE_LABEL,
+                 token="muted", surface="panel").pack(anchor="w", pady=(0, 5))
+        if previous is not None:
+            previous.pack(fill="x")
+            return previous
+        combo = kit.Dropdown(holder, self.theme, values=[], surface="panel",
+                             command=lambda _label: self._on_language_change())
+        combo.pack(fill="x")
+        return combo
 
-    # ---------------- 表单滚动 ----------------
-    def _on_form_content_configure(self, _event=None):
-        """表单高度变化时刷新滚动范围, 并同步滚动条的显隐"""
-        self.form_canvas.configure(scrollregion=self.form_canvas.bbox("all"))
-        self._sync_form_scrollbar()
+    def _build_report(self, area):
+        """右栏: 最近一次翻译的原文与译文
 
-    def _on_form_canvas_configure(self, event):
-        """画布尺寸变化时让表单跟着变宽, 并重新判断是否需要滚动条"""
-        self.form_canvas.itemconfigure(self._form_window, width=event.width)
-        self._sync_form_scrollbar()
+        @param area: 承载左右两栏的容器
+        """
+        panel = kit.Panel(area, self.theme, title="最近一次翻译", right="",
+                          body_pad=(14, 14))
+        panel.configure(width=REPORT_WIDTH)
+        panel.pack(side="right", fill="y")
+        panel.pack_propagate(False)
+        self.report_panel = panel
+        self.source_view = kit.Area(panel.body, self.theme, height=140,
+                                    size=SIZE_LABEL, token="muted",
+                                    editable=False, wrap="word")
+        self.source_view.pack(fill="x")
+        self.result_view = kit.Area(panel.body, self.theme, height=180,
+                                    size=SIZE_BODY, token="text",
+                                    editable=False, wrap="word")
+        self.result_view.pack(fill="both", expand=True, pady=(12, 0))
+        buttons = tk.Frame(panel.body, bd=0, highlightthickness=0)
+        tint(buttons, bg="panel")
+        buttons.configure(bg=self.theme.rgb("panel"))
+        buttons.pack(side="top", anchor="w", pady=(12, 0))
+        ttk.Button(buttons, text="复制结果", style="TButton",
+                   command=self._copy_result).pack(side="left")
+        ttk.Button(buttons, text="重新翻译", style="TButton",
+                   command=self._retry_translation).pack(side="left",
+                                                         padx=(8, 0))
+        self.source_view.set(EMPTY_RESULT_HINT)
 
-    def _sync_form_scrollbar(self):
-        """表单装得下就不显示滚动条, 装不下时才显示并允许滚动"""
-        bbox = self.form_canvas.bbox("all")
-        overflows = (
-            bbox is not None
-            and (bbox[3] - bbox[1]) > self.form_canvas.winfo_height()
-        )
-        if overflows:
-            if not self.form_scroll.winfo_ismapped():
-                self.form_scroll.pack(side="right", fill="y")
-        elif self.form_scroll.winfo_ismapped():
-            self.form_scroll.pack_forget()
-            self.form_canvas.yview_moveto(0)
-
-    # ---------------- 初始数据 ----------------
     def _prefill(self):
         """把已有来源 (环境变量 / 旧版配置 / .env / csv) 的选择与凭据预填进表单"""
         try:
@@ -386,12 +367,10 @@ class TranslatePage(ToolPage):
             for code in (AUTO_LANG,) + tuple(LANGUAGE_LABELS)
             if code == AUTO_LANG or code in spec.languages
         }
-        self.combo_source["values"] = list(self._source_labels)
-        self.combo_target["values"] = list(self._target_labels)
+        self.combo_source.set_values(list(self._source_labels))
+        self.combo_target.set_values(list(self._target_labels))
         # 只有自动识别一项时说明该服务不能指定源语言, 直接置灰
-        self.combo_source.configure(
-            state="readonly" if len(self._source_labels) > 1 else "disabled"
-        )
+        self.combo_source.set_enabled(len(self._source_labels) > 1)
 
         if self._source_lang not in self._source_labels.values():
             self._source_lang = AUTO_LANG
@@ -414,10 +393,10 @@ class TranslatePage(ToolPage):
     def _read_language_ui(self):
         """把下拉框上选中的显示名换回领域语言代码"""
         self._source_lang = self._source_labels.get(
-            self.combo_source.get(), AUTO_LANG
+            self.combo_source.value(), AUTO_LANG
         )
         self._target_lang = self._target_labels.get(
-            self.combo_target.get(), DEFAULT_TARGET_LANG
+            self.combo_target.value(), DEFAULT_TARGET_LANG
         )
 
     def _apply_preferred_target(self):
@@ -447,8 +426,7 @@ class TranslatePage(ToolPage):
         self._refresh_state()
 
     def on_hide(self):
-        """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动"""
-        unbind_mousewheel(self.form_canvas)
+        """页面切走时的清理; 本页没有需要解绑的资源"""
 
     def _refresh_state(self):
         running = self.service.running
@@ -459,41 +437,83 @@ class TranslatePage(ToolPage):
 
         self.btn_toggle.configure(
             text="停止翻译" if running else "启动翻译",
-            style="Danger.TButton" if running else "Accent.TButton",
+            style="TButton" if running else "Primary.TButton",
         )
         self.btn_pause.configure(
             text="恢复热键" if paused else "暂停热键",
             state="normal" if running else "disabled",
         )
+        self.btn_stop.configure(state="normal" if running else "disabled")
+        self.btn_test.configure(state="disabled" if self._testing else "normal")
+        self.status.set_kind("ok" if running and not paused else
+                             ("warn" if paused else "idle"))
+        self.metric.configure(
+            text=f"本日 {self.service.daily_count} 次"
+            if self.service.daily_count else "")
+        self.report_panel.set_right(self._provider_label())
 
         if running and paused:
-            self._status_var.set(
+            self.status.set_text(
                 "已暂停: 全局热键当前不响应, 点击'恢复热键'继续"
             )
             indicator = "翻译热键: 已暂停"
         elif running:
-            self._status_var.set(
-                "运行中: 选中文本后连续按两次 Ctrl 触发翻译 "
-                f"({self._service_detail()})"
-            )
+            self.status.set_text("翻译已启动 · 双击 Ctrl 可用")
             indicator = "翻译热键: 已启用"
         elif ready:
-            self._status_var.set(
-                f"未启动 ({self._service_detail()}): 点击'启动翻译'开始划词翻译"
-            )
+            self.status.set_text(
+                f"未启动 ({self._service_detail()}): 点击'启动翻译'开始划词翻译")
             indicator = ""
         else:
-            self._status_var.set(
-                "未配置: 填写 AK / SK / Project ID 后点击'启动翻译'"
-            )
+            self.status.set_text("未配置: 填写 AK / SK / Project ID 后点击'启动翻译'")
             indicator = ""
 
         self.shell.set_indicator("translate", indicator)
 
+        source = self.service.last_source or EMPTY_SOURCE_HINT
+        self.source_view.set(source[:MAX_RESULT_CHARS])
         result = self.service.last_result or EMPTY_RESULT_HINT
         if len(result) > MAX_RESULT_CHARS:
             result = result[:MAX_RESULT_CHARS] + " ..."
-        self._result_var.set(result)
+        self.result_view.set(result)
+
+    def _provider_label(self):
+        """当前服务的显示名
+
+        @return: 服务名
+        """
+        config = self.service.config
+        provider = (config.provider if config is not None
+                    else self._provider_var.get())
+        return spec_for(provider).label
+
+    def _copy_result(self):
+        """把译文复制到剪贴板"""
+        text = self.result_view.get()
+        if not text or text == EMPTY_RESULT_HINT:
+            self.status.set_text("还没有可复制的结果")
+            self.status.set_kind("fail")
+            return
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.status.set_kind("ok")
+        self.status.set_text("已复制翻译结果")
+
+    def _retry_translation(self):
+        """用最近一次的原文重新翻译一次"""
+        source = self.service.last_source
+        if not source:
+            self.status.set_text("还没有可重新翻译的原文")
+            self.status.set_kind("fail")
+            return
+        self.service.translate_text(source)
+
+    def _clear_credentials(self):
+        """清空表单里的凭据并落盘"""
+        for var in self._vars.values():
+            var.set("")
+        self._save()
+        self.status.set_text("凭据已清空")
 
     def _show_me(self):
         """托盘菜单: 切回本页面并把主窗口拉到前台"""
@@ -525,7 +545,7 @@ class TranslatePage(ToolPage):
 
         values = self._values()
         if not self._ready_to_run(values):
-            self._status_var.set("AK / SK / Project ID 都不能为空")
+            self.status.set_text("AK / SK / Project ID 都不能为空")
             return
         if not self._store_config(values):
             return
@@ -549,19 +569,19 @@ class TranslatePage(ToolPage):
     def _save(self):
         values = self._values()
         if not self._ready_to_run(values):
-            self._status_var.set("AK / SK / Project ID 都不能为空")
+            self.status.set_text("AK / SK / Project ID 都不能为空")
             return
         if not self._store_config(values):
             return
         label = spec_for(values["provider"]).label
-        self._status_var.set(f"已保存 ({label}): {self._saved_path}")
+        self.status.set_text(f"已保存 ({label}): {self._saved_path}")
 
     def _test_connection(self):
         if self._testing:
             return
         values = self._values()
         if not self._ready_to_run(values):
-            self._status_var.set("AK / SK / Project ID 都不能为空")
+            self.status.set_text("AK / SK / Project ID 都不能为空")
             return
 
         label = spec_for(values["provider"]).label
@@ -590,7 +610,7 @@ class TranslatePage(ToolPage):
         self._testing = busy
         self.btn_test.configure(state="disabled" if busy else "normal")
         if message:
-            self._status_var.set(message)
+            self.status.set_text(message)
 
     def _schedule_test_poll(self):
         """轮询后台的测试结果; 页面销毁后不再续排"""
@@ -613,7 +633,6 @@ class TranslatePage(ToolPage):
     # ---------------- 收尾 ----------------
     def on_close(self):
         """停掉热键与托盘; 主窗口随外壳一起关闭, 因此这里不阻止退出"""
-        unbind_mousewheel(self.form_canvas)
         if self._test_poll_id is not None:
             try:
                 self.after_cancel(self._test_poll_id)

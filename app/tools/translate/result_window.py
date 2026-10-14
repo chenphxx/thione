@@ -10,7 +10,7 @@ from tkinter import ttk
 import pyperclip
 
 from ...paths import resource_path
-from ...theme import sans
+from ...theme import SIZE_BODY, SIZE_LABEL, sans, tint
 from .constants import ICON_PATH
 
 WRAP_LENGTH = 320
@@ -48,21 +48,21 @@ class ResultWindow(tk.Toplevel):
         palette = theme.palette if theme is not None else None
         label_options = {}
         if palette is not None:
-            self._thione_surface = "card"
-            self.configure(bg=palette["card"], highlightthickness=1,
-                           highlightbackground=palette["border"])
-            label_options = {"bg": palette["card"], "fg": palette["text"]}
+            tint(self, bg="panel", hl="hair", hlc="hair")
+            self.configure(bg=palette["panel"], highlightthickness=1,
+                           highlightbackground=palette["hair"])
+            label_options = {"bg": palette["panel"], "fg": palette["text"]}
 
         self.label = tk.Label(
             self, text=result, wraplength=WRAP_LENGTH, justify="left",
-            font=sans(11), **label_options,
+            font=sans(SIZE_BODY), **label_options,
         )
-        self.label._thione_surface = "card"
+        tint(self.label, bg="panel", fg="text")
         self.label.pack(padx=PADDING, pady=(PADDING, 10), fill="both",
                         expand=True)
 
         self.copy_button = ttk.Button(
-            self, text="复制并关闭", style="Accent.TButton",
+            self, text="复制并关闭", style="Primary.TButton",
             command=self.copy_to_clipboard,
         )
         self.copy_button.pack(padx=PADDING, pady=(0, PADDING), fill="x")

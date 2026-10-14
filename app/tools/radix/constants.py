@@ -34,14 +34,14 @@ REFERENCE_COLUMNS = (
     ("hex", "十六进制", 150),
 )
 
-# 数字框与对照表使用的等宽字号
-NUMBER_FONT_SIZE = 12
+# 对照表把 0 到 REFERENCE_LIMIT - 1 分成左右两半并排展示
+REFERENCE_HALVES = 2
 
-# 进制下拉框的宽度 (字符数)
-BASE_COMBO_WIDTH = 14
+# 输入框为空时显示的占位文案
+EMPTY_HINT = "输入数字"
 
-# 输入框为空时下方的引导文案
-EMPTY_HINT = "输入数字后立即转换, 支持 0b / 0o / 0x 前缀"
+# 状态栏默认给出的能力说明
+STATUS_HINT = "支持负数与超大整数"
 
 # 页面标题下的说明
-SUBTITLE = "在 2 到 36 进制之间转换数字, 并给出常用进制的换算结果"
+SUBTITLE = "输入数字即可转换, 结果随输入与进制实时刷新"

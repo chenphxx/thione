@@ -12,12 +12,13 @@
 import logging
 import queue
 import threading
+import time
 
 from ...constants import APP_TITLE
 from ...errors import show_error
 from .constants import UI_POLL_INTERVAL_MS
 from .hotkey import DoubleCtrlListener
-from .language import AUTO_LANG, DEFAULT_TARGET_LANG
+from .language import AUTO_LANG, DEFAULT_TARGET_LANG, resolve_direction
 from .providers import build_provider
 from .result_window import ResultWindow
 
@@ -46,6 +47,11 @@ class TranslateService:
         self.config = None
         self.translator = None
         self.last_result = ""
+        #: 最近一次翻译的原文, 供界面上的"最近一次翻译"面板展示
+        self.last_source = ""
+        #: 本日成功翻译的次数 (进程内统计, 跨日期时归零)
+        self.daily_count = 0
+        self._count_date = ""
         self.paused = False
 
         self._queue = queue.Queue()
@@ -249,17 +255,64 @@ class TranslateService:
         self._schedule_poll()
 
     # -- 翻译结果 ---------------------------------------------------------
-    def _on_result(self, text):
-        """热键线程的结果回调: 只投递, 绝不在这里碰 tkinter"""
-        self._post(lambda: self._show_result(text))
+    def _on_result(self, text, source=""):
+        """热键线程的结果回调: 只投递, 绝不在这里碰 tkinter
 
-    def _show_result(self, text):
+        @param text: 翻译结果或者失败说明
+        @param source: 本次翻译的原文
+        """
+        self._post(lambda: self._show_result(text, source))
+
+    def translate_text(self, text):
+        """手动翻译一段文本, 供页面上的'重新翻译'按钮使用
+
+        与热键触发的翻译走同一条链路, 结果同样写成最近一次翻译并弹出结果窗口
+
+        @param text: 待翻译的文本
+        """
+        if self.translator is None or not text.strip():
+            return
+        config = self.config
+        source_lang = config.source_lang if config else AUTO_LANG
+        target_lang = config.target_lang if config else DEFAULT_TARGET_LANG
+        translator = self.translator
+
+        def worker():
+            try:
+                direction = resolve_direction(text, source_lang, target_lang)
+                result = translator.translate(text, *direction)
+            except Exception as exc:
+                logger.warning("重新翻译失败: %s", exc)
+                self._on_result(f"翻译失败:\n{exc}", text)
+                return
+            self._on_result(result, text)
+
+        threading.Thread(target=worker, name="thione-translate-retry",
+                         daemon=True).start()
+
+    def _show_result(self, text, source=""):
+        """记录结果并弹出结果窗口
+
+        @param text: 翻译结果或者失败说明
+        @param source: 本次翻译的原文
+        """
         self.last_result = text
+        if source:
+            self.last_source = source
+            self._count_translation()
         self._notify_state()
         try:
             ResultWindow(self.root, text, theme=self._theme)
         except Exception:
             logger.exception("显示翻译结果失败")
+
+    def _count_translation(self):
+        """按自然日累计成功翻译的次数"""
+        today = time.strftime("%Y-%m-%d")
+        if today != self._count_date:
+            self._count_date = today
+            self.daily_count = 0
+        self.daily_count += 1
 
     def _notify_state(self):
         if self._on_state_change is None:

@@ -18,8 +18,11 @@ import time
 import tkinter as tk
 from tkinter import filedialog, ttk
 
+from ... import kit
 from ...errors import show_error
 from ...shell.page import ToolPage
+from ...theme import BODY_GAP, SIZE_LABEL, tint
+from ...kit import set_enabled
 from . import ports
 from .codec import ParseError
 from .constants import (
@@ -54,6 +57,13 @@ from .constants import (
     LINK_SERIAL,
     MAX_MESSAGES_PER_POLL,
     PAGE_TITLE,
+    PORT_IN_USE_BY_US,
+    RECEIVE_CONTROLS_WIDTH,
+    RECEIVE_MIN_HEIGHT,
+    SEND_AREA_HEIGHT,
+    SEND_CONTROLS_WIDTH,
+    SEND_MIN_HEIGHT,
+    SEND_SPLITTER_ROOM,
     PANEL_NET_RECEIVE,
     PANEL_NET_SEND,
     PANEL_SERIAL_RECEIVE,
@@ -175,30 +185,14 @@ def _set_group_enabled(group, enabled):
     @param enabled: True 按各自的状态恢复, False 全部禁用
     """
     for child in group.winfo_children():
-        if isinstance(child, ttk.Frame):
+        if isinstance(child, (ttk.Frame, tk.Frame, tk.Canvas)) and not getattr(
+                child, "_thione_roles", None):
             _set_group_enabled(child, enabled)
         elif isinstance(child, (ttk.Entry, ttk.Button, ttk.Combobox)):
             state = getattr(child, STATE_ATTR, "normal")
             child.configure(state=state if enabled else "disabled")
-
-
-def _add_field(parent, label, width, values, variable, readonly=False):
-    """按 标签加下拉框 的形式往一行里加一个串口参数
-
-    @param parent: 所在的行
-    @param label: 标签文字
-    @param width: 下拉框宽度 (字符数)
-    @param values: 下拉框取值
-    @param variable: 绑定的变量
-    @param readonly: True 只能从列表里选
-    @return: 下拉框
-    """
-    ttk.Label(parent, text=label, style="CardMuted.TLabel").pack(side="left")
-    combo = ttk.Combobox(parent, width=width, values=list(values),
-                         textvariable=variable)
-    combo.pack(side="left", padx=(4, 10))
-    _mark_state(combo, "readonly" if readonly else "normal")
-    return combo
+        else:
+            set_enabled(child, enabled)
 
 
 def _client_addresses(session):
@@ -239,6 +233,7 @@ class CommPage(ToolPage):
         self._net_busy = False
         self._open_port = ""
         self._port_devices = {}
+        self._port_items = {}
         self._config_loaded = False
         self._scan_request = 0
         self._active_link = LINK_SERIAL
@@ -261,98 +256,97 @@ class CommPage(ToolPage):
         self._config_hint = tk.StringVar(value=HINT_SERIAL_IDLE)
 
         self._build_toolbar()
-        self.add_divider()
         self._build_config_card()
         self._build_panels()
+        self._build_statusbar()
         self._apply_link()
+        self._refresh_metrics()
 
         self._poll_job = self.root.after(POLL_INTERVAL_MS, self._poll_messages)
 
     # ---------------- 界面构建 ----------------
     def _build_toolbar(self):
-        _bar, head, actions = self.build_toolbar()
-        self._actions = actions
-        ttk.Label(head, text=PAGE_TITLE,
-                  style="PanelHeader.TLabel").pack(side="left")
-        ttk.Label(head, text="两条链路可以同时打开, 这里切换当前配置与展示",
-                  style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
+        """顶栏按钮, 顺序与设计稿一致: 刷新串口 测试连接 主操作"""
+        self._actions = self.actions
+        self.btn_ports, self.btn_test, self.btn_serial = self.add_actions((
+            (BTN_REFRESH_PORTS, None, self._rescan_ports),
+            (BTN_TEST_CONNECT, None, self._test_connect),
+            (BTN_OPEN_PORT, "Primary.TButton", self._toggle_serial),
+        ))
+        # 网络链路的主操作与串口同一个位置, 由 _apply_link 决定显示哪一个
+        self.btn_net = ttk.Button(self._actions, text=BTN_LOAD_CONFIG,
+                                  style="Primary.TButton",
+                                  command=self._toggle_net)
 
     def _build_config_card(self):
-        """顶部连接配置: 左边切换链路, 右边是当前链路的参数, 操作按钮挂工具条"""
-        card = ttk.LabelFrame(self, text="连接配置", padding=(16, 12))
-        card.pack(side="top", fill="x")
-        row = ttk.Frame(card, style="CardFlat.TFrame")
+        """顶部连接配置: 面板头部切换链路, 内容是当前链路的参数"""
+        self.config_panel = self.add_panel(title="连接配置", grow=False)
+        head = self.config_panel.head
+        self.link_switch = kit.Segment(head, self.theme, LINK_CHOICES,
+                                       value=self._active_link,
+                                       command=self._select_link,
+                                       surface="panel")
+        self.config_panel.add_head(self.link_switch)
+        self.lbl_summary = kit.text(head, self.theme, size=SIZE_LABEL,
+                                    mono_font=True, token="muted",
+                                    surface="panel", anchor="e")
+        self.lbl_summary.pack(in_=head, side="right", fill="y",
+                              padx=(0, 14))
+
+        row = tk.Frame(self.config_panel.body, bd=0, highlightthickness=0)
+        tint(row, bg="panel")
+        row.configure(bg=self.theme.rgb("panel"))
         row.pack(side="top", fill="x")
 
         # 两个参数组都先建好, 由 _apply_link 决定显示哪一组; 主操作按钮在工具条右侧
-        self._serial_group = ttk.Frame(row, style="CardFlat.TFrame")
-        self._net_row = ttk.Frame(row, style="CardFlat.TFrame")
+        self._serial_group = tk.Frame(row, bd=0, highlightthickness=0)
+        tint(self._serial_group, bg="panel")
+        self._serial_group.configure(bg=self.theme.rgb("panel"))
+        self._net_row = tk.Frame(row, bd=0, highlightthickness=0)
+        tint(self._net_row, bg="panel")
+        self._net_row.configure(bg=self.theme.rgb("panel"))
+        self._net_row.pack(side="left", fill="x", expand=True)
         self._build_serial_group(self._serial_group)
         self._build_net_group(self._net_row)
-        self.btn_serial = ttk.Button(self._actions, text=BTN_OPEN_PORT,
-                                     style="Accent.TButton",
-                                     command=self._toggle_serial)
-        self.btn_net = ttk.Button(self._actions, text=BTN_LOAD_CONFIG,
-                                  style="Accent.TButton", command=self._toggle_net)
-        self.btn_test = ttk.Button(self._actions, text=BTN_TEST_CONNECT,
-                                   style="Secondary.TButton",
-                                   command=self._test_connect)
-        # 刷新串口与 图片查重 批量重命名 的 刷新扫描 一样挂在工具条上,
-        # 配置行只留参数控件
-        self.btn_ports = ttk.Button(self._actions, text=BTN_REFRESH_PORTS,
-                                    style="Secondary.TButton",
-                                    command=self._rescan_ports)
-
-        switch = ttk.Frame(row, style="CardFlat.TFrame")
-        switch.pack(side="left", padx=(0, 12))
-        self._link_buttons = {}
-        for link, label in LINK_CHOICES:
-            button = ttk.Button(switch, text=label, style="Segment.TButton",
-                                command=lambda item=link: self._select_link(item))
-            button.pack(side="left", padx=(0, 6))
-            self._link_buttons[link] = button
-
-        self.lbl_config_hint = ttk.Label(card, textvariable=self._config_hint,
-                                         anchor="w", style="CardMuted.TLabel")
-        self.lbl_config_hint.pack(side="top", fill="x", pady=(10, 0))
 
     def _build_serial_group(self, group):
-        """串口号 波特率 校验位 数据位 停止位, 刷新串口 按钮挂在工具条上
+        """串口号 波特率 校验位 数据位 停止位
 
         @param group: 承载串口控件的容器
         """
-        ttk.Label(group, text="串口",
-                  style="CardMuted.TLabel").pack(side="left")
-        self.combo_port = ttk.Combobox(group, width=PORT_COMBO_WIDTH,
-                                       values=[], textvariable=self._port_var)
-        self.combo_port.pack(side="left", padx=(4, 10))
-        _mark_state(self.combo_port, "readonly")
-
-        self.combo_baud = _add_field(group, "波特率",
-                                     BAUD_COMBO_WIDTH, BAUD_RATES, self._baud_var)
-        self.combo_parity = _add_field(group, "校验位",
-                                       PARITY_COMBO_WIDTH, PARITY_LABELS,
-                                       self._parity_var, readonly=True)
-        self.combo_data = _add_field(group, "数据位",
-                                     BITS_COMBO_WIDTH, DATA_BITS, self._data_var)
-        self.combo_stop = _add_field(group, "停止位",
-                                     BITS_COMBO_WIDTH, STOP_BITS, self._stop_var)
+        self.combo_port = self._settings_field(
+            group, 0, "串口", weight=2, values=[], variable=self._port_var,
+            display=self._port_display)
+        self.combo_baud = self._settings_field(
+            group, 1, "波特率", values=[str(rate) for rate in BAUD_RATES],
+            variable=self._baud_var)
+        self.combo_parity = self._settings_field(
+            group, 2, "校验位", values=list(PARITY_LABELS),
+            variable=self._parity_var)
+        self.combo_data = self._settings_field(
+            group, 3, "数据位", values=[str(bits) for bits in DATA_BITS],
+            variable=self._data_var)
+        self.combo_stop = self._settings_field(
+            group, 4, "停止位", values=list(STOP_BITS),
+            variable=self._stop_var)
 
     def _build_net_group(self, group):
         """协议 目的地址与端口 本机地址 接收端口 与发送端口
 
+        网络这一行控件较多, 四组按权重分列 (grid 的权重决定宽度), 宽度随窗口
+        变化, 不会互相遮挡
+
         @param group: 承载网络控件的容器
         """
-        self._proto_group = ttk.Frame(group, style="CardFlat.TFrame")
-        self._proto_group.pack(side="left")
-        ttk.Label(self._proto_group, text="协议",
-                  style="CardMuted.TLabel").pack(side="left")
-        self.combo_proto = ttk.Combobox(self._proto_group, width=PROTO_COMBO_WIDTH,
-                                        values=[label for _key, label in PROTOCOLS],
-                                        textvariable=self._proto_var)
-        self.combo_proto.pack(side="left", padx=(4, 8))
-        _mark_state(self.combo_proto, "readonly")
-        self.combo_proto.bind("<<ComboboxSelected>>", self._on_proto_change)
+        self._proto_group = tk.Frame(group, bd=0, highlightthickness=0)
+        tint(self._proto_group, bg="panel")
+        self._proto_group.configure(bg=self.theme.rgb("panel"))
+        self._proto_group.grid(row=0, column=0, sticky="ew", padx=(0, 14))
+        group.columnconfigure(0, weight=2)
+        self.combo_proto = self._settings_field(
+            self._proto_group, 0, "协议",
+            values=[label for _key, label in PROTOCOLS],
+            variable=self._proto_var, extra=self._on_proto_change, weight=1)
 
         self._dest_group = self._build_dest_group(group)
         self._local_group = self._build_local_group(group)
@@ -368,17 +362,16 @@ class CommPage(ToolPage):
         @param row: 所在的行
         @return: 承载这一组控件的容器
         """
-        group = ttk.Frame(row, style="CardFlat.TFrame")
-        group.pack(side="left")
-        ttk.Label(group, text="目的IP",
-                  style="CardMuted.TLabel").pack(side="left")
-        self.entry_dest_host = ttk.Entry(group, textvariable=self._dest_host_var,
-                                         width=HOST_ENTRY_WIDTH)
-        self.entry_dest_host.pack(side="left", padx=(4, 2))
-        ttk.Label(group, text=":", style="CardMuted.TLabel").pack(side="left")
-        self.entry_dest_port = ttk.Entry(group, textvariable=self._dest_port_var,
-                                        width=PORT_ENTRY_WIDTH)
-        self.entry_dest_port.pack(side="left", padx=(2, 8))
+        group = tk.Frame(row, bd=0, highlightthickness=0)
+        tint(group, bg="panel")
+        group.configure(bg=self.theme.rgb("panel"))
+        group.grid(row=0, column=1, sticky="ew", padx=(0, 14))
+        row.columnconfigure(1, weight=5)
+        self.entry_dest_host = self._settings_entry(
+            group, 0, "目的地址", self._dest_host_var, width=None, weight=2,
+            mono_font=False)
+        self.entry_dest_port = self._settings_entry(
+            group, 1, "目的端口", self._dest_port_var, width=None, weight=1)
         return group
 
     def _build_local_group(self, row):
@@ -387,19 +380,16 @@ class CommPage(ToolPage):
         @param row: 所在的行
         @return: 承载这一组控件的容器
         """
-        group = ttk.Frame(row, style="CardFlat.TFrame")
-        group.pack(side="left")
-        ttk.Label(group, text="本机IP",
-                  style="CardMuted.TLabel").pack(side="left")
-        self.combo_local = ttk.Combobox(group, width=IP_COMBO_WIDTH, values=[],
-                                        textvariable=self._local_var)
-        self.combo_local.pack(side="left", padx=(4, 8))
-        _mark_state(self.combo_local, "readonly")
-        ttk.Label(group, text="接收",
-                  style="CardMuted.TLabel").pack(side="left")
-        self.entry_recv_port = ttk.Entry(group, textvariable=self._recv_port_var,
-                                         width=PORT_ENTRY_WIDTH)
-        self.entry_recv_port.pack(side="left", padx=(4, 8))
+        group = tk.Frame(row, bd=0, highlightthickness=0)
+        tint(group, bg="panel")
+        group.configure(bg=self.theme.rgb("panel"))
+        group.grid(row=0, column=2, sticky="ew", padx=(0, 14))
+        row.columnconfigure(2, weight=5)
+        self.combo_local = self._settings_field(
+            group, 0, "本机地址", values=[], variable=self._local_var,
+            weight=2)
+        self.entry_recv_port = self._settings_entry(
+            group, 1, "接收端口", self._recv_port_var, width=None, weight=1)
         return group
 
     def _build_send_group(self, row):
@@ -408,27 +398,101 @@ class CommPage(ToolPage):
         @param row: 所在的行
         @return: 承载这一组控件的容器
         """
-        group = ttk.Frame(row, style="CardFlat.TFrame")
-        group.pack(side="left")
-        ttk.Label(group, text="发送",
-                  style="CardMuted.TLabel").pack(side="left")
-        self.entry_send_port = ttk.Entry(group, textvariable=self._send_port_var,
-                                         width=PORT_ENTRY_WIDTH)
-        self.entry_send_port.pack(side="left", padx=(4, 0))
+        group = tk.Frame(row, bd=0, highlightthickness=0)
+        tint(group, bg="panel")
+        group.configure(bg=self.theme.rgb("panel"))
+        group.grid(row=0, column=3, sticky="ew")
+        row.columnconfigure(3, weight=2)
+        self.entry_send_port = self._settings_entry(
+            group, 0, "发送端口", self._send_port_var, width=None, weight=1)
         return group
+
+    def _settings_entry(self, parent, column, caption, variable, width=72,
+                        weight=1, mono_font=True):
+        """建立一列输入参数: 标签在上, 控件框样式的输入框在下
+
+        @param parent: 父容器
+        @param column: 列号
+        @param caption: 标签文字
+        @param variable: 绑定的 StringVar
+        @param width: 输入框宽度 (像素)
+        @param weight: 列宽权重
+        @param mono_font: 是否使用等宽字体
+        @return: 建立好的输入框
+        """
+        box = self._settings_box(parent, column, caption, weight)
+        field = kit.EntryField(box, self.theme, variable=variable, width=width,
+                               mono_font=mono_font)
+        field.pack(fill="x")
+        return field
+
+    def _settings_field(self, parent, column, caption, values, variable,
+                        weight=1, extra=None, display=None):
+        """建立一列参数: 12 像素标签在上, 控件框样式的下拉在下
+
+        @param parent: 父容器
+        @param column: 列号
+        @param caption: 标签文字
+        @param values: 可选项
+        @param variable: 绑定的 StringVar
+        @param weight: 列宽权重
+        @param extra: 选中后的额外回调
+        @param display: 多段展示的取值回调, 见 kit.Dropdown
+        @return: 建立好的下拉控件
+        """
+        box = self._settings_box(parent, column, caption, weight)
+
+        def choose(label):
+            variable.set(label)
+            if extra is not None:
+                extra(None)
+
+        combo = kit.Dropdown(box, self.theme, values=values, surface="fill",
+                             command=choose, display=display)
+        combo.set(variable.get())
+        combo.pack(fill="x")
+        return combo
+
+    def _settings_box(self, parent, column, caption, weight=1):
+        """建立一列参数的容器: 标签在上, 返回放控件的容器
+
+        @param parent: 父容器
+        @param column: 列号
+        @param caption: 标签文字
+        @param weight: 列宽权重
+        @return: 承载控件的容器
+        """
+        holder = tk.Frame(parent, bd=0, highlightthickness=0)
+        tint(holder, bg="panel")
+        holder.configure(bg=self.theme.rgb("panel"))
+        holder.grid(row=0, column=column, sticky="ew",
+                    padx=(0, 14) if column else (0, 14))
+        kit.text(holder, self.theme, value=caption, size=SIZE_LABEL,
+                 token="muted", surface="panel").pack(anchor="w", pady=(0, 5))
+        box = tk.Frame(holder, bd=0, highlightthickness=0)
+        tint(box, bg="fill")
+        box.configure(bg=self.theme.rgb("fill"))
+        box.pack(fill="x")
+        parent.columnconfigure(column, weight=weight)
+        return box
 
     def _build_panels(self):
         """接收区与发送区上下排列, 每个区域的左侧是数据视图, 右侧是配置列"""
-        body = ttk.Frame(self)
-        body.pack(side="top", fill="both", expand=True, pady=(12, 0))
-        body.columnconfigure(0, weight=1)
-        body.rowconfigure(0, weight=1, uniform="comm")
-        body.rowconfigure(1, weight=1, uniform="comm")
-
-        self._recv_area = ttk.Frame(body)
-        self._recv_area.grid(row=0, column=0, sticky="nsew")
+        self._recv_area = tk.Frame(self.body, bd=0, highlightthickness=0)
+        tint(self._recv_area, bg="canvas")
+        self._recv_area.configure(bg=self.theme.rgb("canvas"))
+        self._recv_area.pack(side="top", fill="both", expand=True,
+                             pady=(0, BODY_GAP))
         self._recv_area.columnconfigure(0, weight=1)
         self._recv_area.rowconfigure(0, weight=1)
+
+        # 接收区与发送区之间的拖拽分隔条: 上下拖动改变发送区的高度
+        self.splitter = kit.Splitter(self.body, self.theme, orient="horizontal",
+                                     on_drag=self._on_splitter_drag,
+                                     on_start=self._on_splitter_start)
+        self.splitter.pack(side="top", fill="x", pady=(0, BODY_GAP))
+        self._send_height = SEND_AREA_HEIGHT
+        self._send_origin = SEND_AREA_HEIGHT
         self.recv_serial = ReceivePanel(self._recv_area, self.theme, self,
                                         PANEL_SERIAL_RECEIVE, DISPLAY_AUTO)
         self.recv_serial.grid(row=0, column=0, sticky="nsew")
@@ -437,8 +501,14 @@ class CommPage(ToolPage):
                                      show_source=True)
         self.recv_net.grid(row=0, column=0, sticky="nsew")
 
-        self._send_area = ttk.Frame(body)
-        self._send_area.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        self._send_area = tk.Frame(self.body, bd=0, highlightthickness=0,
+                                   height=self._send_height)
+        tint(self._send_area, bg="canvas")
+        self._send_area.configure(bg=self.theme.rgb("canvas"))
+        self._send_area.pack(side="top", fill="x")
+        # 子控件由 grid 摆放, 因此要关掉 grid 的尺寸传递, 高度才由分隔条决定
+        self._send_area.grid_propagate(False)
+        self._send_area.pack_propagate(False)
         self._send_area.columnconfigure(0, weight=1)
         self._send_area.rowconfigure(0, weight=1)
         self.send_serial = SendPanel(self._send_area, self.theme, self,
@@ -449,19 +519,18 @@ class CommPage(ToolPage):
         self.send_net.grid(row=0, column=0, sticky="nsew")
 
         self._sync_control_width()
+        # 发送区的初始高度按内容的自然高度取, 免得默认就把按钮压掉
+        self.update_idletasks()
+        self._send_height = max(SEND_AREA_HEIGHT,
+                                self.send_serial.winfo_reqheight())
+        self._send_area.configure(height=self._send_height)
 
     def _sync_control_width(self):
-        """把四个面板的配置列宽度统一成最宽的那个
-
-        配置列的宽度由列内的控件决定, 不统一时接收与发送的数据视图会一宽一窄;
-        这里取四个面板里最宽的一份, 左右两列因此对齐
-        """
-        panels = (self.recv_serial, self.recv_net, self.send_serial, self.send_net)
-        # 控件的请求宽度要等几何管理器算过一遍才准, 否则读到的是初始值
-        self.update_idletasks()
-        width = max(panel.controls.winfo_reqwidth() for panel in panels)
-        for panel in panels:
-            panel.columnconfigure(1, minsize=width)
+        """把四个面板的配置列宽度统一成设计稿给出的宽度"""
+        for panel in (self.recv_serial, self.recv_net):
+            panel.set_controls_width(RECEIVE_CONTROLS_WIDTH)
+        for panel in (self.send_serial, self.send_net):
+            panel.set_controls_width(SEND_CONTROLS_WIDTH)
 
     # ---------------- 生命周期 ----------------
     def on_show(self):
@@ -512,27 +581,28 @@ class CommPage(ToolPage):
     def _apply_link(self):
         """按当前链路刷新切换按钮 配置行与两对收发面板"""
         serial = self._active_link == LINK_SERIAL
-        for link, button in self._link_buttons.items():
-            style = ("SegmentOn.TButton" if link == self._active_link
-                     else "Segment.TButton")
-            if button.cget("style") != style:
-                button.configure(style=style)
+        self.link_switch.set(self._active_link)
         for widget in (self._serial_group, self._net_row, self.btn_serial,
                        self.btn_net, self.btn_test, self.btn_ports):
             widget.pack_forget()
         if serial:
-            self.btn_serial.pack(side="right")
-            self.btn_ports.pack(side="right", padx=(0, 8))
-            self._serial_group.pack(side="left")
+            self.btn_serial.pack(in_=self._actions, side="right")
+            self.btn_ports.pack(in_=self._actions, side="right", padx=(0, 8))
+            self._net_row.pack_forget()
+            self._serial_group.pack(side="left", fill="x", expand=True)
         else:
-            self.btn_net.pack(side="right")
-            self.btn_test.pack(side="right", padx=(0, 8))
-            self._net_row.pack(side="left")
+            self.btn_net.pack(in_=self._actions, side="right")
+            self.btn_test.pack(in_=self._actions, side="right", padx=(0, 8))
+            self.btn_ports.pack(in_=self._actions, side="right")
+            self._serial_group.pack_forget()
+            self._net_row.pack(side="left", fill="x", expand=True)
         (self.recv_serial if serial else self.recv_net).grid()
         (self.recv_net if serial else self.recv_serial).grid_remove()
         (self.send_serial if serial else self.send_net).grid()
         (self.send_net if serial else self.send_serial).grid_remove()
         self._sync_controls()
+        self._ensure_send_fits()
+        self._refresh_summary()
         self._show_hint()
 
     # ---------------- 配置区 ----------------
@@ -563,7 +633,8 @@ class CommPage(ToolPage):
         labels = [ports.serial_label(info) for info in infos]
         self._port_devices = {label: info.device
                               for label, info in zip(labels, infos)}
-        self.combo_port.configure(values=labels)
+        self._port_items = {label: info for label, info in zip(labels, infos)}
+        self.combo_port.set_values(labels)
         chosen = ""
         for label, info in zip(labels, infos):
             if info.device == current:
@@ -573,8 +644,31 @@ class CommPage(ToolPage):
             self._port_var.set(chosen)
         elif self._port_var.get() not in labels:
             self._port_var.set(labels[0] if labels else "")
+        self.combo_port.set(self._port_var.get())
         if not labels:
             self._report_config(HINT_NO_PORTS, link=LINK_SERIAL)
+
+    def _port_display(self, label):
+        """串口下拉框要展示的三段文字与各自的颜色
+
+        @param label: 下拉框当前取值
+        @return: (文本, 颜色令牌, 是否等宽) 序列
+        """
+        info = self._port_items.get(label)
+        if info is None:
+            return [(label, "text", True)]
+        device, note, description = ports.serial_parts(info)
+        token = "muted"
+        if info.available is True:
+            token = "accent" if note == PORT_IN_USE_BY_US else "ok"
+        elif info.available is False:
+            token = "danger"
+        segments = [(device, "text", True)]
+        if note:
+            segments.append((note, token, False))
+        if description:
+            segments.append((description, "muted", False))
+        return segments
 
     def refresh_addresses(self, addresses=None):
         """刷新本机地址下拉框, 默认选中系统识别出来的地址
@@ -583,9 +677,10 @@ class CommPage(ToolPage):
         """
         if addresses is None:
             addresses = ports.local_ipv4_addresses()
-        self.combo_local.configure(values=[ALL_ADDRESSES] + addresses)
+        self.combo_local.set_values([ALL_ADDRESSES] + addresses)
         if self._local_var.get() not in addresses:
             self._local_var.set(addresses[0] if addresses else ALL_ADDRESSES)
+        self.combo_local.set(self._local_var.get())
 
     def _start_port_scan(self, force=False):
         """在后台线程里补齐串口占用状态与本机地址
@@ -708,23 +803,41 @@ class CommPage(ToolPage):
         self.btn_test.configure(
             state="normal" if proto == PROTO_TCP_CLIENT and free else "disabled")
         self.send_net.show_target_controls(proto == PROTO_TCP_SERVER)
+        self.btn_close.configure(
+            text="关闭串口" if self._active_link == LINK_SERIAL else "关闭网络",
+            state="normal" if (serial_open or net_open) else "disabled")
+        self._ensure_send_fits()
+
+    def _ensure_send_fits(self):
+        """发送区高度不够放下当前面板时把它顶到刚好放下
+
+        网络模式显示 对象 一行、切回串口模式时会用到, 保证内容不被遮挡
+        """
+        send = (self.send_serial if self._active_link == LINK_SERIAL
+                else self.send_net)
+        needed = send.winfo_reqheight()
+        if self._send_height >= needed:
+            return
+        self._send_height = needed
+        self._send_area.configure(height=needed)
 
     def _layout_net_groups(self, proto):
         """按协议决定哪几组网络控件需要显示
 
-        用不到的控件收起来一行才放得下; 重新显示时按固定顺序 pack 一次, 避免顺序
-        因为隐藏与显示而错乱
+        用不到的控件收起来一行才放得下; 四组都是固定的 grid 位置, 隐藏与重新
+        显示都不会打乱顺序
 
         @param proto: 当前协议
         """
-        groups = ((self._dest_group, proto != PROTO_TCP_SERVER),
-                  (self._local_group, True),
-                  (self._send_group, proto == PROTO_UDP))
-        for group, _visible in groups:
-            group.pack_forget()
-        for group, visible in groups:
-            if visible:
-                group.pack(side="left")
+        if proto == PROTO_TCP_SERVER:
+            self._dest_group.grid_remove()
+        else:
+            self._dest_group.grid()
+        self._local_group.grid()
+        if proto == PROTO_UDP:
+            self._send_group.grid()
+        else:
+            self._send_group.grid_remove()
 
     def _report_config(self, text, error=False, link=None):
         """更新配置区下方的说明与状态栏
@@ -746,13 +859,62 @@ class CommPage(ToolPage):
             self.set_status(text)
 
     def _show_hint(self):
-        """把当前链路的提示写到配置卡片下方与状态栏"""
+        """把当前链路的提示写到状态栏"""
         text, error = self._hints[self._active_link]
-        self._config_hint.set(text)
-        style = "CardError.TLabel" if error else "CardMuted.TLabel"
-        if self.lbl_config_hint.cget("style") != style:
-            self.lbl_config_hint.configure(style=style)
+        self.status.set_kind("fail" if error else "ok")
         self.set_status(text)
+
+    def _build_statusbar(self):
+        """状态栏: 圆点 说明 收发字节数与右侧的关闭按钮"""
+        self.status.set_kind("idle")
+        self.status.set_text(HINT_SERIAL_IDLE)
+        self.metric_rx = kit.text(self.status.tail, self.theme,
+                                  size=SIZE_LABEL, mono_font=True,
+                                  surface="side")
+        self.status.add_tail(self.metric_rx)
+        self.metric_tx = kit.text(self.status.tail, self.theme,
+                                  size=SIZE_LABEL, mono_font=True,
+                                  surface="side")
+        self.status.add_tail(self.metric_tx)
+        self.btn_close = ttk.Button(self.status.actions, text="关闭串口",
+                                    style="TButton", state="disabled",
+                                    command=self._close_active)
+        self.status.add_action(self.btn_close)
+
+    def _refresh_metrics(self):
+        """刷新状态栏上的收发字节数"""
+        serial = self._active_link == LINK_SERIAL
+        receive = self.recv_serial if serial else self.recv_net
+        send = self.send_serial if serial else self.send_net
+        self.metric_rx.configure(text=f"RX {receive.total_bytes()} B")
+        self.metric_tx.configure(text=f"TX {send.sent_total()} B")
+        self._refresh_summary()
+
+    def _refresh_summary(self):
+        """刷新连接配置面板右上角的参数摘要"""
+        if self._active_link == LINK_SERIAL:
+            port = self._port_var.get().split(" ")[0]
+            parity = self._parity_var.get().strip().upper()[:1] or "N"
+            stop = self._stop_var.get().strip()
+            stop = stop[0] if stop else "1"
+            text = (f"{port} · {self._baud_var.get()} · "
+                    f"{self._data_var.get()}{parity}{stop}")
+        else:
+            host = self._dest_host_var.get().strip()
+            port = self._dest_port_var.get().strip()
+            text = " · ".join(item for item in
+                              (self._proto_var.get(),
+                               f"{host}:{port}" if host or port else "")
+                              if item)
+        self.lbl_summary.configure(text=text)
+
+    def _close_active(self):
+        """状态栏上的关闭按钮: 关掉当前链路的连接"""
+        if self._active_link == LINK_SERIAL:
+            if self._serial_session is not None:
+                self._toggle_serial()
+        elif self._net_session is not None:
+            self._toggle_net()
 
     def _on_proto_change(self, _event=None):
         """切换协议后刷新控件状态与说明"""
@@ -1015,9 +1177,36 @@ class CommPage(ToolPage):
             except queue.Empty:
                 break
             self._handle_message(message)
+        self._refresh_metrics()
         if not self._closing:
             self._poll_job = self.root.after(POLL_INTERVAL_MS,
                                              self._poll_messages)
+
+    # ---------------- 接收区与发送区的高度 ----------------
+    def _on_splitter_start(self):
+        """记下拖动开始时的发送区高度, 之后按绝对偏移量计算新高度"""
+        self._send_origin = self._send_height
+
+    def _on_splitter_drag(self, delta):
+        """拖动分隔条时调整发送区的高度
+
+        分隔条向下拖是给接收区让地方, 因此发送区高度减去拖动量; 上下限按两个面板
+        各自需要的高度算, 两边的按钮都不会被压掉
+
+        @param delta: 相对按下位置的像素偏移, 向下为正
+        """
+        send = (self.send_serial if self._active_link == LINK_SERIAL
+                else self.send_net)
+        receive = (self.recv_serial if self._active_link == LINK_SERIAL
+                   else self.recv_net)
+        lowest = max(SEND_MIN_HEIGHT, send.winfo_reqheight())
+        highest = (self.body.winfo_height() - self.config_panel.winfo_height()
+                   - SEND_SPLITTER_ROOM - receive.winfo_reqheight())
+        height = max(lowest, min(max(lowest, highest), self._send_origin - delta))
+        if height == self._send_height:
+            return
+        self._send_height = height
+        self._send_area.configure(height=height)
 
     def _handle_message(self, message):
         """处理一条后台消息

@@ -4,6 +4,9 @@ from PIL import Image
 
 from .constants import HASH_THRESHOLD
 
+#: difference_hash 默认的 8 x 8 哈希位宽, 用于把汉明距离换算成相似度
+HASH_BITS = 64
+
 
 def difference_hash(image, hash_size=8):
     """计算水平差值哈希, 用于判断两张图片的视觉相似度.
@@ -33,6 +36,7 @@ def dedupe_worker(file_list, progress_queue, stop_event,
 
     通过 progress_queue 发送消息:
       ("progress", processed, total) - 进度
+      ("distances", {路径: 与组内参考图的汉明距离}) - 分组的距离情况
       ("result", groups)             - 重复分组结果
       ("done",)                      - 正常完成
       ("stopped",)                   - 被终止
@@ -47,6 +51,7 @@ def dedupe_worker(file_list, progress_queue, stop_event,
     total = len(file_list)
     processed = 0
     hashes = []
+    distances = {}
     for path in file_list:
         if stop_event.is_set():
             progress_queue.put(("stopped",))
@@ -70,6 +75,8 @@ def dedupe_worker(file_list, progress_queue, stop_event,
             continue
         group = [pi]
         used[i] = True
+        # 组内参考图到各成员的最小距离, 用来描述这一组的相似程度
+        closest = None
         for j in range(i + 1, len(hashes)):
             hj, pj = hashes[j]
             if used[j] or hj is None:
@@ -82,9 +89,14 @@ def dedupe_worker(file_list, progress_queue, stop_event,
                 if distance <= threshold:
                     group.append(pj)
                     used[j] = True
+                    distances[pj] = distance
+                    if closest is None or distance < closest:
+                        closest = distance
             except Exception:
                 pass
         if len(group) > 1:
             groups.append(group)
+            distances[pi] = closest if closest is not None else 0
+    progress_queue.put(("distances", distances))
     progress_queue.put(("result", groups))
     progress_queue.put(("done",))

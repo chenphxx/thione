@@ -6,8 +6,10 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import ImageTk
 
+from ... import kit
 from ...errors import open_path
 from ...imaging import load_thumbnail, make_placeholder
+from ...theme import SIZE_LABEL, tint
 from ...widgets import bind_mousewheel
 from .constants import DUP_SUBFOLDER_NAME, THUMB_SIZE
 
@@ -43,48 +45,56 @@ class DuplicateGroupWindow(tk.Toplevel):
 
     # -------------------------- 界面构建 --------------------------
     def _build_toolbar(self):
-        top = ttk.Frame(self, style="Panel.TFrame", padding=(8, 8))
+        top = tk.Frame(self, bd=0, highlightthickness=0)
+        tint(top, bg="canvas")
+        top.configure(bg=self.theme.rgb("canvas"))
         top.pack(side="top", fill="x")
-        ttk.Label(top, text="重复图片分组",
-                  style="PanelHeader.TLabel").pack(side="left", padx=(0, 14))
+        top.pack_configure(padx=20, pady=(18, 12))
+        kit.text(top, self.theme, value="重复图片分组", size=15, bold=True,
+                 surface="canvas").pack(side="left", padx=(0, 14))
 
         self.btn_target = ttk.Button(top, text="选择目标文件夹",
-                                     style="Secondary.TButton",
+                                     style="TButton",
                                      command=self.select_target_folder)
         self.btn_target.pack(side="left")
-        self.lbl_target = ttk.Label(top, text="未选择",
-                                    style="PanelMuted.TLabel", width=40,
-                                    anchor="w")
+        self.lbl_target = kit.text(top, self.theme, value="未选择",
+                                   size=SIZE_LABEL, token="muted",
+                                   surface="canvas", anchor="w", wrap=320)
         self.lbl_target.pack(side="left", padx=(8, 0))
         self.btn_save = ttk.Button(top, text="保存选中图片",
-                                   style="Accent.TButton",
+                                   style="Primary.TButton",
                                    command=self.save_selected)
         self.btn_save.pack(side="left", padx=(16, 0))
 
-        ttk.Separator(top, orient="vertical").pack(side="left", fill="y",
-                                                   padx=14)
+        kit.hairline(top, self.theme, orient="vertical").pack(
+            side="left", fill="y", padx=14)
 
-        ttk.Button(top, text="取消勾选", style="Secondary.TButton",
+        ttk.Button(top, text="取消勾选", style="TButton",
                    command=self.deselect_all).pack(side="left", padx=(0, 6))
-        ttk.Button(top, text="反选", style="Secondary.TButton",
+        ttk.Button(top, text="反选", style="TButton",
                    command=self.inverse_select).pack(side="left", padx=(0, 6))
-        ttk.Button(top, text="批量勾选第一个", style="Secondary.TButton",
+        ttk.Button(top, text="批量勾选第一个", style="TButton",
                    command=self.default_select).pack(side="left", padx=(0, 6))
         ttk.Button(top, text="删除已勾选", style="Danger.TButton",
                    command=self.delete_checked).pack(side="left", padx=(0, 6))
 
     def _build_canvas(self):
-        self.canvas_frame = ttk.Frame(self)
+        self.canvas_frame = tk.Frame(self, bd=0, highlightthickness=0)
+        tint(self.canvas_frame, bg="canvas")
+        self.canvas_frame.configure(bg=self.theme.rgb("canvas"))
         self.canvas_frame.pack(side="top", fill="both", expand=True)
         self.canvas = tk.Canvas(self.canvas_frame,
-                                bg=self.theme.palette["bg"],
+                                bg=self.theme.palette["canvas"],
                                 highlightthickness=0)
         self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar = ttk.Scrollbar(self.canvas_frame, orient="vertical",
-                                       command=self.canvas.yview)
+        self.scrollbar = ttk.Scrollbar(
+            self.canvas_frame, orient="vertical", command=self.canvas.yview,
+            style="Vertical.TScrollbar")
         self.scrollbar.pack(side="left", fill="y")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        self.inner_frame = ttk.Frame(self.canvas)
+        self.inner_frame = tk.Frame(self.canvas, bd=0, highlightthickness=0)
+        tint(self.inner_frame, bg="canvas")
+        self.inner_frame.configure(bg=self.theme.rgb("canvas"))
         self._inner_window_id = self.canvas.create_window(
             (0, 0), window=self.inner_frame, anchor="nw")
         self.inner_frame.bind(
@@ -142,8 +152,8 @@ class DuplicateGroupWindow(tk.Toplevel):
             if not preserve or idx not in self.selected:
                 self.selected[idx] = group[0]
 
-            frame = ttk.LabelFrame(self.inner_frame, text=f"组 {idx + 1}",
-                                   padding=6)
+            frame = kit.Panel(self.inner_frame, self.theme,
+                              title=f"组 {idx + 1}", body_pad=(10, 10))
             frame.grid(row=row, column=col, padx=8, pady=8, sticky="nsew")
             self.inner_frame.columnconfigure(col, weight=1)
             self.inner_frame.rowconfigure(row, weight=1)
@@ -181,7 +191,7 @@ class DuplicateGroupWindow(tk.Toplevel):
             value=1 if self.selected.get(group_idx) == path else 0)
         chk = ttk.Checkbutton(slot, image=tkimg, variable=chk_var,
                               text=_short_name(path), compound="top",
-                              style="Card.TCheckbutton")
+                              style="Panel.TRadiobutton")
         chk.pack(side="top", fill="both", expand=True)
         chk.var = chk_var
         chk.path = path

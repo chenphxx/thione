@@ -9,6 +9,9 @@
 import tkinter as tk
 from tkinter import ttk
 
+from ... import kit
+from ...theme import SIZE_LABEL, tint
+
 #: 窗口标题与说明
 TITLE = "选择发送对象"
 HINT = "勾选要发送到的设备, 一个都不勾选表示发送给全部设备"
@@ -34,7 +37,10 @@ class TargetWindow(tk.Toplevel):
         self.resizable(False, False)
         self.result = None
         self.theme = theme
-        self._thione_surface = "card"
+        if theme is not None:
+            tint(self, bg="panel", hl="hair", hlc="hair")
+            self.configure(bg=theme.rgb("panel"), highlightthickness=1,
+                           highlightbackground=theme.rgb("hair"))
 
         addresses = list(addresses)
         chosen = set(selected)
@@ -43,8 +49,17 @@ class TargetWindow(tk.Toplevel):
             width=LIST_WIDTH, height=_rows(len(addresses)), activestyle="none",
             borderwidth=0, highlightthickness=1,
         )
-        # 主题管理器按 _thione_surface 给原生控件上色, 列表按输入框的底色处理
-        self.listbox._thione_surface = "input"
+        # 列表按控件框的底色处理
+        tint(self.listbox, bg="fill", fg="text", hl="hair",
+             sel_bg="fill_hi", sel_fg="text")
+        if theme is not None:
+            self.listbox.configure(
+                bg=theme.rgb("fill"), fg=theme.rgb("text"),
+                highlightbackground=theme.rgb("hair"),
+                highlightcolor=theme.rgb("hair"),
+                selectbackground=theme.rgb("fill_hi"),
+                selectforeground=theme.rgb("text"),
+                font=("Cascadia Mono", -SIZE_LABEL))
         for index, address in enumerate(addresses):
             self.listbox.insert("end", address)
             if address in chosen:
@@ -52,16 +67,19 @@ class TargetWindow(tk.Toplevel):
         self.listbox.pack(side="top", fill="both", expand=True, padx=PADDING,
                           pady=(PADDING, 8))
 
-        ttk.Label(self, text=HINT, style="CardMuted.TLabel").pack(
-            side="top", anchor="w", padx=PADDING)
+        kit.text(self, theme, value=HINT, size=SIZE_LABEL, token="muted",
+                 surface="panel").pack(side="top", anchor="w", padx=PADDING)
 
-        buttons = ttk.Frame(self, style="CardFlat.TFrame")
+        buttons = tk.Frame(self, bd=0, highlightthickness=0)
+        if theme is not None:
+            tint(buttons, bg="panel")
+            buttons.configure(bg=theme.rgb("panel"))
         buttons.pack(side="top", fill="x", padx=PADDING, pady=(10, PADDING))
-        ttk.Button(buttons, text="确定", style="Accent.TButton",
+        ttk.Button(buttons, text="确定", style="Primary.TButton",
                    command=self._confirm).pack(side="right")
-        ttk.Button(buttons, text="取消", style="Secondary.TButton",
+        ttk.Button(buttons, text="取消", style="TButton",
                    command=self._cancel).pack(side="right", padx=(0, 8))
-        ttk.Button(buttons, text="清空选择", style="Secondary.TButton",
+        ttk.Button(buttons, text="清空选择", style="TButton",
                    command=self._clear).pack(side="left")
 
         self.bind("<Return>", lambda _event: self._confirm())

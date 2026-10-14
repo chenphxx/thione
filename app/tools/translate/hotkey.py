@@ -188,17 +188,21 @@ class DoubleCtrlListener:
                 result = self.translator.translate(text, source_lang, target_lang)
             except Exception as exc:
                 logger.warning("翻译失败: %s", exc)
-                self._show(f"翻译失败:\n{exc}")
+                self._show(f"翻译失败:\n{exc}", text)
                 return
 
-            self._show(result)
+            self._show(result, text)
         finally:
             self._handling = False
             self._synthetic_until = time.monotonic() + SYNTHETIC_EVENT_IGNORE
 
-    def _show(self, text):
-        """把文本交给 UI 层; 这里只是回调, 不涉及任何 tkinter 对象"""
+    def _show(self, text, source=""):
+        """把结果交给 UI 层; 这里只是回调, 不涉及任何 tkinter 对象
+
+        @param text: 要展示的结果文本
+        @param source: 本次翻译的原文, 没有原文时为空串
+        """
         try:
-            self.result_callback(text)
+            self.result_callback(text, source)
         except Exception:
             logger.exception("把结果投递给主线程失败")

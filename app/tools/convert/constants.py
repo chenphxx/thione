@@ -103,12 +103,13 @@ FORMAT_ALIASES = {
     "m4a": ("m4b",),
 }
 
-# 文件列表的列: 列标识 标题 初始宽度 对齐方式
+# 文件列表的列, 与设计稿一致: 文件名 格式 大小 状态
 FILE_COLUMNS = (
-    ("name", "文件名", 320, "w"),
-    ("format", "格式", 70, "center"),
-    ("size", "大小", 90, "e"),
-    ("status", "状态", 200, "w"),
+    {"key": "name", "title": "文件名", "weight": 42},
+    {"key": "format", "title": "格式", "weight": 11, "mono": True},
+    {"key": "size", "title": "大小", "weight": 14, "anchor": "e",
+     "mono": True, "color": "muted"},
+    {"key": "status", "title": "状态", "weight": 33},
 )
 
 #: 状态列的文字
@@ -139,9 +140,10 @@ EMPTY_VALUE = "-"
 EMPTY_TITLE = "还没有要转换的文件"
 EMPTY_HINT = "点击左上角的'添加文件'或者'添加文件夹'开始"
 
-#: 列表卡片的标题与工具条上的说明
+#: 列表面板的标题与顶栏的说明
 CARD_TITLE = "待转换文件"
 PAGE_HINT = "添加音频 视频或加密文件, 选好输出格式后点'开始转换'"
+SUBTITLE = "添加音频 视频或加密文件, 选好输出格式后点'开始转换'"
 #: 选好指定文件夹之后的提示
 CUSTOM_DEST_HINT = "输出到 {path}"
 #: 输出位置一行: 源文件夹时路径框里的说明 与 刷新扫描按钮
@@ -172,10 +174,10 @@ PLATFORM_UNKNOWN = "文件既不是加密容器, 也不是已知的音频"
 #: 找不到 ffmpeg 时的提示
 FFMPEG_MISSING = "没有找到 ffmpeg, 请手动选择 ffmpeg.exe, 或者把它加入 PATH"
 
-# 工具条上下拉框的宽度 (字符数): 格式名最长 4 个字符, 音质最长 11 个字符
-# 留出余量的同时把宽度压到刚好, 让音质说明在最小窗口宽度下也能完整显示
-FORMAT_COMBO_WIDTH = 8
-QUALITY_COMBO_WIDTH = 14
+# 工具条上两个下拉框的宽度 (像素), 与设计稿一致
+# 两个下拉框取同一个宽度, 整行看起来才齐整
+FORMAT_FIELD_WIDTH = 104
+QUALITY_FIELD_WIDTH = 104
 
 # 状态栏左侧的引擎说明
 ENGINE_LABEL = "引擎"

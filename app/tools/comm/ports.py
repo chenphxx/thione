@@ -196,18 +196,37 @@ def _short_reason(exc):
 def serial_label(info):
     """下拉框里展示串口的一行文本
 
-    占用状态还没探测出来时括号里就没有内容, 探测结果回来后会再刷新一次
+    展示成 端口 占用状态 描述 三段, 界面按状态分别配色, 因此这里不带括号;
+    占用状态还没探测出来时只有端口与描述, 探测结果回来后会再刷新一次
 
     @param info: SerialPortInfo
     @return: 展示文本
     """
-    parts = [info.device]
-    if info.note:
-        parts.append("(%s)" % info.note)
-    description = _short_description(info)
-    if description:
-        parts.append(description)
-    return " ".join(parts)
+    return " ".join(part for part in serial_parts(info) if part)
+
+
+def serial_parts(info):
+    """串口下拉框里的三段内容
+
+    界面按这三段分别配色: 端口用正文色, 占用状态用状态色, 描述用弱化色
+
+    @param info: SerialPortInfo
+    @return: (端口, 占用状态, 描述); 没有内容的一段是空串
+    """
+    return (info.device,
+            _short_note(info.note) if info.note else "",
+            _short_description(info))
+
+
+def _short_note(note):
+    """占用状态只保留最前面那个词
+
+    探测失败时的说明形如 占用中: 拒绝访问, 下拉框里只展示 占用中
+
+    @param note: 探测得到的说明文本
+    @return: 简短的状态词
+    """
+    return note.split(":", 1)[0].strip() or note
 
 
 def _short_description(info):

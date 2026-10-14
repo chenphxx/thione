@@ -102,6 +102,24 @@ CONNECT_TIMEOUT = 2.0
 #: 配置列里提示文字的折行宽度 (像素)
 CONTROL_HINT_WRAP = 230
 
+# 收发区右侧配置列的宽度 (像素): 两侧取同一个值, 数据视图才会左右对齐,
+# 宽度要放得下三个动作按钮 (设计稿的 224 在 tkinter 的按钮尺寸下会把文字裁掉)
+RECEIVE_CONTROLS_WIDTH = 300
+SEND_CONTROLS_WIDTH = 300
+
+#: 十六进制展示时每行的字节数说明
+BYTES_PER_LINE_HINT = "每行字节 16"
+
+#: 发送区的高度 (像素), 与设计稿一致
+SEND_AREA_HEIGHT = 172
+
+#: 拖动分隔条时发送区的最小高度, 以及接收区至少要留下的高度
+SEND_MIN_HEIGHT = 150
+RECEIVE_MIN_HEIGHT = 240
+
+#: 分隔条与两侧间距占用的高度, 计算发送区上限时要让出来
+SEND_SPLITTER_ROOM = 20
+
 #: 控件宽度 (字符数): 配置区一行要放下当前链路的全部控件, 收发卡的配置列要放下
 #: 每条控制项, 因此取值按实际内容压到最小, 串口号按常见名称取 17 个字符
 PORT_COMBO_WIDTH = 17

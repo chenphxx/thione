@@ -7,8 +7,10 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from ... import kit
 from ...errors import open_path, show_error
 from ...shell.page import ToolPage
+from ...theme import SIZE_LABEL, tint
 from . import ffmpeg, platforms, tasks
 from .constants import (
     AUDIO_FORMATS,
@@ -38,7 +40,7 @@ from .constants import (
     FILE_COLUMNS,
     FORMAT_CHOICES,
     FORMAT_CODECS,
-    FORMAT_COMBO_WIDTH,
+    FORMAT_FIELD_WIDTH,
     FORMAT_LABELS,
     INPUT_EXTENSIONS,
     LOSSLESS_ONLY_FORMATS,
@@ -48,7 +50,8 @@ from .constants import (
     PROGRESS_IDLE,
     PROGRESS_RUNNING,
     PROGRESS_STOPPING,
-    QUALITY_COMBO_WIDTH,
+    QUALITY_FIELD_WIDTH,
+    SUBTITLE,
     QUALITY_HINTS,
     RESCAN_LABEL,
     SKIP_SAME_FORMAT,
@@ -72,15 +75,31 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_MS = 120
 #: 退出时等待后台线程收尾的时间 (秒)
 CLOSE_JOIN_TIMEOUT = 3
-#: 表格的默认高度 (行数), 窗口变高时表格会自己撑开
-TABLE_HEIGHT = 8
 #: 失败原因在状态列里的最大长度, 超出部分截断
 REASON_MAX_CHARS = 48
+
 #: 状态列的颜色标记
 TAG_RUNNING = "running"
 TAG_DONE = "done"
 TAG_SKIPPED = "skipped"
 TAG_ERROR = "error"
+
+#: 颜色标记与配色令牌的对应关系
+TAG_TOKENS = {
+    TAG_RUNNING: "accent",
+    TAG_DONE: "ok",
+    TAG_SKIPPED: "muted",
+    TAG_ERROR: "danger",
+}
+
+
+def _status_token(tag):
+    """把状态列的颜色标记换成配色令牌
+
+    @param tag: 颜色标记, 空串表示等待转换
+    @return: 配色令牌名
+    """
+    return TAG_TOKENS.get(tag, "muted")
 
 
 class ConvertPage(ToolPage):
@@ -95,7 +114,6 @@ class ConvertPage(ToolPage):
         super().__init__(master, shell)
 
         self._items = []
-        self._rows = []
         self._folders = []
         self._outputs = set()
         self._dest_dir = ""
@@ -116,23 +134,14 @@ class ConvertPage(ToolPage):
         self._skipped = 0
         self._failed = 0
 
-        self._format_var = tk.StringVar(value=FORMAT_LABELS[DEFAULT_FORMAT])
-        self._quality_var = tk.StringVar(
-            value=BITRATE_LABELS[BITRATES.index(DEFAULT_BITRATE)])
-        self._quality_hint_var = tk.StringVar()
-        self._dest_var = tk.StringVar(value=DEST_SOURCE)
-        self._dest_path_var = tk.StringVar(value=DEST_SOURCE_HINT)
-        self._hint_var = tk.StringVar(value=PAGE_HINT)
-        self._engine_var = tk.StringVar(
-            value=f"{ENGINE_LABEL}: {ENGINE_DETECTING}")
-        self._counts_var = tk.StringVar()
-        self._progress_var = tk.StringVar(value=PROGRESS_IDLE)
+        self._format = DEFAULT_FORMAT
+        self._quality = BITRATE_LABELS[BITRATES.index(DEFAULT_BITRATE)]
+        self._dest_source_var = tk.BooleanVar(value=True)
+        self._dest_custom_var = tk.BooleanVar(value=False)
 
         self._build_toolbar()
-        self.add_divider()
-        # 状态栏先于列表 pack: 高度不够时先压缩列表, 而不是把状态栏挤出可视区
         self._build_statusbar()
-        self._build_list_card()
+        self._build_list_panel()
 
         self._sync_quality()
         self._update_counts()
@@ -142,119 +151,95 @@ class ConvertPage(ToolPage):
 
     # ---------------- 界面构建 ----------------
     def _build_toolbar(self):
-        """工具条三行: 标题与主操作 输入与格式 输出位置与列表操作
+        """顶栏按钮与两行设置"""
+        self.btn_rescan, self.btn_start = self.add_actions((
+            (RESCAN_LABEL, None, self._rescan),
+            ("开始转换", "Primary.TButton", self._start),
+        ))
 
-        最小窗口宽度下放不下全部控件, 因此设置区拆成两行, 避免控件被 Tk
-        挤出可视区
-        """
-        bar, head, actions = self.build_toolbar()
-
-        ttk.Label(head, text=PAGE_TITLE,
-                  style="PanelHeader.TLabel").pack(side="left")
-        ttk.Label(head, textvariable=self._hint_var,
-                  style="PanelHint.TLabel").pack(side="left", padx=(12, 0))
-
-        self.btn_start = ttk.Button(actions, text="开始转换",
-                                    style="Accent.TButton", command=self._start)
-        self.btn_start.pack(side="right")
-
-        # 与图片查重页一致: 刷新扫描放在主操作左边
-        self.btn_rescan = ttk.Button(actions, text=RESCAN_LABEL,
-                                     style="Secondary.TButton",
-                                     command=self._rescan)
-        self.btn_rescan.pack(side="right", padx=(0, 8))
-
-        source_row = ttk.Frame(bar, style="Panel.TFrame")
-        source_row.pack(side="top", fill="x", pady=(10, 0))
-
+        source_row = self.add_row(gap=8)
         self.btn_add_files = ttk.Button(source_row, text="添加文件",
-                                       style="Secondary.TButton",
-                                       command=self._add_files)
+                                        style="TButton", command=self._add_files)
         self.btn_add_files.pack(side="left")
         self.btn_add_folder = ttk.Button(source_row, text="添加文件夹",
-                                        style="Secondary.TButton",
-                                        command=self._add_folder)
+                                         style="TButton",
+                                         command=self._add_folder)
         self.btn_add_folder.pack(side="left", padx=(8, 0))
 
-        ttk.Label(source_row, text="输出格式",
-                  style="Panel.TLabel").pack(side="left", padx=(16, 6))
-        self.combo_format = ttk.Combobox(
-            source_row, state="readonly", width=FORMAT_COMBO_WIDTH,
-            values=list(FORMAT_CHOICES), textvariable=self._format_var)
+        kit.text(source_row, self.theme, value="输出格式", size=SIZE_LABEL,
+                 token="muted", surface="canvas").pack(side="left",
+                                                      padx=(16, 8))
+        self.combo_format = kit.Dropdown(source_row, self.theme,
+                                         values=list(FORMAT_CHOICES),
+                                         command=self._on_format_change,
+                                         surface="canvas",
+                                         width=FORMAT_FIELD_WIDTH)
+        self.combo_format.set(FORMAT_LABELS[DEFAULT_FORMAT])
         self.combo_format.pack(side="left")
-        self.combo_format.bind("<<ComboboxSelected>>",
-                               lambda _event: self._sync_quality())
 
-        ttk.Label(source_row, text="音质",
-                  style="Panel.TLabel").pack(side="left", padx=(14, 6))
-        self.combo_quality = ttk.Combobox(
-            source_row, state="readonly", width=QUALITY_COMBO_WIDTH,
-            values=list(BITRATE_LABELS), textvariable=self._quality_var)
+        kit.text(source_row, self.theme, value="音质", size=SIZE_LABEL,
+                 token="muted", surface="canvas").pack(side="left",
+                                                      padx=(14, 8))
+        self.combo_quality = kit.Dropdown(source_row, self.theme,
+                                          command=self._on_quality_change,
+                                          surface="canvas",
+                                          width=QUALITY_FIELD_WIDTH)
         self.combo_quality.pack(side="left")
         # 说明音质可选项为什么与别的格式不同: 无损 与 码率 两类
-        ttk.Label(source_row, textvariable=self._quality_hint_var,
-                  style="PanelHint.TLabel").pack(side="left", padx=(10, 0))
+        self.lbl_quality_hint = kit.text(source_row, self.theme, value="",
+                                         size=SIZE_LABEL, token="muted",
+                                         surface="canvas")
+        self.lbl_quality_hint.pack(side="left", padx=(10, 0))
 
-        options_row = ttk.Frame(bar, style="Panel.TFrame")
-        options_row.pack(side="top", fill="x", pady=(8, 0))
+        options_row = self.add_row()
+        kit.text(options_row, self.theme, value="输出到", size=SIZE_LABEL,
+                 token="muted", surface="canvas").pack(side="left")
+        self.check_source = kit.Check(options_row, self.theme,
+                                      value=DEST_LABELS[0][1],
+                                      variable=self._dest_source_var,
+                                      command=lambda _v: self._select_dest(
+                                          DEST_SOURCE))
+        self.check_source.pack(side="left", padx=(12, 0))
+        self.check_custom = kit.Check(options_row, self.theme,
+                                      value=DEST_LABELS[1][1],
+                                      variable=self._dest_custom_var,
+                                      command=lambda _v: self._select_dest(
+                                          DEST_CUSTOM))
+        self.check_custom.pack(side="left", padx=(12, 0))
 
-        # 先 pack 右侧控件, 再 pack 左侧的伸缩项
         self.btn_clear = ttk.Button(options_row, text="清空列表",
-                                    style="Secondary.TButton",
+                                    style="TButton",
                                     command=self._clear_items)
         self.btn_clear.pack(side="right")
         self.btn_remove = ttk.Button(options_row, text="移除选中",
-                                     style="Secondary.TButton",
+                                     style="TButton",
                                      command=self._remove_selected)
         self.btn_remove.pack(side="right", padx=(0, 8))
 
-        ttk.Label(options_row, text="输出到",
-                  style="Panel.TLabel").pack(side="left", padx=(0, 6))
-        for value, label in DEST_LABELS:
-            ttk.Radiobutton(options_row, text=label, value=value,
-                            variable=self._dest_var,
-                            style="Panel.TRadiobutton",
-                            command=self._on_dest_change).pack(side="left",
-                                                               padx=(0, 6))
-
         # 指定文件夹时在这里显示路径, 点一下可以重新选择输出文件夹
-        self.entry_dest = ttk.Entry(options_row,
-                                    textvariable=self._dest_path_var,
-                                    state="disabled")
-        self.entry_dest.pack(side="left", fill="x", expand=True, padx=(10, 8))
-        self.entry_dest.bind("<Button-1>", self._on_dest_click)
+        self.field_dest = kit.Field(options_row, self.theme, mono_font=True,
+                                    value=DEST_SOURCE_HINT, token="muted",
+                                    width=320)
+        self.field_dest.pack(side="left", fill="x", expand=True,
+                             padx=(10, 10))
+        self.field_dest.configure(cursor="hand2")
+        self.field_dest.label.configure(cursor="hand2")
+        for widget in (self.field_dest, self.field_dest.label):
+            widget.bind("<Button-1>", self._on_dest_click)
 
-    def _build_list_card(self):
+    def _build_list_panel(self):
         """待转换文件列表, 没有内容时由空状态占位块顶替"""
-        card = ttk.LabelFrame(self, text=CARD_TITLE, padding=(16, 12))
-        card.pack(side="top", fill="both", expand=True, pady=(12, 0))
+        panel = self.add_panel(head=False, body_pad=(0, 0))
+        self.list_panel = panel
+        self.table = kit.Table(panel.body, self.theme, FILE_COLUMNS,
+                               on_select=self._on_row_select, multi=True,
+                               empty_text=EMPTY_TITLE, surface="panel")
+        self.table.pack(side="top", fill="both", expand=True)
+        self.table.body.bind("<Double-1>", self._open_selected)
+        self.table.body.bind("<Delete>", lambda _event: self._remove_selected())
+        self.table.body.bind("<Button-3>", self._show_menu)
 
-        box = ttk.Frame(card, style="CardFlat.TFrame")
-        box.pack(side="top", fill="both", expand=True)
-
-        self.table_area = ttk.Frame(box, style="CardFlat.TFrame")
-        self.table = ttk.Treeview(
-            self.table_area, show="headings", height=TABLE_HEIGHT,
-            columns=[column[0] for column in FILE_COLUMNS],
-            style="Card.Treeview")
-        scroll = ttk.Scrollbar(self.table_area, orient="vertical",
-                               command=self.table.yview)
-        self.table.configure(yscrollcommand=scroll.set)
-        # 滚动条先占位: 表格的列宽之和超过面板时, 先 pack 的表格会把宽度用光,
-        # 之后 pack 的滚动条拿不到空间会被 Tk 直接隐藏
-        scroll.pack(side="right", fill="y")
-        self.table.pack(side="left", fill="both", expand=True)
-        for key, title, width, anchor in FILE_COLUMNS:
-            self.table.heading(key, text=title, anchor="center")
-            self.table.column(key, width=width, minwidth=60, anchor=anchor,
-                              stretch=key in ("name", "status"))
-        self.table.bind("<<TreeviewSelect>>", self._update_actions)
-        self.table.bind("<Double-1>", self._open_selected)
-        self.table.bind("<Delete>", lambda _event: self._remove_selected())
-        self.table.bind("<Button-3>", self._show_menu)
-        self._apply_row_tags()
-
-        self.empty_state = self._build_empty_state(box)
+        self.empty_state = self._build_empty_state(panel.body)
 
         self.menu = tk.Menu(self, tearoff=0)
         self.menu.add_command(label="打开文件", command=self._open_selected)
@@ -269,14 +254,21 @@ class ConvertPage(ToolPage):
         @param parent: 承载占位块的容器
         @return: 占位块 Frame (默认不显示)
         """
-        box = ttk.Frame(parent, style="CardFlat.TFrame")
-        inner = ttk.Frame(box, style="CardFlat.TFrame")
+        box = tk.Frame(parent, bd=0, highlightthickness=0)
+        tint(box, bg="panel")
+        box.configure(bg=self.theme.rgb("panel"))
+        inner = tk.Frame(box, bd=0, highlightthickness=0)
+        tint(inner, bg="panel")
+        inner.configure(bg=self.theme.rgb("panel"))
         inner.place(relx=0.5, rely=0.42, anchor="center")
-        ttk.Label(inner, text="🎵", style="EmptyIcon.TLabel").pack()
-        self.empty_title = ttk.Label(inner, text="", style="EmptyTitle.TLabel")
+        kit.text(inner, self.theme, value="\uE8D6", size=34, token="accent",
+                 icon_font=True, surface="panel").pack()
+        self.empty_title = kit.text(inner, self.theme, value="", size=15,
+                                    bold=True, surface="panel")
         self.empty_title.pack(pady=(8, 0))
-        self.empty_hint = ttk.Label(inner, text="", style="EmptyHint.TLabel",
-                                    justify="center")
+        self.empty_hint = kit.text(inner, self.theme, value="",
+                                   size=SIZE_LABEL, token="muted",
+                                   surface="panel", anchor="center")
         self.empty_hint.pack(pady=(6, 0))
         # 说明文案可能较长, 按容器宽度换行, 避免占位块被撑出卡片
         box.bind("<Configure>", lambda event: self._wrap_empty_state(event.width))
@@ -292,37 +284,31 @@ class ConvertPage(ToolPage):
         self.empty_hint.configure(wraplength=wrap)
 
     def _build_statusbar(self):
-        """底部一行: 引擎 计数 进度与终止按钮"""
-        status = ttk.Frame(self, style="Panel.TFrame", padding=(16, 8))
-        status.pack(side="bottom", fill="x")
-
-        self.btn_stop = ttk.Button(status, text="终止", style="Danger.TButton",
+        """状态栏: 计数 引擎 进度细条与终止按钮, 与设计稿一致"""
+        self.status.set_kind("idle")
+        self.status.set_text(PAGE_HINT)
+        self.counts_metric = kit.text(self.status.tail, self.theme,
+                                      size=SIZE_LABEL, mono_font=True,
+                                      surface="side")
+        self.status.add_tail(self.counts_metric)
+        self.engine_metric = kit.text(self.status.tail, self.theme,
+                                      size=SIZE_LABEL, mono_font=True,
+                                      surface="side")
+        self.status.add_tail(self.engine_metric)
+        self.btn_engine = ttk.Button(self.status.tail, text=ENGINE_CHOOSE,
+                                     style="Ghost.TButton",
+                                     command=self._choose_ffmpeg)
+        self.status.add_tail(self.btn_engine)
+        self.track = kit.Track(self.status.tail, self.theme)
+        self.status.add_tail(self.track)
+        self.progress_metric = kit.text(self.status.tail, self.theme,
+                                        size=SIZE_LABEL, mono_font=True,
+                                        surface="side")
+        self.status.add_tail(self.progress_metric)
+        self.btn_stop = ttk.Button(self.status.actions, text="终止",
+                                   style="Danger.TButton",
                                    command=self._stop, state="disabled")
-        self.btn_stop.pack(side="right", padx=(8, 0))
-
-        ttk.Label(status, textvariable=self._counts_var,
-                  style="PanelMuted.TLabel").pack(side="left", padx=(0, 12))
-
-        self.lbl_engine = ttk.Label(status, textvariable=self._engine_var,
-                                    style="PanelMuted.TLabel")
-        self.lbl_engine.pack(side="left", padx=(0, 8))
-        ttk.Button(status, text=ENGINE_CHOOSE, style="Secondary.TButton",
-                   command=self._choose_ffmpeg).pack(side="left", padx=(0, 12))
-
-        self.progress = ttk.Progressbar(status, orient="horizontal",
-                                        mode="determinate", maximum=1.0,
-                                        value=0.0)
-        self.progress.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ttk.Label(status, textvariable=self._progress_var,
-                  style="Panel.TLabel").pack(side="left")
-
-    def _apply_row_tags(self):
-        """给状态列配上颜色, 便于一眼看出哪些文件出错"""
-        palette = self.theme.palette
-        self.table.tag_configure(TAG_RUNNING, foreground=palette["accent"])
-        self.table.tag_configure(TAG_DONE, foreground=palette["ok"])
-        self.table.tag_configure(TAG_SKIPPED, foreground=palette["muted"])
-        self.table.tag_configure(TAG_ERROR, foreground=palette["danger"])
+        self.status.add_action(self.btn_stop)
 
     # ---------------- 文件列表 ----------------
     def _add_files(self):
@@ -382,9 +368,9 @@ class ConvertPage(ToolPage):
             known.add(key)
             item = tasks.ConvertItem(source, tasks.file_size(source))
             self._items.append(item)
-            self._rows.append(self._insert_row(item))
             added += 1
         if added:
+            self._refresh_rows()
             self._update_empty_state()
             self._update_counts()
             self._update_actions()
@@ -448,8 +434,9 @@ class ConvertPage(ToolPage):
         selected = set(self.table.selection())
         if not selected:
             return
-        self._items = [item for item, row in zip(self._items, self._rows)
-                       if row not in selected]
+        self._items = [item for index, item in enumerate(self._items)
+                       if index not in selected]
+        self.table.clear_selection()
         self._rebuild_rows()
         self.set_status(f"已移除选中项, 还剩 {len(self._items)} 个待转换")
 
@@ -463,26 +450,24 @@ class ConvertPage(ToolPage):
 
     def _rebuild_rows(self):
         """按当前的文件列表重建表格行, 状态与颜色一并恢复"""
-        self.table.delete(*self.table.get_children())
-        self._rows = [self._insert_row(item) for item in self._items]
+        self.table.set_rows(self._table_rows())
         self._update_empty_state()
         self._update_counts()
         self._update_actions()
 
-    def _insert_row(self, item):
-        """往表格末尾插一行
+    def _table_rows(self):
+        """把待转换列表转成表格数据
 
-        @param item: 这一行对应的记录
-        @return: Treeview 的行标识
+        @return: 表格数据行
         """
-        return self.table.insert("", "end", values=self._row_values(item),
-                                 tags=(item.tag,) if item.tag else ())
+        return [{"data": index, "name": item.name, "format": item.extension,
+                 "size": tasks.format_size(item.size),
+                 "status": (item.status, _status_token(item.tag))}
+                for index, item in enumerate(self._items)]
 
-    @staticmethod
-    def _row_values(item):
-        """一行四列的内容: 文件名 格式 大小 状态"""
-        return (item.name, item.extension, tasks.format_size(item.size),
-                item.status)
+    def _refresh_rows(self):
+        """只重画表格, 保留选中行"""
+        self.table.set_rows(self._table_rows(), keep_selection=True)
 
     def _set_row_status(self, index, status, tag=""):
         """更新一行的状态列与颜色
@@ -494,8 +479,7 @@ class ConvertPage(ToolPage):
         item = self._items[index]
         item.status = status
         item.tag = tag
-        self.table.item(self._rows[index], values=self._row_values(item),
-                        tags=(tag,) if tag else ())
+        self._refresh_rows()
 
     def _reset_statuses(self):
         """开始新一轮转换前把每一行复位成等待状态"""
@@ -507,33 +491,30 @@ class ConvertPage(ToolPage):
 
         @return: 列表序号; 没有选中任何一行时返回 None
         """
-        selection = self.table.selection()
-        if not selection:
+        index = self.table.current_index()
+        if index is None or index >= len(self._items):
             return None
-        try:
-            return self._rows.index(selection[0])
-        except ValueError:
-            return None
+        return index
 
     def _update_empty_state(self):
         """列表为空时显示占位块, 否则显示列表"""
         if self._items:
             self.empty_state.pack_forget()
-            self.table_area.pack(side="top", fill="both", expand=True)
+            self.table.pack(side="top", fill="both", expand=True)
             return
         self.empty_title.configure(text=EMPTY_TITLE)
         self.empty_hint.configure(text=EMPTY_HINT)
-        self.table_area.pack_forget()
+        self.table.pack_forget()
         self.empty_state.pack(side="top", fill="both", expand=True)
 
     def _update_counts(self):
         """刷新状态栏上的文件数与总大小"""
         if not self._items:
-            self._counts_var.set("")
+            self.counts_metric.configure(text="")
             return
         size = sum(item.size for item in self._items)
-        self._counts_var.set(f"{len(self._items)} 个文件 | "
-                             f"{tasks.format_size(size)}")
+        self.counts_metric.configure(
+            text=f"{len(self._items)} 个文件 | {tasks.format_size(size)}")
 
     def _update_actions(self, _event=None):
         """按运行状态与选中项刷新按钮的可用性"""
@@ -544,7 +525,16 @@ class ConvertPage(ToolPage):
         self.btn_start.configure(state="disabled" if busy else "normal")
         self.btn_stop.configure(state="normal" if busy else "disabled")
         self.btn_remove.configure(
-            state="disabled" if busy or not self.table.selection() else "normal")
+            state="disabled" if busy or not self.table.selection()
+            else "normal")
+
+    def _on_row_select(self, _data, _index):
+        """表格选中项变化时刷新按钮的可用性
+
+        @param _data: 行携带的序号
+        @param _index: 行号
+        """
+        self._update_actions()
 
     # ---------------- 右键菜单 ----------------
     def _show_menu(self, event):
@@ -552,11 +542,11 @@ class ConvertPage(ToolPage):
 
         @param event: 鼠标事件
         """
-        row = self.table.identify_row(event.y)
-        if not row:
+        index = self.table.index_at(event.x, event.y)
+        if index < 0 or index >= len(self._items):
             return
-        self.table.selection_set(row)
-        self.table.focus(row)
+        self.table.select(index)
+        self._update_actions()
         try:
             self.menu.tk_popup(event.x_root, event.y_root)
         finally:
@@ -581,11 +571,7 @@ class ConvertPage(ToolPage):
 
         @return: 扩展名, 不带点
         """
-        label = self._format_var.get()
-        for ext, _label, _codec, _by_rate in AUDIO_FORMATS:
-            if FORMAT_LABELS[ext] == label:
-                return ext
-        return DEFAULT_FORMAT
+        return self._format
 
     def _quality_choice(self):
         """音质下拉框当前对应的编码器 码率与额外参数
@@ -593,7 +579,7 @@ class ConvertPage(ToolPage):
         @return: (编码器, 码率 kbps, 额外编码参数); 无损与最高音质档的码率见说明
         """
         extension = self._target_format()
-        label = self._quality_var.get()
+        label = self._quality
         lossless = LOSSLESS_QUALITY.get(extension)
         if lossless is not None and label == lossless[0]:
             return lossless[1], 0, ()
@@ -620,23 +606,44 @@ class ConvertPage(ToolPage):
             values.append(top[0])
         if extension not in LOSSLESS_ONLY_FORMATS:
             values += list(BITRATE_LABELS)
-        self.combo_quality.configure(state="readonly", values=values)
-        if self._quality_var.get() not in values:
-            self._quality_var.set(
-                values[0] if extension in LOSSLESS_ONLY_FORMATS
-                else BITRATE_LABELS[BITRATES.index(DEFAULT_BITRATE)])
-        self._quality_hint_var.set(QUALITY_HINTS.get(extension, ""))
+        self.combo_quality.set_values(values)
+        if self._quality not in values:
+            self._quality = (values[0] if extension in LOSSLESS_ONLY_FORMATS
+                             else BITRATE_LABELS[BITRATES.index(DEFAULT_BITRATE)])
+        self.combo_quality.set(self._quality)
+        self.lbl_quality_hint.configure(text=QUALITY_HINTS.get(extension, ""))
 
-    def _on_dest_change(self):
-        """切换输出位置: 选指定文件夹时挑目录, 取消就保持原来的选择"""
-        if self._dest_var.get() == DEST_SOURCE:
+    def _on_format_change(self, label):
+        """目标格式变化后刷新音质选项
+
+        @param label: 下拉框里选中的格式名
+        """
+        for ext, _label, _codec, _by_rate in AUDIO_FORMATS:
+            if FORMAT_LABELS[ext] == label:
+                self._format = ext
+                break
+        self._sync_quality()
+
+    def _on_quality_change(self, label):
+        """音质变化后记下选择
+
+        @param label: 下拉框里选中的音质名
+        """
+        self._quality = label
+
+    def _select_dest(self, mode):
+        """切换输出位置: 选指定文件夹时挑目录, 取消就保持原来的选择
+
+        @param mode: DEST_SOURCE 或 DEST_CUSTOM
+        """
+        if mode == DEST_SOURCE:
             self._apply_dest("")
             return
         self._choose_dest_folder()
 
     def _on_dest_click(self, _event):
         """点输出位置的路径框时重新挑一次输出文件夹"""
-        if str(self.entry_dest.cget("state")) == "readonly":
+        if self._dest_dir:
             self._choose_dest_folder()
 
     def _choose_dest_folder(self):
@@ -657,15 +664,13 @@ class ConvertPage(ToolPage):
         """
         self._dest_dir = folder
         if folder:
-            self._dest_var.set(DEST_CUSTOM)
-            self._hint_var.set(CUSTOM_DEST_HINT.format(path=folder))
-            self._dest_path_var.set(folder)
-            self.entry_dest.configure(state="readonly")
+            self._dest_source_var.set(False)
+            self._dest_custom_var.set(True)
+            self.field_dest.set(folder, token="text")
             return
-        self._dest_var.set(DEST_SOURCE)
-        self._hint_var.set(PAGE_HINT)
-        self._dest_path_var.set(DEST_SOURCE_HINT)
-        self.entry_dest.configure(state="disabled")
+        self._dest_source_var.set(True)
+        self._dest_custom_var.set(False)
+        self.field_dest.set(DEST_SOURCE_HINT, token="muted")
 
     # ---------------- 转换引擎 ----------------
     def _detect_engine(self):
@@ -675,8 +680,8 @@ class ConvertPage(ToolPage):
         数秒; 因此定位与读版本号都放在后台线程, 期间状态栏先显示 正在检测
         """
         self._engine_request += 1
-        self._engine_var.set(f"{ENGINE_LABEL}: {ENGINE_DETECTING}")
-        self.lbl_engine.configure(style="PanelMuted.TLabel")
+        self.engine_metric.configure(text=ENGINE_DETECTING)
+        tint(self.engine_metric, bg="side", fg="muted")
         thread = threading.Thread(
             target=self._detect_engine_worker,
             args=(self._engine_request, self._cached_engine_path()),
@@ -721,11 +726,13 @@ class ConvertPage(ToolPage):
         """
         self._ffmpeg_path = path
         if not path:
-            self._engine_var.set(f"{ENGINE_LABEL}: {ENGINE_MISSING}")
-            self.lbl_engine.configure(style="PanelError.TLabel")
+            self.engine_metric.configure(text=ENGINE_MISSING,
+                                         fg=self.theme.rgb("danger"))
+            tint(self.engine_metric, bg="side", fg="danger")
             return
-        self._engine_var.set(f"{ENGINE_LABEL}: ffmpeg {version}".rstrip())
-        self.lbl_engine.configure(style="PanelMuted.TLabel")
+        self.engine_metric.configure(text=f"ffmpeg {version}".rstrip(),
+                                     fg=self.theme.rgb("text"))
+        tint(self.engine_metric, bg="side", fg="text")
         self._remember_engine(path)
 
     def _remember_engine(self, path):
@@ -792,7 +799,7 @@ class ConvertPage(ToolPage):
 
         extension = self._target_format()
         codec, bitrate, extra_args = self._quality_choice()
-        dest_dir = self._dest_dir if self._dest_var.get() == DEST_CUSTOM else ""
+        dest_dir = self._dest_dir
         if dest_dir and not os.path.isdir(dest_dir):
             messagebox.showwarning("提示", DEST_MISSING, parent=self.window)
             return
@@ -809,6 +816,7 @@ class ConvertPage(ToolPage):
         self._process = None
         self._update_actions()
         self._update_progress()
+        self.status.set_kind("run")
 
         self._worker = threading.Thread(
             target=self._run,
@@ -946,7 +954,7 @@ class ConvertPage(ToolPage):
                 process.terminate()
             except OSError:
                 logger.warning("结束 ffmpeg 子进程失败", exc_info=True)
-        self._progress_var.set(PROGRESS_STOPPING)
+        self.progress_metric.configure(text=PROGRESS_STOPPING)
         self.btn_stop.configure(state="disabled")
 
     def _poll_messages(self):
@@ -1063,12 +1071,13 @@ class ConvertPage(ToolPage):
         """按已完成数量与当前文件的进度刷新进度条"""
         total = len(self._items)
         if not total:
-            self.progress["value"] = 0
+            self.track.set_fraction(0.0)
+            self.progress_metric.configure(text="")
             return
         value = min((self._finished + self._fraction) / total, 1.0)
-        self.progress["value"] = value
+        self.track.set_fraction(value)
         index = min(self._finished + 1, total)
-        self._progress_var.set(PROGRESS_RUNNING.format(index=index, total=total))
+        self.progress_metric.configure(text=f"{index}/{total}")
 
     def _finish(self, stopped=False):
         """收尾: 复位进度与按钮, 并把结果写到状态栏
@@ -1083,12 +1092,13 @@ class ConvertPage(ToolPage):
             self._set_row_status(self._active_index, STATUS_CANCELLED,
                                  TAG_SKIPPED)
             self._active_index = None
-        self.progress["value"] = 0
-        self._progress_var.set(
-            SUMMARY_SHORT.format(ok=self._ok, skip=self._skipped,
-                                 fail=self._failed))
+        self.track.set_fraction(0.0)
+        self.progress_metric.configure(
+            text=SUMMARY_SHORT.format(ok=self._ok, skip=self._skipped,
+                                      fail=self._failed))
         self._update_actions()
         template = SUMMARY_STOPPED if stopped else SUMMARY_DONE
+        self.status.set_kind("idle" if stopped else "ok")
         self.set_status(template.format(ok=self._ok, skip=self._skipped,
                                         fail=self._failed))
 
@@ -1102,7 +1112,8 @@ class ConvertPage(ToolPage):
 
     def on_theme_changed(self):
         """主题切换后重新应用状态列的颜色"""
-        self._apply_row_tags()
+        self._refresh_rows()
+        self._update_empty_state()
 
     def on_close(self):
         """退出前结束子进程与后台线程, 避免留下没写完的输出文件"""
