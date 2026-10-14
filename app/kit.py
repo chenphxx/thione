@@ -215,6 +215,10 @@ class Field(tk.Frame):
         self.grid_propagate(False)
         self._left_pad = left_pad
         self._segments = None
+        #: 内容区使用的字体, 可编辑变体与弹出列表都要用同一份
+        self._font_spec = mono(size) if mono_font else sans(size)
+        #: 可编辑变体才会用到, 由 Dropdown 建立
+        self.entry = None
 
         self.label = text(self, theme, value=value, size=size, token=token,
                           mono_font=mono_font, surface="fill", anchor="w")
@@ -226,6 +230,13 @@ class Field(tk.Frame):
                                 icon_font=True, surface="fill", anchor="e")
             self.chevron.configure(width=2)
             self.chevron.pack(side="right", fill="y", padx=(0, 8))
+
+    def content_font(self):
+        """内容区使用的字体
+
+        @return: Tk 字体配置
+        """
+        return self._font_spec
 
     def set(self, value, token=None):
         """更新控件框里的文字
@@ -289,6 +300,13 @@ class Field(tk.Frame):
         token = "text" if enabled else "disabled_text"
         self.label.configure(fg=self.theme.rgb(token))
         tint(self.label, bg="fill", fg=token)
+        if self.entry is not None:
+            self.entry.configure(
+                state="normal" if enabled else "disabled",
+                disabledforeground=self.theme.rgb("disabled_text"),
+                fg=self.theme.rgb(token))
+            tint(self.entry, bg="fill", fg=token, insert="text",
+                 sel_bg="accent", sel_fg="on_accent")
         if self._segments is not None:
             for part in self._segments[1]:
                 part.configure(fg=self.theme.rgb(token if not enabled
@@ -448,12 +466,14 @@ class Dropdown(Field):
     """下拉选择: 外观与控件框一致, 点击后在下方弹出列表
 
     弹出列表的宽度与控件框一致, 并沿用同一套方角 细描边样式; 项目较多时列表内部
-    滚动, 不会超出屏幕
+    滚动, 不会超出屏幕. 传 editable=True 时内容区换成输入框, 既能从列表里选,
+    也能直接输入 (串口助手的波特率 数据位 停止位就属于这一类)
     """
 
     def __init__(self, master, theme, values=(), command=None,
                  surface="panel", size=SIZE_BODY, mono_font=False,
-                 width=None, placeholder="", display=None):
+                 width=None, placeholder="", display=None, editable=False,
+                 variable=None, align="w"):
         super().__init__(master, theme, value=placeholder, surface=surface,
                          size=size, token="text", mono_font=mono_font,
                          width=width, chevron=True)
@@ -462,11 +482,41 @@ class Dropdown(Field):
         self._value = placeholder
         self._enabled = True
         self._display = display
+        self._editable = bool(editable)
+        self._variable = variable
+        self.entry = None
         self._popup_window = None
-        # 点击落在控件框 文字或箭头上都要弹出菜单, 只绑在控件框上会漏掉大部分点击
-        for widget in (self, self.label, self.chevron):
+        if self._editable:
+            self._build_entry(align)
+        # 点击落在控件框 文字或箭头上都要弹出菜单, 只绑在控件框上会漏掉大部分点击;
+        # 可编辑时输入框要让给文字编辑, 只有控件框与箭头弹出列表
+        clickable = (self, self.chevron) if self._editable else (
+            self, self.label, self.chevron)
+        for widget in clickable:
             widget.configure(cursor="hand2")
             widget.bind("<Button-1>", self._popup)
+
+    def _build_entry(self, align="w"):
+        """把只读文字换成可编辑输入框, 右侧的箭头保持不变
+
+        @param align: 文字对齐方式, e 表示右对齐
+        """
+        self.label.pack_forget()
+        self.entry = tk.Entry(self, bd=0, highlightthickness=0, relief="flat",
+                              font=self._font_spec,
+                              textvariable=self._variable,
+                              justify="right" if align == "e" else "left")
+        tint(self.entry, bg="fill", fg="text", insert="text", sel_bg="accent",
+             sel_fg="on_accent")
+        self.entry.configure(bg=self.theme.rgb("fill"),
+                             fg=self.theme.rgb("text"),
+                             insertbackground=self.theme.rgb("text"),
+                             selectbackground=self.theme.rgb("accent"),
+                             selectforeground=self.theme.rgb("on_accent"))
+        self.entry.pack(side="left", fill="both", expand=True,
+                        padx=(self._left_pad, 4))
+        if self._variable is None and self.label.cget("text"):
+            self.entry.insert(0, self.label.cget("text"))
 
     def set(self, value):
         """直接设置当前值, 不触发回调
@@ -474,20 +524,30 @@ class Dropdown(Field):
         @param value: 新的取值
         """
         self._value = value
+        if self._editable:
+            self.entry.delete(0, "end")
+            self.entry.insert(0, value)
+            return
         super().set(value)
         if self._display is not None:
             self.set_segments(self._display(value))
 
     def value(self):
         """取当前取值"""
+        if self._editable:
+            return self.entry.get()
         return self._value
+
+    def get(self):
+        """取当前文字"""
+        return self.value()
 
     def _popup(self, event=None):
         if not self._enabled:
             return "break"
         self._close_popup()
         self._popup_window = _DropdownPopup(self, self.theme, self._values,
-                                            self._value, self._choose)
+                                            self.value(), self._choose)
         self._popup_window.open()
         return "break"
 
@@ -931,8 +991,7 @@ class _DropdownPopup:
             label = text(row, self.theme, value=value, size=SIZE_BODY,
                          token=token, surface=bg, anchor="w")
             label.pack(fill="both", expand=True, padx=9)
-            font = self.field.label.cget("font")
-            label.configure(font=font)
+            label.configure(font=self.field.content_font())
             for widget in (row, label):
                 widget.configure(cursor="hand2")
                 widget.bind("<Button-1>",

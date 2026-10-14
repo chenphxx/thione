@@ -312,6 +312,9 @@ class CommPage(ToolPage):
     def _build_serial_group(self, group):
         """串口号 波特率 校验位 数据位 停止位
 
+        串口与校验位只能从列表里选; 波特率 数据位 停止位既可以选常用的取值,
+        也可以直接输入 (有些设备用的是非标准波特率)
+
         @param group: 承载串口控件的容器
         """
         self.combo_port = self._settings_field(
@@ -319,16 +322,16 @@ class CommPage(ToolPage):
             display=self._port_display)
         self.combo_baud = self._settings_field(
             group, 1, "波特率", values=[str(rate) for rate in BAUD_RATES],
-            variable=self._baud_var)
+            variable=self._baud_var, editable=True)
         self.combo_parity = self._settings_field(
             group, 2, "校验位", values=list(PARITY_LABELS),
             variable=self._parity_var)
         self.combo_data = self._settings_field(
             group, 3, "数据位", values=[str(bits) for bits in DATA_BITS],
-            variable=self._data_var)
+            variable=self._data_var, editable=True)
         self.combo_stop = self._settings_field(
             group, 4, "停止位", values=list(STOP_BITS),
-            variable=self._stop_var)
+            variable=self._stop_var, editable=True)
 
     def _build_net_group(self, group):
         """协议 目的地址与端口 本机地址 接收端口 与发送端口
@@ -427,7 +430,7 @@ class CommPage(ToolPage):
         return field
 
     def _settings_field(self, parent, column, caption, values, variable,
-                        weight=1, extra=None, display=None):
+                        weight=1, extra=None, display=None, editable=False):
         """建立一列参数: 12 像素标签在上, 控件框样式的下拉在下
 
         @param parent: 父容器
@@ -438,6 +441,7 @@ class CommPage(ToolPage):
         @param weight: 列宽权重
         @param extra: 选中后的额外回调
         @param display: 多段展示的取值回调, 见 kit.Dropdown
+        @param editable: True 时既可以选也可以输入
         @return: 建立好的下拉控件
         """
         box = self._settings_box(parent, column, caption, weight)
@@ -448,7 +452,8 @@ class CommPage(ToolPage):
                 extra(None)
 
         combo = kit.Dropdown(box, self.theme, values=values, surface="fill",
-                             command=choose, display=display)
+                             command=choose, display=display,
+                             editable=editable, variable=variable)
         combo.set(variable.get())
         combo.pack(fill="x")
         return combo
