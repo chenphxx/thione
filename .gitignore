@@ -5,6 +5,7 @@ IAM_*-accessKeys.csv
 # 测试 
 test.py
 temp/
+test/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
