@@ -27,7 +27,6 @@ from .constants import (
     DEFAULT_TARGET_BASE,
     EMPTY_HINT,
     REFERENCE_COLUMNS,
-    REFERENCE_HALVES,
     REFERENCE_LIMIT,
     STATUS_HINT,
     SUBTITLE,
@@ -81,11 +80,9 @@ class RadixPage(ToolPage):
                 side="left", fill="x", expand=True, padx=(0, 10))
 
         table_panel = self.add_panel(title="进制对照表", body_pad=(14, 0))
-        columns = []
-        for offset in range(REFERENCE_HALVES):
-            for key, title, _width in REFERENCE_COLUMNS:
-                columns.append({"key": f"{key}{offset}", "title": title,
-                                "weight": 1, "mono": True})
+        # 一张表 16 行纵向下滑, 不再左右分成两半
+        columns = [{"key": key, "title": title, "weight": 1, "mono": True}
+                   for key, title, _width in REFERENCE_COLUMNS]
         self.table = kit.Table(
             table_panel.body, self.theme, columns, surface="panel")
         self.table.pack(side="top", fill="both", expand=True, pady=(10, 0))
@@ -171,21 +168,12 @@ class RadixPage(ToolPage):
         return cell
 
     def _reference_rows(self):
-        """对照表的 8 行数据: 每行左右各一组 十进制/二进制/八进制/十六进制
+        """对照表的每一行: 十进制/二进制/八进制/十六进制
 
         @return: 表格数据行
         """
-        rows = []
-        values = reference_rows(REFERENCE_LIMIT)
-        half = REFERENCE_LIMIT // REFERENCE_HALVES
-        for index in range(half):
-            cells = {}
-            for offset, row in enumerate((values[index], values[index + half])):
-                for position, (key, _title, _width) in enumerate(
-                        REFERENCE_COLUMNS):
-                    cells[f"{key}{offset}"] = row[position]
-            rows.append(cells)
-        return rows
+        keys = [key for key, _title, _width in REFERENCE_COLUMNS]
+        return [dict(zip(keys, row)) for row in reference_rows(REFERENCE_LIMIT)]
 
     # ---------------- 转换与提示 ----------------
     def _on_input(self, _event=None):

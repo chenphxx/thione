@@ -34,9 +34,6 @@ REFERENCE_COLUMNS = (
     ("hex", "十六进制", 150),
 )
 
-# 对照表把 0 到 REFERENCE_LIMIT - 1 分成左右两半并排展示
-REFERENCE_HALVES = 2
-
 # 输入框为空时显示的占位文案
 EMPTY_HINT = "输入数字"
 
