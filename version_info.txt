@@ -1,13 +1,9 @@
 # UTF-8
-#
-# thione的PyInstaller版本资源 
-# 写入 exe 属性后, 任务栏/资源管理器的悬浮提示与文件属性会显示这些信息 
-# thione.spec中引用
 
 VSVersionInfo(
     ffi=FixedFileInfo(
-        filevers=(1, 26, 1, 0),
-        prodvers=(1, 26, 1, 0),
+        filevers=(1, 26, 2, 0),
+        prodvers=(1, 26, 2, 0),
         mask=0x3F,
         flags=0x0,
         OS=0x40004,
@@ -23,12 +19,12 @@ VSVersionInfo(
                     [
                         StringStruct("CompanyName", "thione"),
                         StringStruct("FileDescription", "thione"),
-                        StringStruct("FileVersion", "1.26.1"),
+                        StringStruct("FileVersion", "1.26.2"),
                         StringStruct("InternalName", "thione"),
                         StringStruct("LegalCopyright", ""),
                         StringStruct("OriginalFilename", "thione.exe"),
                         StringStruct("ProductName", "thione"),
-                        StringStruct("ProductVersion", "1.26.1"),
+                        StringStruct("ProductVersion", "1.26.2"),
                     ],
                 )
             ]
