@@ -6,6 +6,7 @@ tkinter 窗口 - Tk 有线程亲和性, 跨线程操作会导致偶发崩溃或�
 """
 
 import logging
+import threading
 import time
 
 from pynput.keyboard import Controller, Key, Listener
@@ -13,8 +14,8 @@ from pynput.keyboard import Controller, Key, Listener
 from .clipboard import wait_for_text
 from .constants import (
     COPY_SETTLE_TIME,
-    CTRL_HOLD_LIMIT,
     DOUBLE_PRESS_INTERVAL,
+    PRESS_DEBOUNCE,
     SYNTHETIC_EVENT_IGNORE,
 )
 from .language import AUTO_LANG, DEFAULT_TARGET_LANG, resolve_direction
@@ -35,14 +36,14 @@ class DoubleCtrlListener:
         self.result_callback = result_callback  # callable(str), 必须线程安全
         self.source_lang = source_lang
         self.target_lang = target_lang
-        self._first_press = None
-        self._ctrl_down = False
-        #: 本次按住的落下时间, 用来区分'按一下'与长按
-        self._ctrl_down_at = 0.0
-        #: 正在执行 _handle(), 期间到达的按键事件来自自己合成的 Ctrl+C
-        self._handling = False
-        #: 合成事件的忽略截止时间, 它们要等 _handle() 返回后才轮到处理
+        #: 上一次 Ctrl 按下的时间, 配对只看按下事件
+        self._last_press = None
+        #: 正在合成 Ctrl+C, 期间的事件都来自自己
+        self._injecting = False
+        #: 合成事件在结束后仍需忽略的时间 (钩子回调可能晚于合成返回)
         self._synthetic_until = 0.0
+        #: 已经有一次翻译在跑, 期间不再重复触发
+        self._busy = False
         self._controller = Controller()
         self._listener = None
         self._paused = False
@@ -73,7 +74,7 @@ class DoubleCtrlListener:
 
     def pause(self):
         self._paused = True
-        self._first_press = None
+        self._last_press = None
         logger.info("已暂停翻译热键")
 
     def resume(self):
@@ -89,8 +90,12 @@ class DoubleCtrlListener:
     def _on_press(self, key, injected=False):
         """Ctrl 按下事件
 
-        连续两次按下才算触发, 因此这里排除两类假按下: 自己合成的 Ctrl+C 与按住
-        Ctrl 时系统持续补发的自动重复事件
+        连续两次按下才算触发. 配对只看两次按下之间的间隔, 因此按住多久都不影响
+        判定, 也不会因为漏掉一次抬起 (自己合成的 Ctrl+C 抬起会被忽略) 就吃掉
+        下一次手势的第一次按下
+
+        同一时刻重复到达的按下要丢掉: 按住 Ctrl 时系统可能补发的自动重复, 以及
+        _handle() 自己合成的那个 Ctrl
 
         @param key: pynput 给出的按键对象
         @param injected: 事件是否由注入产生, Windows 后端会给出, 其它后端为 False
@@ -105,76 +110,80 @@ class DoubleCtrlListener:
         if key not in (Key.ctrl_l, Key.ctrl_r):
             # 两次 Ctrl 之间按了别的键, 判定为普通操作而非双击手势,
             # 避免 Ctrl+C 之后紧接着一次 Ctrl 就误触发
-            self._first_press = None
+            self._last_press = None
             return
 
-        # 按住 Ctrl 时系统会持续补发'按下'事件 (自动重复). 抬起之前到达的
-        # 重复事件都属于同一次按住, 因此不能当成新的一次按下, 否则长按 Ctrl
-        # 就会被当成连续双击
-        if self._ctrl_down:
-            return
-        self._ctrl_down = True
-        self._ctrl_down_at = now
-
-        # 上一次按下已经超过双击间隔就无法再配对, 直接以本次重新计时
-        # 否则长按 Ctrl 留在 _first_press 里的旧时间戳会吃掉下一次真正的
-        # 双击的前一半, 表现为长按之后双击不灵, 过一会才恢复
-        if (self._first_press is None
-                or now - self._first_press >= DOUBLE_PRESS_INTERVAL):
-            self._first_press = now
+        if self._last_press is not None and now - self._last_press < PRESS_DEBOUNCE:
+            # 同一次按住里的重复按下, 或者刚由自己合成的 Ctrl
             return
 
-        self._first_press = None
+        # 上一次按下已经超过双击间隔就无法再配对, 以本次重新计时
+        if (self._last_press is None
+                or now - self._last_press > DOUBLE_PRESS_INTERVAL):
+            self._last_press = now
+            return
+
+        # 配对成功: 连按三次只会触发一次
+        self._last_press = None
         try:
-            self._handle()
+            self._start_handle()
         except Exception:
             logger.exception("处理双击 Ctrl 时出错")
 
     def _on_release(self, key, injected=False):
-        """记录 Ctrl 抬起
+        """抬起事件不参与判定
 
-        只有用户真正抬起才会清零: 长按产生的自动重复因此不会被当成新的按下,
-        自己合成的 Ctrl+C 抬起也被忽略, 否则仍被按住的 Ctrl 会被误判成已松开
-        按住时间超过 CTRL_HOLD_LIMIT 的算长按, 一并丢弃待配对的那一次按下,
-        免得长按之后紧接着的一次 Ctrl 被配成双击
+        配对以两次按下为准, 这样自己合成的 Ctrl 抬起被忽略也不会影响下一次
+        手势; 这里保留回调只是为了方便后续需要时接管
 
         @param key: pynput 给出的按键对象
         @param injected: 事件是否由注入产生
         """
-        if self._is_synthetic(injected):
-            return
-        if key not in (Key.ctrl_l, Key.ctrl_r):
-            return
-        was_down = self._ctrl_down
-        self._ctrl_down = False
-        if not was_down:
-            return
-        if time.monotonic() - self._ctrl_down_at >= CTRL_HOLD_LIMIT:
-            self._first_press = None
+        return
 
     def _is_synthetic(self, injected):
         """事件是否由 _handle() 自己合成的 Ctrl+C 产生
 
-        合成事件同样会回到本监听器, 且要等 _handle() 返回后才轮到处理, 因此除了
-        注入标记, 还要看当前是否正在执行 _handle() 或刚执行完
+        合成事件同样会回到本监听器. 正在合成时一律忽略; 合成刚结束时钩子回调
+        可能还没派发完, 因此在注入标记之外再留一小段忽略窗口
 
         @param injected: 监听回调给出的注入标记
         @return: True 表示该事件应被忽略
         """
+        if self._injecting:
+            return True
         if not injected:
             return False
-        return self._handling or time.monotonic() < self._synthetic_until
+        return time.monotonic() < self._synthetic_until
+
+    def _start_handle(self):
+        """把复制与翻译放到后台线程, 监听线程必须立刻返回
+
+        键盘钩子的回调运行在系统要求的时限内, 翻译又要等网络, 一旦在回调里同步
+        做完整件事, 回调期间到达的按键会被丢掉, 表现为'按两次有时不生效'
+
+        上一次翻译还没结束就不再重复触发
+        """
+        if self._busy:
+            logger.debug("上一次翻译还没结束, 忽略这次双击")
+            return
+        self._busy = True
+        threading.Thread(target=self._handle, name="translate-hotkey",
+                         daemon=True).start()
 
     def _handle(self):
         """复制选中文本并翻译, 结果交给 UI 层"""
-        # 合成的 Ctrl+C 同样会回到本监听器, 且要等本函数返回后才轮到处理,
-        # 因此整个执行期间都不可信, 结束后再补一小段忽略窗口
-        self._handling = True
         try:
             # 模拟 Ctrl+C 复制当前选中的文本
-            with self._controller.pressed(Key.ctrl):
-                self._controller.press("c")
-                self._controller.release("c")
+            self._injecting = True
+            try:
+                with self._controller.pressed(Key.ctrl):
+                    self._controller.press("c")
+                    self._controller.release("c")
+            finally:
+                # 合成事件可能比这里晚一点回到钩子, 因此再留一段忽略窗口
+                self._synthetic_until = time.monotonic() + SYNTHETIC_EVENT_IGNORE
+                self._injecting = False
 
             text = wait_for_text(COPY_SETTLE_TIME)
             if not text:
@@ -193,8 +202,7 @@ class DoubleCtrlListener:
 
             self._show(result, text)
         finally:
-            self._handling = False
-            self._synthetic_until = time.monotonic() + SYNTHETIC_EVENT_IGNORE
+            self._busy = False
 
     def _show(self, text, source=""):
         """把结果交给 UI 层; 这里只是回调, 不涉及任何 tkinter 对象
