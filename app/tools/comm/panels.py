@@ -202,6 +202,38 @@ class DataView(tk.Frame):
         return "break"
 
 
+def _pair_setting(parent, theme, column, caption, values, variable, extra=None):
+    """在一行里排一列 标签 + 下拉框, 接收区与发送区共用
+
+    @param parent: 所在的行
+    @param theme: 主题管理器
+    @param column: 列号
+    @param caption: 标签文字
+    @param values: 可选项
+    @param variable: 绑定的 StringVar
+    @param extra: 选中后的额外回调
+    @return: 建立好的下拉控件
+    """
+    holder = tk.Frame(parent, bd=0, highlightthickness=0)
+    tint(holder, bg="panel")
+    holder.configure(bg=theme.rgb("panel"))
+    holder.grid(row=0, column=column, sticky="ew",
+                padx=(0, 10) if column == 0 else (0, 0))
+    kit.text(holder, theme, value=caption, size=SIZE_LABEL, token="muted",
+             surface="panel").pack(anchor="w", pady=(0, 5))
+
+    def choose(label):
+        variable.set(label)
+        if extra is not None:
+            extra(None)
+
+    combo = kit.Dropdown(holder, theme, values=values, surface="panel",
+                         command=choose)
+    combo.set(variable.get())
+    combo.pack(fill="x")
+    return combo
+
+
 class ReceivePanel(tk.Frame):
     """接收卡片: 展示模式 编码 自动换行 保存 开始暂停 清屏 与接收计数"""
 
@@ -261,16 +293,23 @@ class ReceivePanel(tk.Frame):
         """
         bar = self.controls
         bar.columnconfigure(0, weight=1)
-        self._setting(bar, 0, "展示", display_labels, self.mode_var,
-                      self._on_mode_change)
-        self._setting(bar, 1, "编码", list(ENCODINGS), self.encoding_var,
-                      self._on_encoding_change)
+        # 展示与编码并排一行, 与发送区一致, 也更省纵向空间
+        row = tk.Frame(bar, bd=0, highlightthickness=0)
+        tint(row, bg="panel")
+        row.configure(bg=self.theme.rgb("panel"))
+        row.grid(row=0, column=0, sticky="ew")
+        for column in range(2):
+            row.columnconfigure(column, weight=1, uniform="recv_pair")
+        self.combo_mode = self._pair_setting(row, 0, "展示", display_labels,
+                                             self.mode_var, self._on_mode_change)
+        self._pair_setting(row, 1, "编码", list(ENCODINGS), self.encoding_var,
+                           self._on_encoding_change)
         self.check_wrap = kit.Check(bar, self.theme, value="自动换行",
                                     variable=self.wrap_var, surface="panel")
-        self.check_wrap.grid(row=2, column=0, sticky="w", pady=(12, 0))
+        self.check_wrap.grid(row=1, column=0, sticky="w", pady=(12, 0))
         kit.text(bar, self.theme, value=BYTES_PER_LINE_HINT,
                  size=SIZE_LABEL, token="muted",
-                 surface="panel").grid(row=3, column=0, sticky="w",
+                 surface="panel").grid(row=2, column=0, sticky="w",
                                        pady=(6, 0))
 
         actions = tk.Frame(bar, bd=0, highlightthickness=0)
@@ -296,32 +335,11 @@ class ReceivePanel(tk.Frame):
         # 中间的空档吸收多余高度, 动作按钮因此贴着列底
         bar.rowconfigure(4, weight=1)
 
-    def _setting(self, parent, row, caption, values, variable, command):
-        """建立一列下拉设置: 标签在上, 控件框样式的下拉在下
-
-        @param parent: 父容器
-        @param row: 行号
-        @param caption: 标签文字
-        @param values: 可选项
-        @param variable: 绑定的 StringVar
-        @param command: 选中后的回调
-        @return: 建立好的下拉控件
-        """
-        holder = tk.Frame(parent, bd=0, highlightthickness=0)
-        tint(holder, bg="panel")
-        holder.configure(bg=self.theme.rgb("panel"))
-        holder.grid(row=row, column=0, sticky="ew",
-                    pady=(0 if row == 0 else 10, 0))
-        kit.text(holder, self.theme, value=caption, size=SIZE_LABEL,
-                 token="muted", surface="panel").pack(anchor="w",
-                                                      pady=(0, 5))
-        combo = kit.Dropdown(holder, self.theme, values=values,
-                             surface="panel",
-                             command=lambda label: self._on_setting(
-                                 variable, label, command))
-        combo.set(variable.get())
-        combo.pack(fill="x")
-        return combo
+    def _pair_setting(self, parent, column, caption, values, variable,
+                      extra=None):
+        """在一行里排一列 标签 + 下拉框, 见模块级 _pair_setting"""
+        return _pair_setting(parent, self.theme, column, caption, values,
+                             variable, extra)
 
     @staticmethod
     def _on_setting(variable, label, command):
@@ -673,25 +691,8 @@ class SendPanel(tk.Frame):
         @param extra: 选中后的额外回调
         @return: 建立好的下拉控件
         """
-        holder = tk.Frame(parent, bd=0, highlightthickness=0)
-        tint(holder, bg="panel")
-        holder.configure(bg=self.theme.rgb("panel"))
-        holder.grid(row=0, column=column, sticky="ew",
-                    padx=(0, 10) if column == 0 else (0, 0))
-        kit.text(holder, self.theme, value=caption, size=SIZE_LABEL,
-                 token="muted", surface="panel").pack(anchor="w",
-                                                      pady=(0, 5))
-
-        def choose(label):
-            variable.set(label)
-            if extra is not None:
-                extra(None)
-
-        combo = kit.Dropdown(holder, self.theme, values=values,
-                             surface="panel", command=choose)
-        combo.set(variable.get())
-        combo.pack(fill="x")
-        return combo
+        return _pair_setting(parent, self.theme, column, caption, values,
+                             variable, extra)
 
     def set_controls_width(self, width):
         """固定配置列的宽度
