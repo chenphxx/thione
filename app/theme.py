@@ -1,12 +1,5 @@
 """统一管理界面外观的配色令牌与 ttk 控件样式
 
-界面按设计稿实现: 全部方角, 只用 1 像素描边与色块分层, 不出现渐变与圆角
-配色令牌的名字与设计稿里的 CSS 变量一一对应 (canvas / side / panel / fill /
-fill_hi / text / muted / hair / accent / on_accent / accent_soft / ok /
-danger / warn), 便于与设计稿逐项对照
-
-字号统一用像素值 (tkinter 里负数字号表示像素高度), 与设计稿的 px 一致
-
 @brief 设计令牌, 字体与控件样式
 """
 

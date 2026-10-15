@@ -1,7 +1,5 @@
 """日志初始化
 
-打包成 GUI 程序后没有控制台, print() 的内容会消失. 这里做两件事:
-
 1. 把日志写入 %LOCALAPPDATA%\\thione\\logs\\thione.log (按大小轮转);
 2. 若确实没有可用的 stdout/stderr, 把 print 重定向到日志, 保留 print 的可见性
 

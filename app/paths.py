@@ -4,8 +4,6 @@
     用户配置 -> %APPDATA%\\thione
     运行日志 -> %LOCALAPPDATA%\\thione\\logs
     只读资源 -> 打包后的解压目录, 源码运行时为项目根目录
-
-更名前使用的 %APPDATA%\\thpy 只作为兼容读取来源, 不再写入
 """
 
 import os
