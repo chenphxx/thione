@@ -9,10 +9,11 @@ import queue
 import tkinter as tk
 from tkinter import ttk
 
-from .. import kit
-from ..constants import APP_MIN_SIZE, APP_SIZE, APP_TITLE, QUEUE_POLL_MS
+from .. import kit, win32
+from ..constants import (APP_ICON, APP_MIN_SIZE, APP_SIZE, APP_TITLE,
+                         QUEUE_POLL_MS)
 from ..errors import open_path, show_error
-from ..paths import ensure_dir, user_log_dir
+from ..paths import ensure_dir, resource_path, user_log_dir
 from ..theme import BODY_PAD_X, SIZE_LABEL, STATUSBAR_HEIGHT, ThemeManager, tint
 from .sidebar import Sidebar
 
@@ -39,6 +40,7 @@ class ShellWindow:
         self._closing = False
 
         root.title(APP_TITLE)
+        self._apply_window_icon()
         root.geometry(APP_SIZE)
         root.minsize(*APP_MIN_SIZE)
 
@@ -50,6 +52,21 @@ class ShellWindow:
 
         self.show(self._initial_key())
         self._queue_job = root.after(QUEUE_POLL_MS, self._drain_queue)
+
+    def _apply_window_icon(self):
+        """把程序图标写到窗口上
+
+        任务栏与 Alt+Tab 显示的是窗口图标: 源码运行时进程图标是 python, 不设置
+        的话任务栏就不显示本程序的图标; default 让之后创建的对话框也沿用
+        """
+        icon = resource_path(APP_ICON)
+        try:
+            self.root.iconbitmap(default=icon)
+        except tk.TclError:
+            logger.debug("Tk 默认图标设置失败", exc_info=True)
+        self.root.update_idletasks()
+        if not win32.set_window_icon(self.root.winfo_id(), icon):
+            logger.warning("设置窗口图标失败: %s", icon)
 
     # ---------------- 布局 ----------------
     def _build_layout(self):

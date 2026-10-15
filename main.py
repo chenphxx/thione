@@ -44,7 +44,11 @@ class Application:
         )
 
         root = tk.Tk()
+        # 先把窗口藏起来: Tk 一创建根窗口就会显示, 而外壳 (七个页面) 还没建好,
+        # 不隐藏的话会先闪出一个空白小窗再跳到正常尺寸
+        root.withdraw()
         self.shell = ShellWindow(root, AppSettings.load(), TOOL_PAGES)
+        root.deiconify()
         logger.info("thione 已就绪: 左侧选择工具, 双击 Ctrl 触发划词翻译")
 
         try:

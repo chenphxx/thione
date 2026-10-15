@@ -38,6 +38,39 @@ def set_app_user_model_id(app_id=APP_USER_MODEL_ID):
         return False
 
 
+def set_window_icon(hwnd, icon_path):
+    """把 .ico 设成窗口图标, 任务栏与 Alt+Tab 显示的正是它
+
+    Tk 的 wm iconbitmap 在部分环境下不会真正写进窗口图标, 因此直接调 Win32:
+    先按常见尺寸载入图标, 再用 WM_SETICON 设成大图标与小图标
+
+    @param hwnd: 窗口句柄 (Tk 的 winfo_id())
+    @param icon_path: .ico 文件路径
+    @return: True 表示图标已经设置到窗口上
+    """
+    if not _IS_WINDOWS:
+        return False
+    IMAGE_ICON = 1
+    LR_LOADFROMFILE = 0x0010
+    WM_SETICON = 0x0080
+    ICON_SMALL, ICON_BIG = 0, 1
+    try:
+        user32 = ctypes.windll.user32
+        big = user32.LoadImageW(None, icon_path, IMAGE_ICON, 32, 32,
+                                LR_LOADFROMFILE)
+        small = user32.LoadImageW(None, icon_path, IMAGE_ICON, 16, 16,
+                                  LR_LOADFROMFILE)
+        if not big and not small:
+            logger.warning("载入窗口图标失败: %s", icon_path)
+            return False
+        user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, big or small)
+        user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, small or big)
+        return True
+    except Exception:
+        logger.warning("设置窗口图标失败: %s", icon_path, exc_info=True)
+        return False
+
+
 # ---------------------------------------------------------------------------
 # 单实例
 # ---------------------------------------------------------------------------
