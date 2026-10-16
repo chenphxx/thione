@@ -26,7 +26,7 @@ Each tool lives in `app/tools/<name>/`, exports a `ToolPage` subclass from `page
 ## Build, Test, and Development Commands
 
 ```powershell
-py -3.14 -m venv .venv
+py -3.15 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe main.py                                        # run from source
 .venv\Scripts\python.exe -m PyInstaller --noconfirm --clean thione.spec # build dist/thione.exe
