@@ -14,15 +14,11 @@
 
 ## 快速开始
 
-> Python 3.10 及以上, 本项目为Python 3.15.0 
-
-在终端中按顺序执行以下命令 
-
 ```bash
-python -m venv .venv 
-.venv\Scripts\activate 
-pip install -r requirements.txt 
-python main.py 
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python main.py
 ```
 
 ## 打包为`.exe`文件
