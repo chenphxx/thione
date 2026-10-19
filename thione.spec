@@ -6,7 +6,8 @@ import os
 os.environ.setdefault("PYINSTALLER_ZLIB_COMPRESSION_LEVEL", "9")
 
 # 没有用到的界面库 
-EXCLUDED_MODULES = [
+EXCLUDED_MODULES = 
+[
     "PyQt5", "PySide2", "PySide6",
     "numpy", "scipy", "pywt", "imagehash",
     "PIL.AvifImagePlugin", "PIL.ImageCms", "PIL.ImageShow", "PIL.ImageQt",
@@ -21,12 +22,14 @@ EXCLUDED_MODULES = [
     "pynput.mouse._darwin", "pynput.mouse._xorg",
 ]
 
-a = Analysis(
+a = Analysis
+(
     ['main.py'],
     pathex=[],
     binaries=[],
     datas=[('assets/images/logo.ico', 'assets/images')],
-    hiddenimports=[
+    hiddenimports =
+    [
         'openpyxl',
         'et_xmlfile',
         'pystray._win32',
@@ -49,7 +52,8 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe = EXE(
+exe = EXE
+(
     pyz,
     a.scripts,
     a.binaries,
