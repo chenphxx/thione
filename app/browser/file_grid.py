@@ -14,6 +14,7 @@ import tkinter.font as tkfont
 
 from PIL import ImageTk
 
+from ..dpi import scale
 from ..imaging import load_thumbnail, make_gradient
 from ..theme import (
     ICON_ARROW,
@@ -48,7 +49,7 @@ from .constants import (
 )
 
 #: 列表视图里勾选字形占用的宽度
-LIST_MARK_WIDTH = 19
+LIST_MARK_WIDTH = scale(19)
 
 
 def _fit_text(font, name, max_width):
@@ -438,9 +439,9 @@ class FileGrid(tk.Frame):
         right = left + box_width - BADGE_INSET
         bottom = top + box_height - BADGE_INSET
         self.canvas.itemconfigure(cell["badge"], state="normal", text=text)
-        self.canvas.coords(cell["badge"], right - 5, bottom - 1)
-        self.canvas.coords(cell["badge_bg"], right - text_width - 10,
-                           bottom - line - 2, right, bottom)
+        self.canvas.coords(cell["badge"], right - scale(5), bottom - 1)
+        self.canvas.coords(cell["badge_bg"], right - text_width - scale(10),
+                           bottom - line - scale(2), right, bottom)
         self.canvas.itemconfigure(cell["badge_bg"], state="normal")
 
     def _relayout_list(self):
@@ -459,16 +460,18 @@ class FileGrid(tk.Frame):
             self.canvas.coords(cell["placeholder"], -100, -100)
             self.canvas.coords(cell["image"], -100, -100)
             if self._secondary is None:
-                self.canvas.coords(cell["text"], 12, center)
-                self.canvas.itemconfigure(
-                    cell["text"], anchor="w",
-                    text=_fit_text(font, os.path.basename(path), width - 40))
-            else:
-                self.canvas.coords(cell["text"], 12 + LIST_MARK_WIDTH, center)
+                self.canvas.coords(cell["text"], scale(12), center)
                 self.canvas.itemconfigure(
                     cell["text"], anchor="w",
                     text=_fit_text(font, os.path.basename(path),
-                                   middle - 40 - LIST_MARK_WIDTH))
+                                   width - scale(40)))
+            else:
+                self.canvas.coords(cell["text"], scale(12) + LIST_MARK_WIDTH,
+                                   center)
+                self.canvas.itemconfigure(
+                    cell["text"], anchor="w",
+                    text=_fit_text(font, os.path.basename(path),
+                                   middle - scale(40) - LIST_MARK_WIDTH))
                 self._draw_secondary(cell, path, middle, center, width)
             if self._secondary is None:
                 for name in ("mark", "arrow", "secondary"):
@@ -480,7 +483,8 @@ class FileGrid(tk.Frame):
             self.canvas.itemconfigure(
                 cell["line"], state="normal" if index < len(self._paths) - 1
                 else "hidden", fill=self.theme.rgb("hair"))
-            self.canvas.coords(cell["bar"], 0, top, 2, top + LIST_ROW_HEIGHT)
+            self.canvas.coords(cell["bar"], 0, top, scale(2),
+                               top + LIST_ROW_HEIGHT)
         content = max(len(self._paths) * LIST_ROW_HEIGHT + GRID_PAD * 2,
                       self.canvas.winfo_height())
         self.canvas.configure(scrollregion=(0, 0, width, content))
@@ -496,19 +500,19 @@ class FileGrid(tk.Frame):
         @param center: 行的垂直中点
         @param width: 行宽
         """
-        self.canvas.coords(cell["mark"], 12, center)
+        self.canvas.coords(cell["mark"], scale(12), center)
         self.canvas.itemconfigure(
             cell["mark"], state="normal", font=icon(SIZE_SECTION),
             text=ICON_CHECK, fill=self.theme.rgb("muted"))
-        self.canvas.coords(cell["arrow"], middle - 10, center)
+        self.canvas.coords(cell["arrow"], middle - scale(10), center)
         self.canvas.itemconfigure(
             cell["arrow"], state="normal", font=icon(SIZE_SECTION),
             text=ICON_ARROW, fill=self.theme.rgb("muted"))
-        self.canvas.coords(cell["secondary"], middle + 23, center)
+        self.canvas.coords(cell["secondary"], middle + scale(23), center)
         self.canvas.itemconfigure(
             cell["secondary"], state="normal", anchor="w",
             text=_fit_text(self._label_font(), self._secondary(path) or "",
-                           width - middle - 40),
+                           width - middle - scale(40)),
             font=mono(self._label_size()),
             fill=self.theme.rgb("accent"))
 
@@ -540,7 +544,7 @@ class FileGrid(tk.Frame):
         self.canvas.itemconfigure(cell["bar"], state="hidden")
         self.canvas.itemconfigure(cell["ring"], state="normal")
         self.canvas.itemconfigure(
-            cell["ring"], fill="", width=2 if selected else 1,
+            cell["ring"], fill="", width=scale(2) if selected else 1,
             outline=self.theme.rgb("accent" if selected
                                    else "thumb_edge"))
         self.canvas.itemconfigure(

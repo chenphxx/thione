@@ -3,6 +3,7 @@
 from tkinter import ttk
 
 from .. import kit
+from ..dpi import scale
 from ..theme import ICON_PANE_DETAILS, ICON_PANE_PREVIEW
 from .constants import (
     DEFAULT_TIER,
@@ -80,7 +81,7 @@ class PaneToggles(ttk.Frame):
         self._preview = ttk.Button(self, text=ICON_PANE_PREVIEW,
                                    style="MiniIcon.TButton",
                                    command=on_toggle_preview)
-        self._preview.pack(side="left", padx=(8, 0))
+        self._preview.pack(side="left", padx=(scale(8), 0))
 
     def set_state(self, details, preview):
         """同步两个开关的打开状态, 由页面在切换窗格后调用

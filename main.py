@@ -10,6 +10,13 @@
 
 import logging
 import sys
+
+from app import dpi
+
+# DPI 感知必须在加载 Tk 并创建任何窗口之前设置, 否则 Windows 会先把窗口
+# 按位图缩放, 之后再声明感知也无法消除文字模糊
+dpi.enable()
+
 import tkinter as tk
 
 from app import logging_setup, win32
@@ -29,6 +36,9 @@ class Application:
         self._activation_server = None
 
     def run(self):
+        # 必须在创建 Tk 根窗口前声明 DPI 感知, 否则 Windows 会按位图放大整个
+        # 窗口, 200% 缩放下文字会发虚
+        dpi.enable()
         logging_setup.install_excepthook()
 
         if not win32.acquire_single_instance():

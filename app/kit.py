@@ -5,7 +5,9 @@
 
 import inspect
 import tkinter as tk
+from tkinter import font as tkfont
 
+from .dpi import scale
 from .theme import (
     CONTROL_HEIGHT,
     ICON_BOX,
@@ -26,13 +28,13 @@ from .theme import (
 )
 
 #: 状态栏圆点的直径
-DOT_SIZE = 7
+DOT_SIZE = scale(7)
 
 #: 弹出列表最多显示多少项, 超出时滚动
 LIST_MAX_VISIBLE = 10
 
 #: 弹出列表每项的高度
-LIST_ITEM_HEIGHT = 28
+LIST_ITEM_HEIGHT = scale(28)
 
 
 def invoke(command, value):
@@ -61,7 +63,7 @@ def invoke(command, value):
         command()
 
 #: 表格单元格的左右内边距
-CELL_PAD = 12
+CELL_PAD = scale(12)
 
 
 def hairline(parent, theme, orient="horizontal"):
@@ -152,17 +154,19 @@ class Panel(tk.Frame):
             self.title_label = text(self.head, theme, value=title or "",
                                     size=SIZE_SECTION, token="muted", bold=True,
                                     surface="panel", anchor="w")
-            self.title_label.pack(side="left", fill="y", padx=(14, 0))
+            self.title_label.pack(side="left", fill="y",
+                                  padx=(scale(14), 0))
             if right is not None:
                 self.right_label = text(self.head, theme, value=right,
                                         size=SIZE_LABEL, token="muted",
                                         surface="panel", anchor="e")
-                self.right_label.pack(side="right", fill="y", padx=(0, 14))
+                self.right_label.pack(side="right", fill="y",
+                                      padx=(0, scale(14)))
         self.body = tk.Frame(self, bd=0, highlightthickness=0)
         tint(self.body, bg="panel")
         self.body.configure(bg=theme.rgb("panel"))
         self.body.pack(side="top", fill="both", expand=True,
-                       padx=body_pad[0], pady=body_pad[1])
+                       padx=scale(body_pad[0]), pady=scale(body_pad[1]))
 
     def add_head(self, widget, side="left", padx=(12, 0)):
         """把控件放进头部
@@ -173,7 +177,8 @@ class Panel(tk.Frame):
         """
         if self.head is None:
             return
-        widget.pack(in_=self.head, side=side, fill="y", padx=padx)
+        widget.pack(in_=self.head, side=side, fill="y",
+                    padx=(scale(padx[0]), scale(padx[1])))
 
     def set_title(self, value):
         """更新头部左侧的小节标题"""
@@ -194,7 +199,10 @@ class Field(tk.Frame):
 
     def __init__(self, master, theme, value="", surface="panel",
                  size=SIZE_BODY, token="text", mono_font=True, width=None,
-                 height=CONTROL_HEIGHT, chevron=False, left_pad=9):
+                 height=None, chevron=False, left_pad=9):
+        height = CONTROL_HEIGHT if height is None else scale(height)
+        width = scale(width) if width is not None else None
+        left_pad = scale(left_pad)
         super().__init__(master, bd=0, highlightthickness=1)
         self.theme = theme
         self._surface = surface
@@ -221,8 +229,8 @@ class Field(tk.Frame):
             self.chevron = text(self, theme, value=ICON_CHEVRON,
                                 size=SIZE_SECTION, token="muted",
                                 icon_font=True, surface="fill", anchor="e")
-            self.chevron.configure(width=2)
-            self.chevron.pack(side="right", fill="y", padx=(0, 8))
+            self.chevron.configure(width=scale(2))
+            self.chevron.pack(side="right", fill="y", padx=(0, scale(8)))
 
     def content_font(self):
         """内容区使用的字体
@@ -271,7 +279,8 @@ class Field(tk.Frame):
                         token=token, mono_font=mono_font, surface="fill",
                         anchor="w")
             part._thione_token = token
-            part.pack(side="left", padx=(0 if index == 0 else 6, 0))
+            part.pack(side="left",
+                      padx=(0 if index == 0 else scale(6), 0))
             parts.append(part)
         self._segments = (holder, parts)
 
@@ -312,8 +321,10 @@ class EntryField(tk.Frame):
     """可编辑的控件框: 外观与 Field 一致, 内部是单行输入框"""
 
     def __init__(self, master, theme, variable=None, width=150,
-                 mono_font=True, size=SIZE_BODY, height=CONTROL_HEIGHT,
+                 mono_font=True, size=SIZE_BODY, height=None,
                  align="w"):
+        width = scale(width) if width is not None else None
+        height = CONTROL_HEIGHT if height is None else scale(height)
         super().__init__(master, bd=0, highlightthickness=1)
         self.theme = theme
         tint(self, bg="fill", hl="hair", hlc="hair")
@@ -332,7 +343,8 @@ class EntryField(tk.Frame):
                              insertbackground=theme.rgb("text"),
                              selectbackground=theme.rgb("accent"),
                              selectforeground=theme.rgb("on_accent"))
-        self.entry.pack(side="left", fill="both", expand=True, padx=(9, 9))
+        self.entry.pack(side="left", fill="both", expand=True,
+                        padx=(scale(9), scale(9)))
         if align == "e":
             self.entry.configure(justify="right")
 
@@ -375,6 +387,8 @@ class Area(tk.Frame):
     def __init__(self, master, theme, height=120, surface="panel",
                  size=SIZE_TITLE, token="text", editable=True, wrap="char",
                  pad=10, placeholder=""):
+        height = scale(height)
+        pad = scale(pad)
         super().__init__(master, bd=0, highlightthickness=1)
         self.theme = theme
         tint(self, bg="fill", hl="hair", hlc="hair")
@@ -586,6 +600,7 @@ class Segment(tk.Frame):
 
     def __init__(self, master, theme, options, value=None, command=None,
                  surface="canvas", height=28, size=SIZE_BODY):
+        height = scale(height)
         super().__init__(master, bd=0, highlightthickness=1)
         self.theme = theme
         self._surface = surface
@@ -600,11 +615,14 @@ class Segment(tk.Frame):
             cell = tk.Frame(self, height=height, bd=0, highlightthickness=0)
             caption = text(cell, theme, value=label, size=size,
                            surface=surface, anchor="center")
-            # 单元格宽度取文字宽度加左右各 12 像素的内边距, 之后固定住尺寸
-            cell.configure(width=caption.winfo_reqwidth() + 24)
+            # 选中项使用粗体, 宽度按粗体测量, 切换时文字才不会被裁掉
+            bold_font = tkfont.Font(root=cell, font=sans(size, True))
+            cell_width = max(caption.winfo_reqwidth(),
+                             bold_font.measure(label)) + scale(24)
+            cell.configure(width=cell_width)
             cell.pack_propagate(False)
             cell.pack(side="left", fill="y")
-            caption.pack(fill="both", expand=True, padx=12)
+            caption.pack(fill="both", expand=True, padx=scale(12))
             for widget in (cell, caption):
                 widget.configure(cursor="hand2")
                 widget.bind("<Button-1>", lambda _e, k=key: self.set(k, True))
@@ -663,7 +681,7 @@ class Check(tk.Frame):
         self.mark.pack(side="left")
         self.label = text(self, theme, value=value, size=size, token=token,
                           surface=surface, anchor="w")
-        self.label.pack(side="left", padx=(6, 0))
+        self.label.pack(side="left", padx=(scale(6), 0))
         self._variable.trace_add("write", lambda *_a: self._paint())
         for widget in (self, self.mark, self.label):
             widget.configure(cursor="hand2")
@@ -723,6 +741,7 @@ class RadioRow(tk.Frame):
 
     def __init__(self, master, theme, value, label, hint="", variable=None,
                  command=None, surface="panel", height=34):
+        height = scale(height)
         super().__init__(master, bd=0, highlightthickness=0, height=height)
         self.theme = theme
         self._surface = surface
@@ -736,7 +755,8 @@ class RadioRow(tk.Frame):
                          surface=surface, anchor="center")
         self.mark.pack(side="left")
         self.label = text(self, theme, value=label, surface=surface, anchor="w")
-        self.label.pack(side="left", padx=(10, 0), fill="x", expand=True)
+        self.label.pack(side="left", padx=(scale(10), 0), fill="x",
+                        expand=True)
         self.hint = text(self, theme, value=hint, size=SIZE_LABEL,
                          token="muted", surface=surface, anchor="e")
         self.hint.pack(side="right")
@@ -808,6 +828,7 @@ class Splitter(tk.Frame):
 
     def __init__(self, master, theme, orient="vertical", size=5,
                  on_drag=None, on_start=None, on_end=None):
+        size = scale(size)
         super().__init__(master, bd=0, highlightthickness=0)
         self.theme = theme
         self.orient = orient
@@ -893,7 +914,7 @@ class _DropdownPopup:
         field.update_idletasks()
         if not self.values:
             return
-        width = max(field.winfo_width(), 80)
+        width = max(field.winfo_width(), scale(80))
         row_count = max(1, min(len(self.values), LIST_MAX_VISIBLE))
         height = row_count * LIST_ITEM_HEIGHT
 
@@ -934,9 +955,11 @@ class _DropdownPopup:
         x = field.winfo_rootx()
         y = field.winfo_rooty() + field.winfo_height()
         screen_height = field.winfo_screenheight()
-        if y + height > screen_height - 8:
-            above = field.winfo_rooty() - height - 2
-            y = above if above > 8 else max(8, screen_height - height - 8)
+        margin = scale(8)
+        if y + height > screen_height - margin:
+            above = field.winfo_rooty() - height - scale(2)
+            y = above if above > margin else max(
+                margin, screen_height - height - margin)
         self.window.geometry("%dx%d+%d+%d" % (width + 2, height + 2, x, y))
         self.window.deiconify()
         self.window.lift()
@@ -983,7 +1006,7 @@ class _DropdownPopup:
             row.configure(bg=self.theme.rgb(bg))
             label = text(row, self.theme, value=value, size=SIZE_BODY,
                          token=token, surface=bg, anchor="w")
-            label.pack(fill="both", expand=True, padx=9)
+            label.pack(fill="both", expand=True, padx=scale(9))
             label.configure(font=self.field.content_font())
             for widget in (row, label):
                 widget.configure(cursor="hand2")
@@ -1056,11 +1079,13 @@ def value_grid(master, theme, fields, surface="panel", label_width=None,
     for index, (key, caption) in enumerate(fields):
         caption_label = text(frame, theme, value=caption, size=SIZE_LABEL,
                              token="muted", surface=surface, anchor="w")
-        caption_label.grid(row=index, column=0, sticky="nw", pady=(0, 7))
+        caption_label.grid(row=index, column=0, sticky="nw",
+                           pady=(0, scale(7)))
         holder = tk.Frame(frame, bd=0, highlightthickness=0)
         tint(holder, bg=surface)
         holder.configure(bg=theme.rgb(surface))
-        holder.grid(row=index, column=1, sticky="ew", padx=(10, 0), pady=(0, 7))
+        holder.grid(row=index, column=1, sticky="ew",
+                    padx=(scale(10), 0), pady=(0, scale(7)))
         label = text(holder, theme, value="-", size=value_size,
                      mono_font=value_mono, surface=surface, anchor="w",
                      wrap=wrap_width > 0)
@@ -1102,7 +1127,7 @@ class Table(tk.Frame):
         self._empty_text = empty_text
         self._surface = surface
         self.row_height = row_height
-        self.padding = padding
+        self.padding = scale(padding)
         self._rows = []
         self._selected = None
         #: 允许多选时记录所有被勾选的行号
@@ -1122,7 +1147,7 @@ class Table(tk.Frame):
         tint(self.body, bg=surface)
         self.body.configure(bg=theme.rgb(surface))
         self.scroll = tk.Scrollbar(self, orient="vertical",
-                                   command=self.body.yview, width=8,
+                                   command=self.body.yview, width=scale(8),
                                    bd=0, highlightthickness=0,
                                    troughcolor=theme.rgb(surface),
                                    activebackground=theme.rgb("muted"),
@@ -1413,7 +1438,7 @@ class StatusRow:
         self.dot.pack(side="left")
         self.text = text(self.frame, theme, size=SIZE_LABEL, token="muted",
                          surface="side")
-        self.text.pack(side="left", padx=(12, 0))
+        self.text.pack(side="left", padx=(scale(12), 0))
         self.tail = tk.Frame(self.frame, bd=0, highlightthickness=0)
         tint(self.tail, bg="side")
         self.tail.configure(bg=theme.rgb("side"))
@@ -1437,9 +1462,9 @@ class StatusRow:
         @param widget: 以 self.tail 为父容器的控件
         """
         if self._tail_count == 0:
-            self.tail.pack(side="left", padx=(12, 0))
+            self.tail.pack(side="left", padx=(scale(12), 0))
         widget.pack(in_=self.tail, side="left",
-                    padx=(12, 0) if self._tail_count else (0, 0))
+                    padx=(scale(12), 0) if self._tail_count else (0, 0))
         self._tail_count += 1
 
     def add_action(self, widget):
@@ -1448,7 +1473,7 @@ class StatusRow:
         @param widget: 以 self.actions 为父容器的控件
         """
         widget.pack(in_=self.actions, side="left",
-                    padx=(10, 0) if self._action_count else (0, 0))
+                    padx=(scale(10), 0) if self._action_count else (0, 0))
         self._action_count += 1
 
     def show(self):
@@ -1466,6 +1491,8 @@ class Track(tk.Canvas):
     """进度条: 150 x 4 像素的细条, 前景用强调色"""
 
     def __init__(self, master, theme, width=150, height=4, surface="side"):
+        width = scale(width)
+        height = scale(height)
         super().__init__(master, width=width, height=height, bd=0,
                          highlightthickness=0)
         self.theme = theme

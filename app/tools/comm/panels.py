@@ -12,6 +12,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from ... import kit
+from ...dpi import scale
 from ...theme import SIZE_BODY, SIZE_LABEL, mono, sans, tint
 from .codec import ParseError, StreamDecoder, format_bytes, parse_payload
 from .constants import (
@@ -97,7 +98,8 @@ class DataView(tk.Frame):
             foreground=palette["text"], insertbackground=palette["text"],
             selectbackground=palette["accent"],
             selectforeground=palette["on_accent"],
-            font=mono(SIZE_LABEL), padx=10, pady=10, undo=editable,
+            font=mono(SIZE_LABEL), padx=scale(10), pady=scale(10),
+            undo=editable,
             maxundo=200,
         )
         tint(self.text, bg="fill", fg="text", insert="text", sel_bg="accent",

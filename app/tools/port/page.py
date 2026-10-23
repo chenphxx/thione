@@ -32,7 +32,6 @@ from .constants import (
     MIN_PORT,
     PAGE_TITLE,
     PORT_COLUMNS,
-    PORT_ENTRY_WIDTH,
     SUBTITLE,
     VIEW_FILES,
     VIEW_LABELS,
@@ -104,7 +103,7 @@ class PortPage(ToolPage):
                  size=SIZE_LABEL, token="muted",
                  surface="panel").pack(side="left", padx=(14, 8))
         self.entry_port = kit.EntryField(self._port_controls, self.theme,
-                                         width=PORT_ENTRY_WIDTH)
+                                         width=96)
         self.entry_port.pack(side="left")
         self.entry_port.entry.bind("<Return>", lambda _e: self._search_port())
         ttk.Button(self._port_controls, text="查询", style="Primary.TButton",

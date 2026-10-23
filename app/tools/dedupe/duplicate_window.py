@@ -7,6 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 from PIL import ImageTk
 
 from ... import kit
+from ...dpi import scale
 from ...errors import open_path
 from ...imaging import load_thumbnail, make_placeholder
 from ...theme import SIZE_LABEL, tint
@@ -24,7 +25,11 @@ class DuplicateGroupWindow(tk.Toplevel):
     def __init__(self, master, groups, all_files, theme):
         super().__init__(master)
         self.title("重复图片分组")
-        self.geometry("1400x1000")
+        width = min(scale(1400),
+                    max(scale(800), self.winfo_screenwidth() - scale(80)))
+        height = min(scale(1000),
+                     max(scale(600), self.winfo_screenheight() - scale(120)))
+        self.geometry(f"{width}x{height}")
         self.theme = theme
         self.theme.register(self)
 
@@ -36,7 +41,7 @@ class DuplicateGroupWindow(tk.Toplevel):
         self.target_folder = ""
         self.dup_subfolder_name = DUP_SUBFOLDER_NAME
         self._layout_job = None
-        self._last_canvas_w = 1000
+        self._last_canvas_w = scale(1000)
 
         self._build_toolbar()
         self._build_canvas()
@@ -49,9 +54,9 @@ class DuplicateGroupWindow(tk.Toplevel):
         tint(top, bg="canvas")
         top.configure(bg=self.theme.rgb("canvas"))
         top.pack(side="top", fill="x")
-        top.pack_configure(padx=20, pady=(18, 12))
+        top.pack_configure(padx=scale(20), pady=(scale(18), scale(12)))
         kit.text(top, self.theme, value="重复图片分组", size=15, bold=True,
-                 surface="canvas").pack(side="left", padx=(0, 14))
+                 surface="canvas").pack(side="left", padx=(0, scale(14)))
 
         self.btn_target = ttk.Button(top, text="选择目标文件夹",
                                      style="TButton",
@@ -60,23 +65,27 @@ class DuplicateGroupWindow(tk.Toplevel):
         self.lbl_target = kit.text(top, self.theme, value="未选择",
                                    size=SIZE_LABEL, token="muted",
                                    surface="canvas", anchor="w", wrap=320)
-        self.lbl_target.pack(side="left", padx=(8, 0))
+        self.lbl_target.pack(side="left", padx=(scale(8), 0))
         self.btn_save = ttk.Button(top, text="保存选中图片",
                                    style="Primary.TButton",
                                    command=self.save_selected)
-        self.btn_save.pack(side="left", padx=(16, 0))
+        self.btn_save.pack(side="left", padx=(scale(16), 0))
 
         kit.hairline(top, self.theme, orient="vertical").pack(
-            side="left", fill="y", padx=14)
+            side="left", fill="y", padx=scale(14))
 
         ttk.Button(top, text="取消勾选", style="TButton",
-                   command=self.deselect_all).pack(side="left", padx=(0, 6))
+                   command=self.deselect_all).pack(side="left",
+                                                   padx=(0, scale(6)))
         ttk.Button(top, text="反选", style="TButton",
-                   command=self.inverse_select).pack(side="left", padx=(0, 6))
+                   command=self.inverse_select).pack(side="left",
+                                                    padx=(0, scale(6)))
         ttk.Button(top, text="批量勾选第一个", style="TButton",
-                   command=self.default_select).pack(side="left", padx=(0, 6))
+                   command=self.default_select).pack(side="left",
+                                                    padx=(0, scale(6)))
         ttk.Button(top, text="删除已勾选", style="Danger.TButton",
-                   command=self.delete_checked).pack(side="left", padx=(0, 6))
+                   command=self.delete_checked).pack(side="left",
+                                                    padx=(0, scale(6)))
 
     def _build_canvas(self):
         self.canvas_frame = tk.Frame(self, bd=0, highlightthickness=0)
@@ -142,10 +151,10 @@ class DuplicateGroupWindow(tk.Toplevel):
             self.theme.apply_theme(self)
             return
 
-        canvas_w = max(400, self._last_canvas_w
-                       or self.canvas.winfo_width() or 1000)
-        cols = max(1, min(len(self.groups), canvas_w // 380))
-        card_w = (canvas_w - (cols + 1) * 16) / cols
+        canvas_w = max(scale(400), self._last_canvas_w
+                       or self.canvas.winfo_width() or scale(1000))
+        cols = max(1, min(len(self.groups), canvas_w // scale(380)))
+        card_w = (canvas_w - (cols + 1) * scale(16)) / cols
 
         for idx, group in enumerate(self.groups):
             row, col = divmod(idx, cols)
@@ -154,14 +163,17 @@ class DuplicateGroupWindow(tk.Toplevel):
 
             frame = kit.Panel(self.inner_frame, self.theme,
                               title=f"组 {idx + 1}", body_pad=(10, 10))
-            frame.grid(row=row, column=col, padx=8, pady=8, sticky="nsew")
+            frame.grid(row=row, column=col, padx=scale(8), pady=scale(8),
+                       sticky="nsew")
             self.inner_frame.columnconfigure(col, weight=1)
             self.inner_frame.rowconfigure(row, weight=1)
 
             # 组内图片分几行展示: 每行最多按卡片宽度 170px 一张
-            slots_per_row = max(1, min(len(group), max(1, int(card_w // 170))))
+            slots_per_row = max(
+                1, min(len(group), max(1, int(card_w // scale(170)))))
             slot_w = card_w / slots_per_row
-            thumb_side = max(48, min(240, int(slot_w - 30)))
+            thumb_side = max(scale(48), min(scale(240),
+                                            int(slot_w - scale(30))))
             for i, pi in enumerate(group):
                 r, c = divmod(i, slots_per_row)
                 self._add_image_slot(frame, pi, idx, thumb_side, r, c,
@@ -171,7 +183,8 @@ class DuplicateGroupWindow(tk.Toplevel):
     def _add_image_slot(self, card, path, group_idx, thumb_side, row, col,
                         slots_per_row):
         slot = ttk.Frame(card)
-        slot.grid(row=row, column=col, sticky="nsew", padx=3, pady=3)
+        slot.grid(row=row, column=col, sticky="nsew", padx=scale(3),
+                  pady=scale(3))
         card.columnconfigure(col, weight=1)
         card.rowconfigure(row, weight=1)
 
@@ -204,7 +217,7 @@ class DuplicateGroupWindow(tk.Toplevel):
         btn_del = ttk.Button(slot, text="删除", style="Danger.TButton",
                              command=lambda p=path, cb=chk:
                              self.delete_file(p, cb))
-        btn_del.pack(side="bottom", fill="x", pady=(2, 0))
+        btn_del.pack(side="bottom", fill="x", pady=(scale(2), 0))
 
     # -------------------------- 分组展示 --------------------------
     def select_target_folder(self):

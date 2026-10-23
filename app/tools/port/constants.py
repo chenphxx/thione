@@ -1,5 +1,7 @@
 """端口与文件占用的专属常量"""
 
+from ...dpi import scale
+
 PAGE_TITLE = "端口与占用"
 
 # 顶栏里工具名下方的说明
@@ -44,15 +46,15 @@ DETAIL_FIELDS = (
 EMPTY_VALUE = "-"
 
 # 端口输入框宽度 (像素)
-PORT_ENTRY_WIDTH = 96
+PORT_ENTRY_WIDTH = scale(96)
 
 # 详情栏的宽度 (像素), 与设计稿一致; 拖动分隔条时可在这个范围内调整
-DETAIL_WIDTH = 304
-DETAIL_MIN_WIDTH = 240
-DETAIL_MAX_WIDTH = 560
+DETAIL_WIDTH = scale(304)
+DETAIL_MIN_WIDTH = scale(240)
+DETAIL_MAX_WIDTH = scale(560)
 
 # 详情字段标签列的宽度 (像素)
-DETAIL_LABEL_WIDTH = 74
+DETAIL_LABEL_WIDTH = scale(74)
 
 # 空状态文案: 标题 与 下一步动作
 EMPTY_STATES = {

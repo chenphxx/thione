@@ -1,5 +1,7 @@
 """资源管理器风格浏览组件的常量"""
 
+from ..dpi import scale
+
 #: 展示方式, 顺序即界面上的排列顺序
 VIEWS = ("list", "icons")
 
@@ -24,25 +26,27 @@ DEFAULT_TIER = "medium"
 #: 每档的 (缩略图框宽, 缩略图框高, 名称字号)
 #: 中档与设计稿一致 (148 x 98), 小档与大档按同一比例缩放
 TIER_SPECS = {
-    "small": (89, 59, 11),
-    "medium": (148, 98, 12),
-    "large": (207, 137, 13),
+    "small": (scale(89), scale(59), 11),
+    "medium": (scale(148), scale(98), 12),
+    "large": (scale(207), scale(137), 13),
 }
 
 #: 缩略图与名称之间的间距
-LABEL_GAP = 6
+LABEL_GAP = scale(6)
 
 #: 网格里各格子之间的间距, 与设计稿的 gap 一致
-CELL_GAP = 12
+CELL_GAP = scale(12)
 
 #: 网格四周留出的空白
-GRID_PAD = 0
+GRID_PAD = scale(0)
 
 #: 列表视图的行高与名称字号; 列表视图不随缩略图档位变化
-LIST_ROW_HEIGHT = 30
+LIST_ROW_HEIGHT = scale(30)
 LIST_FONT_SIZE = 13
 
 #: 后端线程读入时的缓存尺寸, 比最大展示尺寸大一圈以便放大档位后仍然清晰
+#: 512 物理像素已经覆盖 200% 下大档缩略图的展示尺寸, 不随 DPI 再放大,
+#: 否则缓存占用会成倍增加
 CACHE_SIZE = (512, 512)
 
 #: 主线程每次贴上几张, 避免一次性重建几百张时卡住界面
@@ -64,11 +68,11 @@ OVERSCAN_ROWS = 2
 CACHE_LIMIT = 240
 
 #: 右侧预览窗格宽度与底部详细信息窗格高度
-PREVIEW_WIDTH = 276
-DETAILS_HEIGHT = 88
+PREVIEW_WIDTH = scale(276)
+DETAILS_HEIGHT = scale(88)
 
 #: 缩略图右下角标记的内边距与字号
-BADGE_INSET = 6
+BADGE_INSET = scale(6)
 BADGE_FONT_SIZE = 11
 
 #: 预览支持的文件类型, 与 Windows 资源管理器能直接预览的范围一致

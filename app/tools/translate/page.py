@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from ... import kit
+from ...dpi import scale
 from ...errors import show_error
 from ...shell.page import ToolPage
 from ...theme import BODY_GAP, SIZE_BODY, SIZE_LABEL, tint
@@ -44,10 +45,10 @@ FIELDS = (
 )
 
 #: 服务选择区里服务名一列的宽度, 让两行的说明文案左对齐
-PROVIDER_LABEL_WIDTH = 140
+PROVIDER_LABEL_WIDTH = scale(140)
 
 #: 最近一次翻译面板的宽度 (像素), 与设计稿一致
-REPORT_WIDTH = 364
+REPORT_WIDTH = scale(364)
 
 #: 测试连接用的短文本, 只要能走通一次真实翻译即可
 SKIP_TEST_TEXT = "Hello"

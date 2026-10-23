@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .. import kit
+from ..dpi import scale
 from ..theme import (
     BODY_GAP,
     BODY_PAD_TOP,
@@ -120,7 +121,7 @@ class ToolPage(tk.Frame):
         for caption, style, command in reversed(list(specs)):
             button = ttk.Button(self.actions, text=caption,
                                 style=style or "TButton", command=command)
-            button.pack(side="right", padx=(8, 0))
+            button.pack(side="right", padx=(scale(8), 0))
             buttons.append(button)
         return list(reversed(buttons))
 

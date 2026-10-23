@@ -13,6 +13,7 @@ from tkinter import ttk
 from PIL import ImageTk
 
 from .. import kit
+from ..dpi import scale
 from ..errors import open_path
 from ..imaging import load_thumbnail, make_gradient
 from ..theme import SIZE_BODY, SIZE_LABEL, SIZE_SECTION, mono, tint
@@ -26,7 +27,7 @@ from .constants import (
 )
 
 #: 预览框的高度, 与设计稿一致
-PREVIEW_BOX_HEIGHT = 196
+PREVIEW_BOX_HEIGHT = scale(196)
 
 #: 属性字段的默认内容
 DEFAULT_FIELDS = (("name", "文件名"), ("size", "大小"))
@@ -56,11 +57,12 @@ class PreviewPane(tk.Frame):
         inner = tk.Frame(self, bd=0, highlightthickness=0)
         tint(inner, bg="panel")
         inner.configure(bg=theme.rgb("panel"))
-        inner.pack(side="left", fill="both", expand=True, padx=14, pady=14)
+        inner.pack(side="left", fill="both", expand=True, padx=scale(14),
+                   pady=scale(14))
 
         kit.text(inner, self.theme, value="预览", size=SIZE_SECTION,
                  token="muted", bold=True,
-                 surface="panel").pack(anchor="w", pady=(0, 10))
+                 surface="panel").pack(anchor="w", pady=(0, scale(10)))
 
         self.box = tk.Frame(inner, bd=0, highlightthickness=1,
                             height=PREVIEW_BOX_HEIGHT)
@@ -74,7 +76,7 @@ class PreviewPane(tk.Frame):
         holder = tk.Frame(inner, bd=0, highlightthickness=0)
         tint(holder, bg="panel")
         holder.configure(bg=theme.rgb("panel"))
-        holder.pack(fill="x", pady=(12, 0))
+        holder.pack(fill="x", pady=(scale(12), 0))
         self._grid, self._labels, self._apply_values = kit.value_grid(
             holder, theme, self._fields, surface="panel")
         self._grid.pack(fill="x")
@@ -89,7 +91,7 @@ class PreviewPane(tk.Frame):
         self.btn_reveal = ttk.Button(actions, text="在文件夹中显示",
                                      style="TButton",
                                      command=self._reveal_preview_file)
-        self.btn_reveal.pack(side="left", padx=(8, 0))
+        self.btn_reveal.pack(side="left", padx=(scale(8), 0))
 
         self.show(None)
 
@@ -221,7 +223,8 @@ class PreviewPane(tk.Frame):
 
     def _show_text_content(self, content):
         text = tk.Text(self.box, wrap="none", bd=0, highlightthickness=0,
-                       font=mono(SIZE_LABEL), padx=10, pady=8)
+                       font=mono(SIZE_LABEL), padx=scale(10),
+                       pady=scale(8))
         tint(text, bg="fill", fg="text", insert="text", sel_bg="accent",
              sel_fg="on_accent")
         text.configure(bg=self.theme.rgb("fill"), fg=self.theme.rgb("text"),

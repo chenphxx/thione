@@ -9,16 +9,17 @@ from tkinter import ttk
 
 import pyperclip
 
+from ...dpi import scale
 from ...paths import resource_path
 from ...theme import SIZE_BODY, SIZE_LABEL, sans, tint
 from .constants import ICON_PATH
 
-WRAP_LENGTH = 320
-MARGIN = 8          # 与屏幕边缘的最小间距
-CURSOR_OFFSET = 12  # 窗口相对光标的偏移, 避免正好盖住光标
-MIN_WIDTH = 240
-MIN_HEIGHT = 100
-PADDING = 14        # 内容与窗口边框的间距
+WRAP_LENGTH = scale(320)
+MARGIN = scale(8)          # 与屏幕边缘的最小间距
+CURSOR_OFFSET = scale(12)  # 窗口相对光标的偏移, 避免正好盖住光标
+MIN_WIDTH = scale(240)
+MIN_HEIGHT = scale(100)
+PADDING = scale(14)        # 内容与窗口边框的间距
 
 
 class ResultWindow(tk.Toplevel):

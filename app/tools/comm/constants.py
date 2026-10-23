@@ -1,5 +1,7 @@
 """串口助手的专属常量"""
 
+from ...dpi import scale
+
 PAGE_TITLE = "串口助手"
 
 SUBTITLE = "通过串口或者网络收发数据, 支持 TCP Client TCP Server 与 UDP"
@@ -100,25 +102,25 @@ CLOSE_JOIN_TIMEOUT = 2.0
 CONNECT_TIMEOUT = 2.0
 
 #: 配置列里提示文字的折行宽度 (像素)
-CONTROL_HINT_WRAP = 230
+CONTROL_HINT_WRAP = scale(230)
 
 # 收发区右侧配置列的宽度 (像素): 两侧取同一个值, 数据视图才会左右对齐,
 # 宽度要放得下三个动作按钮 (设计稿的 224 在 tkinter 的按钮尺寸下会把文字裁掉)
-RECEIVE_CONTROLS_WIDTH = 300
-SEND_CONTROLS_WIDTH = 300
+RECEIVE_CONTROLS_WIDTH = scale(300)
+SEND_CONTROLS_WIDTH = scale(300)
 
 #: 十六进制展示时每行的字节数说明
 BYTES_PER_LINE_HINT = "每行字节 16"
 
 #: 发送区的高度 (像素), 与设计稿一致
-SEND_AREA_HEIGHT = 172
+SEND_AREA_HEIGHT = scale(172)
 
 #: 拖动分隔条时发送区的最小高度, 以及接收区至少要留下的高度
-SEND_MIN_HEIGHT = 150
-RECEIVE_MIN_HEIGHT = 240
+SEND_MIN_HEIGHT = scale(150)
+RECEIVE_MIN_HEIGHT = scale(240)
 
 #: 分隔条与两侧间距占用的高度, 计算发送区上限时要让出来
-SEND_SPLITTER_ROOM = 20
+SEND_SPLITTER_ROOM = scale(20)
 
 #: 控件宽度 (字符数): 配置区一行要放下当前链路的全部控件, 收发卡的配置列要放下
 #: 每条控制项, 因此取值按实际内容压到最小, 串口号按常见名称取 17 个字符

@@ -12,6 +12,7 @@ from tkinter import ttk
 from .. import kit, win32
 from ..constants import (APP_ICON, APP_MIN_SIZE, APP_SIZE, APP_TITLE,
                          QUEUE_POLL_MS)
+from ..dpi import scale
 from ..errors import open_path, show_error
 from ..paths import ensure_dir, resource_path, user_log_dir
 from ..theme import BODY_PAD_X, SIZE_LABEL, STATUSBAR_HEIGHT, ThemeManager, tint
@@ -20,7 +21,7 @@ from .sidebar import Sidebar
 logger = logging.getLogger(__name__)
 
 #: 侧栏拖拽分隔条的宽度
-SPLITTER_WIDTH = 5
+SPLITTER_WIDTH = scale(5)
 
 
 class ShellWindow:
@@ -289,7 +290,7 @@ class ShellWindow:
         value = "   ·   ".join(self._indicators.values())
         self._indicator.configure(text=value)
         if value:
-            self._indicator_frame.pack(side="left", padx=(12, 0))
+            self._indicator_frame.pack(side="left", padx=(scale(12), 0))
         else:
             self._indicator_frame.pack_forget()
 

@@ -1,9 +1,11 @@
 """批量重命名的专属常量"""
 
+from ...dpi import scale
+
 PAGE_TITLE = "批量重命名"
 
 # 顶栏里工具名下方的说明
 SUBTITLE = "按前缀与起始序号批量改名, 可在原文件夹内直接改"
 
 # 文件网格的最小高度; 卡片会把它撑满所在区域, 一屏放不下时由外层滚动
-LIST_MIN_HEIGHT = 180
+LIST_MIN_HEIGHT = scale(180)

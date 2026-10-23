@@ -8,6 +8,7 @@
 import tkinter as tk
 
 from ... import kit
+from ...dpi import scale
 from ...shell.page import ToolPage
 from ...theme import (
     BODY_GAP,
@@ -85,7 +86,8 @@ class RadixPage(ToolPage):
                    for key, title, _width in REFERENCE_COLUMNS]
         self.table = kit.Table(
             table_panel.body, self.theme, columns, surface="panel")
-        self.table.pack(side="top", fill="both", expand=True, pady=(10, 0))
+        self.table.pack(side="top", fill="both", expand=True,
+                        pady=(scale(10), 0))
         self.table.set_rows(self._reference_rows())
 
     def _build_block(self, parent, caption, accent):
@@ -127,7 +129,7 @@ class RadixPage(ToolPage):
         @param parent: 父容器
         @return: 按钮控件
         """
-        swap = tk.Frame(parent, width=32, bd=0, highlightthickness=1,
+        swap = tk.Frame(parent, width=scale(32), bd=0, highlightthickness=1,
                         cursor="hand2")
         tint(swap, bg="fill", hl="hair", hlc="hair")
         swap.configure(bg=self.theme.rgb("fill"),
@@ -157,13 +159,14 @@ class RadixPage(ToolPage):
         inner = tk.Frame(cell, bd=0, highlightthickness=0)
         tint(inner, bg="fill")
         inner.configure(bg=self.theme.rgb("fill"))
-        inner.pack(fill="both", expand=True, padx=10, pady=7)
+        inner.pack(fill="both", expand=True, padx=scale(10),
+                   pady=scale(7))
         kit.text(inner, self.theme, value=COMMON_LABELS[base],
                  size=SIZE_SECTION, token="muted", surface="fill").pack(
             anchor="w")
         value = kit.text(inner, self.theme, value="", size=SIZE_VALUE,
                          mono_font=True, surface="fill")
-        value.pack(anchor="w", pady=(4, 0))
+        value.pack(anchor="w", pady=(scale(4), 0))
         self._cell_values[base] = value
         return cell
 

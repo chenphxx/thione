@@ -40,7 +40,6 @@ from .constants import (
     FILE_COLUMNS,
     FORMAT_CHOICES,
     FORMAT_CODECS,
-    FORMAT_FIELD_WIDTH,
     FORMAT_LABELS,
     INPUT_EXTENSIONS,
     LOSSLESS_ONLY_FORMATS,
@@ -50,7 +49,6 @@ from .constants import (
     PROGRESS_IDLE,
     PROGRESS_RUNNING,
     PROGRESS_STOPPING,
-    QUALITY_FIELD_WIDTH,
     SUBTITLE,
     QUALITY_HINTS,
     RESCAN_LABEL,
@@ -173,7 +171,7 @@ class ConvertPage(ToolPage):
                                          values=list(FORMAT_CHOICES),
                                          command=self._on_format_change,
                                          surface="canvas",
-                                         width=FORMAT_FIELD_WIDTH)
+                                         width=104)
         self.combo_format.set(FORMAT_LABELS[DEFAULT_FORMAT])
         self.combo_format.pack(side="left")
 
@@ -183,7 +181,7 @@ class ConvertPage(ToolPage):
         self.combo_quality = kit.Dropdown(source_row, self.theme,
                                           command=self._on_quality_change,
                                           surface="canvas",
-                                          width=QUALITY_FIELD_WIDTH)
+                                          width=104)
         self.combo_quality.pack(side="left")
         # 说明音质可选项为什么与别的格式不同: 无损 与 码率 两类
         self.lbl_quality_hint = kit.text(source_row, self.theme, value="",

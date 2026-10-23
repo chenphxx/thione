@@ -8,6 +8,7 @@ import time
 import tkinter as tk
 
 from .. import kit
+from ..dpi import scale
 from ..imaging import image_size
 from ..theme import SIZE_BODY, SIZE_LABEL, tint
 from .constants import DETAILS_HEIGHT, IMAGE_EXTS, TABLE_EXTS, TEXT_EXTS
@@ -49,7 +50,8 @@ class DetailsPane(tk.Frame):
                          height=DETAILS_HEIGHT)
         tint(inner, bg="panel")
         inner.configure(bg=theme.rgb("panel"))
-        inner.pack(side="top", fill="both", expand=True, padx=14, pady=8)
+        inner.pack(side="top", fill="both", expand=True, padx=scale(14),
+                   pady=scale(8))
         inner.pack_propagate(False)
 
         self._values = {}
@@ -57,12 +59,13 @@ class DetailsPane(tk.Frame):
             column = tk.Frame(inner, bd=0, highlightthickness=0)
             tint(column, bg="panel")
             column.configure(bg=theme.rgb("panel"))
-            column.grid(row=0, column=index, sticky="nsew", padx=(0, 20))
+            column.grid(row=0, column=index, sticky="nsew",
+                        padx=(0, scale(20)))
             kit.text(column, theme, value=caption, size=SIZE_LABEL,
                      token="muted", surface="panel").pack(anchor="w")
             label = kit.text(column, theme, value="-", size=SIZE_BODY,
                              surface="panel")
-            label.pack(anchor="w", fill="x", pady=(2, 0))
+            label.pack(anchor="w", fill="x", pady=(scale(2), 0))
             self._values[key] = label
             inner.columnconfigure(index, weight=weight)
 

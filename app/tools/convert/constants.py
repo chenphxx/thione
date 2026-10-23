@@ -1,5 +1,7 @@
 """文件格式转换的专属常量"""
 
+from ...dpi import scale
+
 PAGE_TITLE = "文件格式转换"
 
 # 可选的输出格式: 扩展名 显示名 有损编码器 是否有损码率可选
@@ -176,8 +178,8 @@ FFMPEG_MISSING = "没有找到 ffmpeg, 请手动选择 ffmpeg.exe, 或者把它�
 
 # 工具条上两个下拉框的宽度 (像素), 与设计稿一致
 # 两个下拉框取同一个宽度, 整行看起来才齐整
-FORMAT_FIELD_WIDTH = 104
-QUALITY_FIELD_WIDTH = 104
+FORMAT_FIELD_WIDTH = scale(104)
+QUALITY_FIELD_WIDTH = scale(104)
 
 # 状态栏左侧的引擎说明
 ENGINE_LABEL = "引擎"

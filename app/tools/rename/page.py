@@ -11,6 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from ... import kit
 from ...browser import PreviewPane, ViewSwitch
+from ...dpi import scale
 from ...errors import open_path
 from ...shell.page import ToolPage
 from ...theme import SIZE_LABEL, tint
@@ -106,7 +107,7 @@ class RenamePage(ToolPage):
         self.preview = PreviewPane(area, self.theme, fields=PREVIEW_FIELDS,
                                    on_open=self._open_file,
                                    on_reveal=self._reveal_file)
-        self.preview.configure(width=276)
+        self.preview.configure(width=scale(276))
 
         self.panel = kit.Panel(area, self.theme, head=False, body_pad=(0, 0))
         self.panel.pack(side="left", fill="both", expand=True)

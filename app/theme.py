@@ -7,6 +7,8 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
 
+from .dpi import factor, scale
+
 # ---------------- 字号 (像素) ----------------
 SIZE_BRAND = 14
 SIZE_TITLE = 15
@@ -16,20 +18,20 @@ SIZE_LABEL = 12
 SIZE_SECTION = 11
 SIZE_EMPTY = 34
 
-# ---------------- 尺寸 (像素) ----------------
-SIDEBAR_WIDTH = 208
-TOPBAR_HEIGHT = 62
-STATUSBAR_HEIGHT = 32
-PANEL_HEAD_HEIGHT = 34
-CONTROL_HEIGHT = 30
-BUTTON_HEIGHT = 30
-MINI_BUTTON_HEIGHT = 26
-TABLE_ROW_HEIGHT = 31
+# ---------------- 尺寸 (设计稿逻辑像素, 启动时按 DPI 换算) ----------------
+SIDEBAR_WIDTH = scale(208)
+TOPBAR_HEIGHT = scale(62)
+STATUSBAR_HEIGHT = scale(32)
+PANEL_HEAD_HEIGHT = scale(34)
+CONTROL_HEIGHT = scale(30)
+BUTTON_HEIGHT = scale(30)
+MINI_BUTTON_HEIGHT = scale(26)
+TABLE_ROW_HEIGHT = scale(31)
 #: 表头高度: 24 像素文字行与下边距 + 1 像素分隔线
-TABLE_HEAD_HEIGHT = 25
-BODY_PAD_X = 20
-BODY_PAD_TOP = 18
-BODY_GAP = 12
+TABLE_HEAD_HEIGHT = scale(25)
+BODY_PAD_X = scale(20)
+BODY_PAD_TOP = scale(18)
+BODY_GAP = scale(12)
 
 # 字体族, 由 ThemeManager 启动时按系统可用字体改写
 FONT_SANS = "Segoe UI"
@@ -143,7 +145,7 @@ def sans(size=SIZE_BODY, bold=False, italic=False):
     @param italic: 是否使用斜体
     @return: Tk 字体元组
     """
-    return (FONT_SANS, -size, "bold" if bold else "normal",
+    return (FONT_SANS, -scale(size), "bold" if bold else "normal",
             "italic" if italic else "roman")
 
 
@@ -154,7 +156,7 @@ def mono(size=SIZE_BODY, bold=False):
     @param bold: 是否使用粗体
     @return: Tk 字体元组
     """
-    return (FONT_MONO, -size, "bold" if bold else "normal")
+    return (FONT_MONO, -scale(size), "bold" if bold else "normal")
 
 
 def icon(size=SIZE_BODY, bold=False):
@@ -164,7 +166,7 @@ def icon(size=SIZE_BODY, bold=False):
     @param bold: 是否使用粗体
     @return: Tk 字体元组
     """
-    return (FONT_ICON, -size, "bold" if bold else "normal")
+    return (FONT_ICON, -scale(size), "bold" if bold else "normal")
 
 
 def tint(widget, **roles):
@@ -188,11 +190,13 @@ class ThemeManager:
         self.mode = mode if mode in PALETTES else "light"
         self.palette = dict(PALETTES[self.mode])
         self._windows = [root]
+        # 让 Tk 的点字号默认控件 (菜单 原生提示等) 与物理 DPI 保持一致
+        root.tk.call("tk", "scaling", factor() * 96 / 72)
         self._configure_fonts(root)
         self._apply_styles()
         root.configure(bg=self.palette["canvas"])
         self._default_font = tkfont.Font(
-            root=root, family=FONT_SANS, size=-SIZE_BODY
+            root=root, family=FONT_SANS, size=-scale(SIZE_BODY)
         )
         self._apply_native_defaults()
 
@@ -239,6 +243,10 @@ class ThemeManager:
     def _apply_styles(self):
         s = self.style
         p = self.palette
+
+        def pad(x, y):
+            return (scale(x), scale(y))
+
         s.configure(".", font=sans(), foreground=p["text"], background=p["canvas"])
 
         # 表面
@@ -321,7 +329,7 @@ class ThemeManager:
                     foreground=p["text"], font=sans(SIZE_VALUE, True))
 
         # 按钮: 一律 30 像素高, 方角, 无边框
-        s.configure("TButton", padding=(13, 6), relief="flat", borderwidth=0,
+        s.configure("TButton", padding=pad(13, 6), relief="flat", borderwidth=0,
                     background=p["fill"], foreground=p["text"], font=sans(),
                     focuscolor=p["fill"])
         s.map("TButton",
@@ -329,7 +337,7 @@ class ThemeManager:
                           ("pressed", p["fill_hi"]),
                           ("active", p["fill_hi"])],
               foreground=[("disabled", p["disabled_text"])])
-        s.configure("Primary.TButton", padding=(13, 6), relief="flat",
+        s.configure("Primary.TButton", padding=pad(13, 6), relief="flat",
                     borderwidth=0, background=p["accent"],
                     foreground=p["on_accent"], font=sans(SIZE_BODY, True),
                     focuscolor=p["accent"])
@@ -338,7 +346,7 @@ class ThemeManager:
                           ("pressed", p["accent"]),
                           ("active", p["accent"])],
               foreground=[("disabled", p["disabled_text"])])
-        s.configure("Ghost.TButton", padding=(9, 6), relief="flat",
+        s.configure("Ghost.TButton", padding=pad(9, 6), relief="flat",
                     borderwidth=0, background=p["side"],
                     foreground=p["muted"], font=sans(),
                     focuscolor=p["side"])
@@ -346,43 +354,43 @@ class ThemeManager:
               background=[("pressed", p["fill"]), ("active", p["fill"])],
               foreground=[("active", p["text"])])
         # 危险按钮: 透明底 + 1 像素描边, 与设计稿一致
-        s.configure("Danger.TButton", padding=(12, 4), relief="solid",
+        s.configure("Danger.TButton", padding=pad(12, 4), relief="solid",
                     borderwidth=1, bordercolor=p["hair"],
                     background=p["side"], foreground=p["danger"],
                     font=sans(), focuscolor=p["side"])
         s.map("Danger.TButton",
               background=[("pressed", p["fill"]), ("active", p["fill"])])
         # 面板上的危险按钮: 透明底 + 1 像素描边
-        s.configure("PanelDanger.TButton", padding=(12, 4), relief="solid",
+        s.configure("PanelDanger.TButton", padding=pad(12, 4), relief="solid",
                     borderwidth=1, bordercolor=p["hair"],
                     background=p["panel"], foreground=p["danger"],
                     font=sans(), focuscolor=p["panel"])
         s.map("PanelDanger.TButton",
               background=[("pressed", p["fill"]), ("active", p["fill"])])
-        s.configure("Mini.TButton", padding=(9, 4), relief="flat",
+        s.configure("Mini.TButton", padding=pad(9, 4), relief="flat",
                     borderwidth=0, background=p["fill"],
                     foreground=p["muted"], font=sans(SIZE_LABEL),
                     focuscolor=p["fill"])
         s.map("Mini.TButton",
               background=[("pressed", p["fill_hi"]), ("active", p["fill_hi"])],
               foreground=[("active", p["text"])])
-        s.configure("MiniOn.TButton", padding=(9, 4), relief="flat",
+        s.configure("MiniOn.TButton", padding=pad(9, 4), relief="flat",
                     borderwidth=0, background=p["fill_hi"],
                     foreground=p["accent"], font=sans(SIZE_LABEL, True),
                     focuscolor=p["fill_hi"])
         s.map("MiniOn.TButton", background=[("active", p["fill_hi"])])
-        s.configure("MiniIcon.TButton", padding=(5, 3), relief="flat",
+        s.configure("MiniIcon.TButton", padding=pad(5, 3), relief="flat",
                     borderwidth=0, background=p["fill"],
                     foreground=p["muted"], font=icon(SIZE_LABEL + 1),
                     focuscolor=p["fill"])
         s.map("MiniIcon.TButton",
               background=[("pressed", p["fill_hi"]), ("active", p["fill_hi"])])
-        s.configure("MiniIconOn.TButton", padding=(5, 3), relief="flat",
+        s.configure("MiniIconOn.TButton", padding=pad(5, 3), relief="flat",
                     borderwidth=0, background=p["fill_hi"],
                     foreground=p["accent"], font=icon(SIZE_LABEL + 1),
                     focuscolor=p["fill_hi"])
         s.map("MiniIconOn.TButton", background=[("active", p["fill_hi"])])
-        s.configure("MiniIcon.TButton", padding=(5, 3), relief="flat",
+        s.configure("MiniIcon.TButton", padding=pad(5, 3), relief="flat",
                     borderwidth=0, background=p["fill"],
                     foreground=p["muted"], font=icon(SIZE_LABEL + 1),
                     focuscolor=p["fill"])
@@ -391,14 +399,14 @@ class ThemeManager:
 
         # 输入
         s.configure("TEntry", fieldbackground=p["fill"], foreground=p["text"],
-                    insertcolor=p["text"], padding=(9, 6), borderwidth=1,
+                    insertcolor=p["text"], padding=pad(9, 6), borderwidth=1,
                     relief="solid", bordercolor=p["hair"],
                     lightcolor=p["hair"], darkcolor=p["hair"])
         s.map("TEntry", bordercolor=[("focus", p["accent"])],
               lightcolor=[("focus", p["accent"])],
               darkcolor=[("focus", p["accent"])])
         s.configure("TCombobox", fieldbackground=p["fill"],
-                    background=p["fill"], foreground=p["text"], padding=(9, 6),
+                    background=p["fill"], foreground=p["text"], padding=pad(9, 6),
                     arrowcolor=p["muted"], bordercolor=p["hair"],
                     lightcolor=p["hair"], darkcolor=p["hair"],
                     selectbackground=p["fill"], selectforeground=p["text"])
@@ -407,7 +415,7 @@ class ThemeManager:
               selectbackground=[("readonly", p["fill"])],
               selectforeground=[("readonly", p["text"])])
         s.configure("TCheckbutton", background=p["panel"], foreground=p["text"],
-                    font=sans(), focuscolor=p["panel"], padding=(2, 2))
+                    font=sans(), focuscolor=p["panel"], padding=pad(2, 2))
         s.map("TCheckbutton", background=[("active", p["panel"])],
               indicatorcolor=[("selected", p["accent"]),
                               ("!selected", p["fill"])])
@@ -420,49 +428,49 @@ class ThemeManager:
               foreground=[("selected", p["text"])])
         s.configure("Treeview.Heading", background=p["panel"],
                     foreground=p["muted"], relief="flat", borderwidth=0,
-                    padding=(12, 8), font=sans(SIZE_SECTION, True))
+                    padding=pad(12, 8), font=sans(SIZE_SECTION, True))
         s.map("Treeview.Heading", background=[("active", p["panel"])])
         s.configure("Vertical.TScrollbar", background=p["muted"],
                     troughcolor=p["panel"], bordercolor=p["panel"],
-                    arrowcolor=p["muted"], relief="flat", width=10,
+                    arrowcolor=p["muted"], relief="flat", width=scale(10),
                     arrowsize=0)
         s.configure("Horizontal.TScrollbar", background=p["muted"],
                     troughcolor=p["panel"], bordercolor=p["panel"],
-                    arrowcolor=p["muted"], relief="flat", width=10,
+                    arrowcolor=p["muted"], relief="flat", width=scale(10),
                     arrowsize=0)
         s.configure("Thin.Vertical.TScrollbar", background=p["muted"],
                     troughcolor=p["fill"], bordercolor=p["fill"],
-                    arrowcolor=p["fill"], relief="flat", width=8,
+                    arrowcolor=p["fill"], relief="flat", width=scale(8),
                     arrowsize=0)
         s.configure("Track.Horizontal.TProgressbar", background=p["accent"],
                     troughcolor=p["fill_hi"], bordercolor=p["fill_hi"],
                     lightcolor=p["accent"], darkcolor=p["accent"],
-                    relief="flat", thickness=4)
+                    relief="flat", thickness=scale(4))
         s.configure("TLabelframe", background=p["panel"],
                     bordercolor=p["hair"], relief="solid")
         s.configure("TLabelframe.Label", background=p["panel"],
                     foreground=p["muted"], font=sans(SIZE_SECTION, True))
 
         # 兼容旧样式名: 对话框与沿用旧命名的调用点仍然按设计稿的配色渲染
-        s.configure("Accent.TButton", padding=(13, 6), relief="flat",
+        s.configure("Accent.TButton", padding=pad(13, 6), relief="flat",
                     borderwidth=0, background=p["accent"],
                     foreground=p["on_accent"], font=sans(SIZE_BODY, True))
         s.map("Accent.TButton",
               background=[("disabled", p["disabled"]),
                           ("pressed", p["accent"]), ("active", p["accent"])],
               foreground=[("disabled", p["disabled_text"])])
-        s.configure("Secondary.TButton", padding=(13, 6), relief="flat",
+        s.configure("Secondary.TButton", padding=pad(13, 6), relief="flat",
                     borderwidth=0, background=p["fill"],
                     foreground=p["text"], font=sans())
         s.map("Secondary.TButton",
               background=[("disabled", p["disabled"]),
                           ("pressed", p["fill_hi"]), ("active", p["fill_hi"])])
-        s.configure("Segment.TButton", padding=(12, 5), relief="flat",
+        s.configure("Segment.TButton", padding=pad(12, 5), relief="flat",
                     borderwidth=0, background=p["panel"],
                     foreground=p["muted"], font=sans())
         s.map("Segment.TButton",
               background=[("pressed", p["fill"]), ("active", p["fill"])])
-        s.configure("SegmentOn.TButton", padding=(12, 5), relief="flat",
+        s.configure("SegmentOn.TButton", padding=pad(12, 5), relief="flat",
                     borderwidth=0, background=p["accent_soft"],
                     foreground=p["accent"], font=sans(SIZE_BODY, True))
         s.map("SegmentOn.TButton", background=[("active", p["accent_soft"])])

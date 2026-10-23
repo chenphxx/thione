@@ -10,7 +10,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from ... import kit
-from ...theme import SIZE_LABEL, tint
+from ...dpi import scale
+from ...theme import SIZE_LABEL, mono, tint
 
 #: 窗口标题与说明
 TITLE = "选择发送对象"
@@ -22,7 +23,7 @@ MIN_ROWS = 3
 MAX_ROWS = 12
 
 #: 内容与窗口边框的间距
-PADDING = 14
+PADDING = scale(14)
 
 
 class TargetWindow(tk.Toplevel):
@@ -59,7 +60,7 @@ class TargetWindow(tk.Toplevel):
                 highlightcolor=theme.rgb("hair"),
                 selectbackground=theme.rgb("fill_hi"),
                 selectforeground=theme.rgb("text"),
-                font=("Cascadia Mono", -SIZE_LABEL))
+                font=mono(SIZE_LABEL))
         for index, address in enumerate(addresses):
             self.listbox.insert("end", address)
             if address in chosen:

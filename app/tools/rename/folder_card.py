@@ -10,11 +10,12 @@ from tkinter import filedialog, messagebox
 
 from ... import kit
 from ...browser import FileGrid
+from ...dpi import scale
 from ...errors import open_path
 from .constants import LIST_MIN_HEIGHT
 
 #: 内容区上下各留出的空白, 与设计稿的 10 像素内边距一致
-BODY_PAD_Y = 10
+BODY_PAD_Y = scale(10)
 
 
 class FolderCard(kit.Panel):
@@ -27,7 +28,7 @@ class FolderCard(kit.Panel):
         self.folder_path = ""
         self.files = []
         self.filtered_files = []
-        self.pack(fill="x", pady=(0, 12))
+        self.pack(fill="x", pady=(0, scale(12)))
 
         self.body.pack_propagate(False)
         self.grid = FileGrid(self.body, app.theme, surface="panel",

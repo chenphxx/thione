@@ -14,6 +14,7 @@ from tkinter import filedialog, messagebox, ttk
 from ... import kit
 from ...browser import DetailsPane, FileGrid, PaneToggles, PreviewPane, ViewSwitch
 from ...browser.constants import DEFAULT_TIER, DEFAULT_VIEW
+from ...dpi import scale
 from ...errors import open_path
 from ...imaging import image_size
 from ...shell.page import ToolPage
@@ -115,8 +116,8 @@ class DedupePage(ToolPage):
         grid_holder = tk.Frame(area, bd=0, highlightthickness=0)
         tint(grid_holder, bg="panel")
         grid_holder.configure(bg=self.theme.rgb("panel"))
-        grid_holder.pack(side="left", fill="both", expand=True, padx=14,
-                         pady=14)
+        grid_holder.pack(side="left", fill="both", expand=True,
+                         padx=scale(14), pady=scale(14))
 
         self.grid_box = tk.Frame(grid_holder, bd=0, highlightthickness=0)
         tint(self.grid_box, bg="panel")
@@ -159,7 +160,7 @@ class DedupePage(ToolPage):
                  icon_font=True, surface="panel").pack()
         self.empty_title = kit.text(inner, self.theme, value="", size=15,
                                     bold=True, surface="panel")
-        self.empty_title.pack(pady=(10, 0))
+        self.empty_title.pack(pady=(scale(10), 0))
         self.empty_hint = kit.text(inner, self.theme, value="", size=SIZE_LABEL,
                                    token="muted", surface="panel")
         self.empty_hint.pack(pady=(6, 0))
