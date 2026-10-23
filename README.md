@@ -38,3 +38,7 @@ pyinstaller --noconfirm --clean thione.spec
 ## 文档
 
 参考`docs/` 
+
+## 许可
+
+MIT
