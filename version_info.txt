@@ -1,11 +1,9 @@
 # UTF-8
 
-VSVersionInfo
-(
-    ffi = FixedFileInfo
-    (
-        filevers=(1, 26, 2, 0),
-        prodvers=(1, 26, 2, 0),
+VSVersionInfo(
+    ffi=FixedFileInfo(
+        filevers=(1, 26, 3, 0),
+        prodvers=(1, 26, 3, 0),
         mask=0x3F,
         flags=0x0,
         OS=0x40004,
@@ -13,23 +11,20 @@ VSVersionInfo
         subtype=0x0,
         date=(0, 0),
     ),
-    kids =
-    [
-        StringFileInfo
-        (
+    kids=[
+        StringFileInfo(
             [
-                StringTable
-                (
+                StringTable(
                     "080404b0",
                     [
                         StringStruct("CompanyName", "thione"),
                         StringStruct("FileDescription", "thione"),
-                        StringStruct("FileVersion", "1.26.2"),
+                        StringStruct("FileVersion", "1.26.3"),
                         StringStruct("InternalName", "thione"),
                         StringStruct("LegalCopyright", ""),
                         StringStruct("OriginalFilename", "thione.exe"),
                         StringStruct("ProductName", "thione"),
-                        StringStruct("ProductVersion", "1.26.2"),
+                        StringStruct("ProductVersion", "1.26.3"),
                     ],
                 )
             ]
