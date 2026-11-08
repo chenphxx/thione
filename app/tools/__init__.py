@@ -7,6 +7,7 @@
 from .comm import CommPage
 from .convert import ConvertPage
 from .dedupe import DedupePage
+from .markdown import MarkdownPage
 from .port import PortPage
 from .radix import RadixPage
 from .rename import RenamePage
@@ -16,6 +17,7 @@ from .translate import TranslatePage
 TOOL_PAGES = (
     DedupePage,
     RenamePage,
+    MarkdownPage,
     TranslatePage,
     RadixPage,
     PortPage,
@@ -23,5 +25,6 @@ TOOL_PAGES = (
     CommPage,
 )
 
-__all__ = ["TOOL_PAGES", "DedupePage", "RenamePage", "TranslatePage",
-           "RadixPage", "PortPage", "ConvertPage", "CommPage"]
+__all__ = ["TOOL_PAGES", "DedupePage", "RenamePage", "MarkdownPage",
+           "TranslatePage", "RadixPage", "PortPage", "ConvertPage",
+           "CommPage"]
