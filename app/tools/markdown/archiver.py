@@ -3,12 +3,17 @@
 import glob
 import html
 import re
+import shutil
+import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from posixpath import relpath
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
+
+from .constants import DEFAULT_IMAGE_FOLDER
 
 
 HTML_IMAGE_RE = re.compile(
@@ -28,17 +33,19 @@ FRONTMATTER_COVER_RE = re.compile(
 
 @dataclass(frozen=True)
 class ArchiveResult:
-    """一次 Markdown 打包的统计结果"""
+    """一次 Markdown 改造的统计结果"""
 
     markdown_count: int
     image_count: int
     skipped_images: int = 0
     warnings: tuple[str, ...] = ()
+    mode: str = "archive"
+    outputs: tuple[Path, ...] = ()
 
 
 @dataclass
 class MarkdownPackage:
-    """单个 Markdown 在 ZIP 中的路径与图片状态"""
+    """单个 Markdown 的输出路径与图片状态"""
 
     source: Path
     archive_name: str
@@ -78,6 +85,34 @@ def unique_name(name: str, used: set[str]) -> str:
         index += 1
     used.add(candidate.lower())
     return candidate
+
+
+def normalize_image_folder(value: str | Path) -> str:
+    """把用户输入的图片目录规范为相对路径
+
+    目录可以包含中英文及数字, 但必须是相对路径且不能通过 ``..``
+    跳出输出目录. 不适用于 Markdown 地址的字符会替换为下划线.
+
+    @param value 用户输入的图片目录
+    @return 使用正斜杠分隔的相对目录
+    """
+    text = str(value).strip().replace("\\", "/")
+    if not text:
+        text = DEFAULT_IMAGE_FOLDER
+    if text.startswith(("/", "//")) or re.match(r"^[A-Za-z]:", text):
+        raise ValueError("图片目录必须是相对路径")
+
+    parts = [
+        part
+        for part in PurePosixPath(text).parts
+        if part not in {"", "."}
+    ]
+    if not parts or any(part == ".." for part in parts):
+        raise ValueError("图片目录不能包含 .. 或为空")
+    return "/".join(
+        safe_resource_name(part, "images")
+        for part in parts
+    )
 
 
 def is_remote_or_site_path(target: str) -> bool:
@@ -164,7 +199,7 @@ class ImageCollector:
         self.warnings: list[str] = []
 
     def register(self, target: str) -> str | None:
-        """返回图片在 ZIP 中的相对路径, 远程地址或缺失图片返回 None"""
+        """返回图片相对 Markdown 的路径, 远程地址或缺失图片返回 None"""
         path = local_path_from_target(target, self.package.source.parent)
         if path is None:
             return None
@@ -183,7 +218,10 @@ class ImageCollector:
         )
         archive_path = f"{self.package.image_folder}/{filename}"
         self.package.images[path] = archive_path
-        return archive_path
+        return relpath(
+            archive_path,
+            PurePosixPath(self.package.archive_name).parent.as_posix(),
+        )
 
 
 def rewrite_markdown_images(text: str, collector: ImageCollector) -> str:
@@ -304,42 +342,59 @@ def default_output(sources: list[Path]) -> Path:
     return sources[0].parent / filename
 
 
-def build_archive(
+def document_output_path(source: Path) -> Path:
+    """返回不生成压缩包时的 Markdown 输出路径"""
+    return source.with_name(f"{source.stem}-改造后{source.suffix}")
+
+
+def _create_packages(
     sources: list[Path],
-    output: Path,
-    allow_missing: bool,
-    force: bool,
-) -> ArchiveResult:
-    """处理 Markdown 并写入 ZIP, 返回打包统计"""
-    if not sources:
-        raise ValueError("没有找到 Markdown 文件")
-    if output.exists() and not force:
-        raise FileExistsError(f"输出文件已存在: {output}")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output.with_name(f"{output.name}.tmp")
-    temporary.unlink(missing_ok=True)
+    image_root: str,
+    separate_image_folders: bool,
+) -> list[MarkdownPackage]:
+    """创建 Markdown 与图片的目标路径信息"""
     packages: list[MarkdownPackage] = []
     used_markdown_names: set[str] = set()
     used_image_folders: set[str] = set()
+    shared_image_names: dict[Path, set[str]] = {}
 
     for source in sources:
-        markdown_name = unique_name(
-            safe_name(source.name),
-            used_markdown_names,
-        )
-        folder_name = unique_name(
-            safe_resource_name(Path(markdown_name).stem, "markdown"),
-            used_image_folders,
-        )
+        if separate_image_folders:
+            markdown_name = unique_name(
+                safe_name(source.name),
+                used_markdown_names,
+            )
+            folder_name = unique_name(
+                safe_resource_name(Path(markdown_name).stem, "markdown"),
+                used_image_folders,
+            )
+            image_folder = f"{image_root}/{folder_name}"
+            image_names: set[str] = set()
+        else:
+            markdown_name = document_output_path(source).name
+            image_folder = image_root
+            image_dir = source.parent.joinpath(
+                *PurePosixPath(image_folder).parts
+            ).resolve()
+            image_names = shared_image_names.setdefault(image_dir, set())
+
         packages.append(
             MarkdownPackage(
                 source=source,
                 archive_name=markdown_name,
-                image_folder=f"images/{folder_name}",
+                image_folder=image_folder,
+                used_image_names=image_names,
             )
         )
+    return packages
 
-    contents: dict[str, str] = {}
+
+def _rewrite_packages(
+    packages: list[MarkdownPackage],
+    allow_missing: bool,
+) -> tuple[dict[Path, str], list[str], list[str]]:
+    """读取并改写所有 Markdown, 返回正文 缺失项与警告"""
+    contents: dict[Path, str] = {}
     missing: list[str] = []
     warnings: list[str] = []
     for package in packages:
@@ -353,9 +408,51 @@ def build_archive(
         collector = ImageCollector(package, allow_missing)
         rewritten = rewrite_markdown_images(raw_text, collector)
         rewritten = rewrite_cover_image(rewritten, collector)
-        contents[package.archive_name] = rewritten
+        contents[package.source] = rewritten
         missing.extend(package.missing)
         warnings.extend(collector.warnings)
+    return contents, missing, warnings
+
+
+def _write_markdown_atomic(output: Path, text: str) -> None:
+    """先写同目录临时文件, 再替换目标 Markdown"""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=output.parent,
+            prefix=f".{output.stem}-",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(text)
+        temporary.replace(output)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def build_archive(
+    sources: list[Path],
+    output: Path,
+    allow_missing: bool,
+    force: bool,
+    image_folder: str | Path = DEFAULT_IMAGE_FOLDER,
+) -> ArchiveResult:
+    """处理 Markdown 并写入 ZIP, 返回打包统计"""
+    if not sources:
+        raise ValueError("没有找到 Markdown 文件")
+    if output.exists() and not force:
+        raise FileExistsError(f"输出文件已存在: {output}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_name(f"{output.name}.tmp")
+    temporary.unlink(missing_ok=True)
+    image_root = normalize_image_folder(image_folder)
+    packages = _create_packages(sources, image_root, True)
+    contents, missing, warnings = _rewrite_packages(packages, allow_missing)
 
     if missing:
         raise FileNotFoundError(
@@ -374,7 +471,7 @@ def build_archive(
             for package in packages:
                 archive.writestr(
                     package.archive_name,
-                    contents[package.archive_name].encode("utf-8"),
+                    contents[package.source].encode("utf-8"),
                 )
                 for image_path, archive_path in package.images.items():
                     archive.writestr(archive_path, image_path.read_bytes())
@@ -390,4 +487,73 @@ def build_archive(
         image_count=image_total,
         skipped_images=len(warnings),
         warnings=tuple(warnings),
+        mode="archive",
+        outputs=(output,),
+    )
+
+
+def build_documents(
+    sources: list[Path],
+    allow_missing: bool,
+    force: bool,
+    image_folder: str | Path = DEFAULT_IMAGE_FOLDER,
+) -> ArchiveResult:
+    """在原文档旁输出改造后的 Markdown 与图片目录"""
+    if not sources:
+        raise ValueError("没有找到 Markdown 文件")
+
+    image_root = normalize_image_folder(image_folder)
+    packages = _create_packages(sources, image_root, False)
+    contents, missing, warnings = _rewrite_packages(packages, allow_missing)
+    if missing:
+        raise FileNotFoundError(
+            f"有 {len(missing)} 张本地图片不存在, 未生成改造文档\n"
+            + "\n".join(missing)
+        )
+
+    outputs = [document_output_path(package.source) for package in packages]
+    conflicts = [str(path) for path in outputs if path.exists()]
+    image_targets: list[tuple[Path, Path]] = []
+    for package in packages:
+        for image_source, image_reference in package.images.items():
+            image_target = package.source.parent.joinpath(
+                *PurePosixPath(image_reference).parts
+            )
+            image_targets.append((image_source, image_target))
+            if image_target.exists() \
+                    and image_source.resolve() != image_target.resolve():
+                conflicts.append(str(image_target))
+    if conflicts and not force:
+        raise FileExistsError(
+            "以下输出文件已存在, 请勾选覆盖后重试\n"
+            + "\n".join(dict.fromkeys(conflicts))
+        )
+
+    image_directories = {
+        package.source.parent.joinpath(
+            *PurePosixPath(package.image_folder).parts
+        )
+        for package in packages
+    }
+    for image_directory in image_directories:
+        image_directory.mkdir(parents=True, exist_ok=True)
+
+    image_total = 0
+    for image_source, image_target in image_targets:
+        if image_source.resolve() == image_target.resolve():
+            continue
+        image_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(image_source, image_target)
+        image_total += 1
+
+    for package, output in zip(packages, outputs):
+        _write_markdown_atomic(output, contents[package.source])
+
+    return ArchiveResult(
+        markdown_count=len(packages),
+        image_count=image_total,
+        skipped_images=len(warnings),
+        warnings=tuple(warnings),
+        mode="document",
+        outputs=tuple(outputs),
     )
