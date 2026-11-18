@@ -35,7 +35,8 @@ class FolderCard(kit.Panel):
                              tier=app.tier, view=app.view,
                              on_select=self._on_select,
                              on_activate=self.open_selected_file,
-                             on_context=self._on_context_menu)
+                             on_context=self._on_context_menu,
+                             wheel_canvas=app.canvas)
         self.grid.pack(fill="both", expand=True)
         self.grid.canvas.bind("<Configure>", self._on_grid_resize, add="+")
         self._fit_height()

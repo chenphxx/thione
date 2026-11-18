@@ -19,7 +19,6 @@ from ...errors import open_path
 from ...imaging import image_size
 from ...shell.page import ToolPage
 from ...theme import ICON_EMPTY, SIZE_LABEL, tint
-from ...widgets import unbind_mousewheel
 from .constants import PAGE_TITLE, SUBTITLE
 from .dedupe import HASH_BITS, dedupe_worker
 from .duplicate_window import DuplicateGroupWindow
@@ -252,7 +251,7 @@ class DedupePage(ToolPage):
 
     def on_hide(self):
         """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动"""
-        unbind_mousewheel(self.grid.canvas)
+        self.grid.release_mousewheel()
 
     def on_theme_changed(self):
         self.grid.apply_palette()

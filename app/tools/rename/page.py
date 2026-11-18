@@ -252,7 +252,7 @@ class RenamePage(ToolPage):
         """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动"""
         unbind_mousewheel(self.canvas)
         for card in self.folder_blocks:
-            unbind_mousewheel(card.grid.canvas)
+            card.grid.release_mousewheel()
 
     # ---------------- 文件夹管理 ----------------
     def _on_cards_resize(self, event):

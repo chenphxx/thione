@@ -6,14 +6,21 @@
 _WHEEL_EVENTS = ("<MouseWheel>", "<Button-4>", "<Button-5>")
 
 
-def bind_mousewheel(containers, canvas, horizontal=False):
+def bind_mousewheel(containers, canvas, horizontal=False, recursive=False):
     """指针进入 containers 时把滚轮接到 canvas 上 离开时解除
 
     @param containers: 一个控件 或者控件序列
     @param canvas: 被滚动的 Canvas
     @param horizontal: True 时左右滚动 否则上下滚动
+    @param recursive: True 时同时绑定 containers 内已有的全部子控件
     """
     widgets = containers if isinstance(containers, (list, tuple)) else [containers]
+    if recursive:
+        widgets = list(widgets)
+        index = 0
+        while index < len(widgets):
+            widgets.extend(widgets[index].winfo_children())
+            index += 1
     for widget in widgets:
         widget.bind("<Enter>", lambda _e: _bind(canvas, horizontal), add="+")
         widget.bind("<Leave>", lambda _e: unbind_mousewheel(canvas), add="+")

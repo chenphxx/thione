@@ -11,7 +11,7 @@ from ...dpi import scale
 from ...errors import open_path
 from ...imaging import load_thumbnail, make_placeholder
 from ...theme import SIZE_LABEL, tint
-from ...widgets import bind_mousewheel
+from ...widgets import bind_mousewheel, unbind_mousewheel
 from .constants import DUP_SUBFOLDER_NAME, THUMB_SIZE
 
 
@@ -45,6 +45,7 @@ class DuplicateGroupWindow(tk.Toplevel):
 
         self._build_toolbar()
         self._build_canvas()
+        self.bind("<Destroy>", self._on_destroy)
         self.populate_groups()
         self.theme.apply_theme(self)
 
@@ -124,6 +125,11 @@ class DuplicateGroupWindow(tk.Toplevel):
             pass
         self._schedule_relayout()
 
+    def _on_destroy(self, event):
+        """窗口销毁时清掉全局滚轮绑定"""
+        if event.widget is self:
+            unbind_mousewheel(self.canvas)
+
     def _schedule_relayout(self):
         if self._layout_job is not None:
             try:
@@ -178,6 +184,7 @@ class DuplicateGroupWindow(tk.Toplevel):
                 r, c = divmod(i, slots_per_row)
                 self._add_image_slot(frame, pi, idx, thumb_side, r, c,
                                      slots_per_row)
+            bind_mousewheel(frame, self.canvas, recursive=True)
         self.theme.apply_theme(self)
 
     def _add_image_slot(self, card, path, group_idx, thumb_side, row, col,

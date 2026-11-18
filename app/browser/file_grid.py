@@ -105,11 +105,12 @@ class FileGrid(tk.Frame):
         tier:        初始档位, 见 constants.TIERS
         view:        初始展示方式, 见 constants.VIEWS
         surface:     所在的表面层, canvas 表示页面底色, panel 表示面板
+        wheel_canvas: 滚轮实际控制的 Canvas, 省略时控制自身
     """
 
     def __init__(self, master, theme, on_select=None, on_activate=None,
                  on_context=None, tier=DEFAULT_TIER,
-                 view=DEFAULT_VIEW, surface="canvas"):
+                 view=DEFAULT_VIEW, surface="canvas", wheel_canvas=None):
         super().__init__(master, bd=0, highlightthickness=0)
         self.theme = theme
         self._surface = surface
@@ -145,7 +146,8 @@ class FileGrid(tk.Frame):
         self.canvas.configure(bg=theme.rgb(surface))
         self.canvas.pack(side="left", fill="both", expand=True)
 
-        bind_mousewheel(self.canvas, self.canvas)
+        self._wheel_canvas = wheel_canvas or self.canvas
+        bind_mousewheel(self.canvas, self._wheel_canvas)
         self.canvas.bind("<Button-1>", self._on_click)
         self.canvas.bind("<Double-1>", self._on_double_click)
         self.canvas.bind("<Button-3>", self._on_right_click)
@@ -167,6 +169,10 @@ class FileGrid(tk.Frame):
     def loading(self):
         """是否仍在后台读取缩略图"""
         return self._loading
+
+    def release_mousewheel(self):
+        """解除当前网格建立的滚轮绑定"""
+        unbind_mousewheel(self._wheel_canvas)
 
     def selected_path(self):
         """当前选中的文件路径, 未选中时返回 None"""
@@ -783,4 +789,4 @@ class FileGrid(tk.Frame):
         if event.widget is not self:
             return
         self._stop_pump()
-        unbind_mousewheel(self.canvas)
+        self.release_mousewheel()
