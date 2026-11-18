@@ -243,7 +243,12 @@ class FileGrid(tk.Frame):
 
         @param provider: callable(path) -> 文本, 传 None 时恢复普通列表
         """
+        previous = self._secondary
         self._secondary = provider
+        if provider == previous:
+            if provider is not None and self._view == "list":
+                self._refresh_secondary_text()
+            return
         self._relayout()
 
     def content_height(self):
@@ -524,6 +529,16 @@ class FileGrid(tk.Frame):
                            width - middle - scale(40)),
             font=mono(self._label_size()),
             fill=self.theme.rgb("accent"))
+
+    def _refresh_secondary_text(self):
+        """只刷新次要文字, 用于前缀变化等不改变布局的更新"""
+        width = max(self.canvas.winfo_width(), 1)
+        middle = width / 2
+        available = width - middle - scale(40)
+        font = self._label_font()
+        for path, cell in self._cells.items():
+            text = _fit_text(font, self._secondary(path) or "", available)
+            self.canvas.itemconfigure(cell["secondary"], text=text)
 
     def _paint_selection(self, path):
         """刷新一个格子的选中态

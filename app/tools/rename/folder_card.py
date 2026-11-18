@@ -139,6 +139,7 @@ class FolderCard(kit.Panel):
             self.filtered_files.append(name)
         self.set_right(f"{len(self.filtered_files)} 个文件")
         self.grid.set_files(self.paths())
+        self._fit_height()
 
     def set_tier(self, tier):
         """切换缩略图档位; 由页面统一驱动, 保证各面板一致
@@ -155,11 +156,11 @@ class FolderCard(kit.Panel):
         """
         self.grid.set_view(view)
         self.refresh_preview()
+        self._fit_height()
 
     def refresh_preview(self):
-        """重画 原名 -> 改后名 那一列, 并让面板高度重新贴合行数"""
+        """刷新 原名 -> 改后名 那一列, 不改变文件行数"""
         self.grid.set_secondary_text(self.app.new_name_of)
-        self._fit_height()
 
     def remove_block(self):
         """从页面上移除这个文件夹"""

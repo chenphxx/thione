@@ -35,6 +35,9 @@ PREVIEW_FIELDS = (("name", "文件名"), ("size", "大小"))
 #: 平铺视图使用的档位 (设计稿里 rename 的视图只有 列表 与 平铺)
 TILE_TIER = "medium"
 
+#: 输入前缀或起始数字后等待多久再刷新预览 (毫秒)
+PARAMETER_DEBOUNCE_MS = 120
+
 
 class RenamePage(ToolPage):
     """把文件夹内的文件按前缀 + 序号批量重命名的工具页面"""
@@ -55,6 +58,7 @@ class RenamePage(ToolPage):
         self.preview_visible = False
         self._new_names = {}
         self.type_filter = None
+        self._parameter_job = None
 
         self._build_toolbar()
         self._build_main_area()
@@ -222,8 +226,25 @@ class RenamePage(ToolPage):
         """rename 只区分 列表 与 平铺, 忽略档位切换"""
 
     def _on_parameter_change(self, _event=None):
-        """前缀或起始数字变化后重算每个文件的新名字"""
+        """前缀或起始数字变化后延迟重算, 避免每次按键都重排全部文件"""
+        self._cancel_parameter_update()
+        self._parameter_job = self.root.after(
+            PARAMETER_DEBOUNCE_MS, self._apply_parameter_change)
+
+    def _apply_parameter_change(self):
+        """输入停顿后刷新新文件名预览"""
+        self._parameter_job = None
         self._rebuild_new_names()
+
+    def _cancel_parameter_update(self):
+        """取消尚未来得及执行的参数刷新"""
+        if self._parameter_job is None:
+            return
+        try:
+            self.root.after_cancel(self._parameter_job)
+        except tk.TclError:
+            pass
+        self._parameter_job = None
 
     def _on_type_filter_change(self, _selected_types):
         """文件类型筛选变化后刷新文件列表与编号"""
@@ -381,6 +402,7 @@ class RenamePage(ToolPage):
 
         编号顺序与 build_tasks 一致: 先按面板顺序, 再按面板内的文件顺序
         """
+        self._cancel_parameter_update()
         prefix = self.entry_prefix.get().strip()
         try:
             start = int(self.entry_start.get())
