@@ -58,6 +58,7 @@ class FolderCard(kit.Panel):
                              on_select=self._on_select,
                              on_activate=self.open_selected_file,
                              on_context=self._on_context_menu,
+                             on_background_context=self._on_background_context_menu,
                              wheel_canvas=app.canvas)
         self.grid.pack(fill="both", expand=True)
         self.grid.canvas.bind("<Configure>", self._on_grid_resize, add="+")
@@ -71,6 +72,10 @@ class FolderCard(kit.Panel):
         self.menu.add_command(label="仅移除该文件",
                               command=self.remove_selected_file)
         self.menu.add_command(label="移除此文件夹", command=self.remove_block)
+
+        self.folder_menu = tk.Menu(self, tearoff=0)
+        self.folder_menu.add_command(label="移除此文件夹",
+                                     command=self.remove_block)
 
     # ---------------- 文件夹操作 ----------------
     def select_folder(self):
@@ -205,6 +210,13 @@ class FolderCard(kit.Panel):
             self.menu.tk_popup(event.x_root, event.y_root)
         finally:
             self.menu.grab_release()
+
+    def _on_background_context_menu(self, event):
+        """在文件网格空白区域右键时提供文件夹操作"""
+        try:
+            self.folder_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.folder_menu.grab_release()
 
     def open_selected_file(self, path=None):
         """用系统默认程序打开选中文件

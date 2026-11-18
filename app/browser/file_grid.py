@@ -102,6 +102,7 @@ class FileGrid(tk.Frame):
         on_select:   callable(path), 选中项变化时调用, 未选中时 path 为 None
         on_activate: callable(path), 双击某一项时调用
         on_context:  callable(path, event), 右键某一项时调用
+        on_background_context: callable(event), 右键空白区域时调用
         tier:        初始档位, 见 constants.TIERS
         view:        初始展示方式, 见 constants.VIEWS
         surface:     所在的表面层, canvas 表示页面底色, panel 表示面板
@@ -109,7 +110,8 @@ class FileGrid(tk.Frame):
     """
 
     def __init__(self, master, theme, on_select=None, on_activate=None,
-                 on_context=None, tier=DEFAULT_TIER,
+                 on_context=None, on_background_context=None,
+                 tier=DEFAULT_TIER,
                  view=DEFAULT_VIEW, surface="canvas", wheel_canvas=None):
         super().__init__(master, bd=0, highlightthickness=0)
         self.theme = theme
@@ -117,6 +119,7 @@ class FileGrid(tk.Frame):
         self._on_select = on_select
         self._on_activate = on_activate
         self._on_context = on_context
+        self._on_background_context = on_background_context
 
         self._paths = []
         self._cells = {}
@@ -769,6 +772,8 @@ class FileGrid(tk.Frame):
     def _on_right_click(self, event):
         path = self._hit(event.x, event.y)
         if path is None:
+            if self._on_background_context is not None:
+                self._on_background_context(event)
             return
         self.select(path)
         if self._on_context is not None:
