@@ -223,6 +223,12 @@ class RenamePage(ToolPage):
         """
         self.preview.show(path)
 
+    def on_file_removed(self):
+        """文件从重命名列表移除后刷新编号 计数与预览"""
+        self._rebuild_new_names()
+        self.refresh_overall_counts()
+        self.on_file_selected(None)
+
     def _open_file(self, path):
         """用系统默认程序打开文件
 
@@ -315,7 +321,8 @@ class RenamePage(ToolPage):
     def refresh_overall_counts(self):
         """刷新状态栏里的文件夹与文件计数"""
         folders = len([b for b in self.folder_blocks if b.folder_path])
-        total = sum(len(b.files) for b in self.folder_blocks if b.folder_path)
+        total = sum(len(b.filtered_files)
+                    for b in self.folder_blocks if b.folder_path)
         self.status.set_text(f"文件夹: {folders} | 总文件数: {total}")
 
     # ---------------- 新文件名预览 ----------------

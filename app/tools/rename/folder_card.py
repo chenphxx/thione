@@ -45,6 +45,8 @@ class FolderCard(kit.Panel):
         self.menu.add_command(label="打开所在文件夹",
                               command=self.open_file_location)
         self.menu.add_separator()
+        self.menu.add_command(label="仅移除该文件",
+                              command=self.remove_selected_file)
         self.menu.add_command(label="移除此文件夹", command=self.remove_block)
 
     # ---------------- 文件夹操作 ----------------
@@ -112,6 +114,16 @@ class FolderCard(kit.Panel):
         """从页面上移除这个文件夹"""
         self.destroy()
         self.app.remove_folder(self)
+
+    def remove_selected_file(self):
+        """从当前重命名列表中移除选中文件, 不删除磁盘上的文件"""
+        path = self.get_selected_path()
+        if not path or path not in self.paths():
+            return
+        self.filtered_files.remove(os.path.basename(path))
+        self.set_right(f"{len(self.filtered_files)} 个文件")
+        self.grid.set_files(self.paths())
+        self.app.on_file_removed()
 
     def fit_height(self):
         """让面板内容区高度重新贴合当前的文件行数
