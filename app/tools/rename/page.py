@@ -27,6 +27,7 @@ from .renamer import (
     restore_inplace_temps,
     run_tasks,
 )
+from .type_filter import TypeFilter
 
 #: 预览列的宽度
 PREVIEW_FIELDS = (("name", "文件名"), ("size", "大小"))
@@ -53,6 +54,7 @@ class RenamePage(ToolPage):
         self.view = "list"
         self.preview_visible = False
         self._new_names = {}
+        self.type_filter = None
 
         self._build_toolbar()
         self._build_main_area()
@@ -81,6 +83,13 @@ class RenamePage(ToolPage):
                                          style="TButton",
                                          command=self.add_folder)
         self.btn_add_folder.pack(side="left")
+
+        kit.text(row, self.theme, value="筛选类型", size=SIZE_LABEL,
+                 token="muted", surface="canvas").pack(side="left",
+                                                      padx=(16, 8))
+        self.type_filter = TypeFilter(row, self.theme,
+                                      command=self._on_type_filter_change)
+        self.type_filter.pack(side="left")
 
         kit.text(row, self.theme, value="文件名前缀", size=SIZE_LABEL,
                  token="muted", surface="canvas").pack(side="left",
@@ -216,6 +225,10 @@ class RenamePage(ToolPage):
         """前缀或起始数字变化后重算每个文件的新名字"""
         self._rebuild_new_names()
 
+    def _on_type_filter_change(self, _selected_types):
+        """文件类型筛选变化后刷新文件列表与编号"""
+        self._apply_type_filter()
+
     def on_file_selected(self, path):
         """任意面板里的选中项变化时同步右侧预览
 
@@ -224,10 +237,9 @@ class RenamePage(ToolPage):
         self.preview.show(path)
 
     def on_file_removed(self):
-        """文件从重命名列表移除后刷新编号 计数与预览"""
-        self._rebuild_new_names()
-        self.refresh_overall_counts()
-        self.on_file_selected(None)
+        """文件从重命名列表移除后刷新类型 编号 计数与预览"""
+        self._refresh_file_types()
+        self._apply_type_filter()
 
     def _open_file(self, path):
         """用系统默认程序打开文件
@@ -244,12 +256,14 @@ class RenamePage(ToolPage):
         open_path(path, parent=self.window, reveal=True)
 
     def on_theme_changed(self):
+        self.type_filter.close_popup()
         for card in self.folder_blocks:
             card.grid.apply_palette()
         self.preview.refresh()
 
     def on_hide(self):
         """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动"""
+        self.type_filter.close_popup()
         unbind_mousewheel(self.canvas)
         for card in self.folder_blocks:
             card.grid.release_mousewheel()
@@ -277,9 +291,9 @@ class RenamePage(ToolPage):
             card.destroy()
             return
         self.folder_blocks.append(card)
-        self._rebuild_new_names()
+        self._refresh_file_types()
+        self._apply_type_filter()
         self._update_empty_state()
-        self._queue_card_layout()
 
     def remove_folder(self, card):
         """移除一个文件夹面板
@@ -288,10 +302,9 @@ class RenamePage(ToolPage):
         """
         if card in self.folder_blocks:
             self.folder_blocks.remove(card)
-        self._rebuild_new_names()
-        self.refresh_overall_counts()
+        self._refresh_file_types()
+        self._apply_type_filter()
         self._update_empty_state()
-        self._queue_card_layout()
 
     def _update_empty_state(self):
         """没有任何文件夹时显示占位块, 否则显示面板区"""
@@ -315,8 +328,33 @@ class RenamePage(ToolPage):
         for card in self.folder_blocks:
             if card.folder_path:
                 card.load_files()
+        self._refresh_file_types()
+        self._apply_type_filter()
+
+    def selected_file_types(self):
+        """当前多选的文件类型
+
+        @return: None 表示全部类型, 否则是扩展名集合
+        """
+        return self.type_filter.selected_values()
+
+    def _refresh_file_types(self):
+        """汇总各文件夹中仍可处理的文件类型并刷新筛选框"""
+        values = set()
+        for card in self.folder_blocks:
+            if card.folder_path:
+                values.update(card.file_types())
+        self.type_filter.set_values(values)
+
+    def _apply_type_filter(self):
+        """把当前类型筛选应用到全部文件夹面板"""
+        selected = self.selected_file_types()
+        for card in self.folder_blocks:
+            card.apply_type_filter(selected)
         self._rebuild_new_names()
         self.refresh_overall_counts()
+        self.on_file_selected(None)
+        self._queue_card_layout()
 
     def refresh_overall_counts(self):
         """刷新状态栏里的文件夹与文件计数"""

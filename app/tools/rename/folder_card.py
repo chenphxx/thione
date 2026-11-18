@@ -13,6 +13,7 @@ from ...browser import FileGrid
 from ...dpi import scale
 from ...errors import open_path
 from .constants import LIST_MIN_HEIGHT
+from .type_filter import file_type
 
 #: 内容区上下各留出的空白, 与设计稿的 10 像素内边距一致
 BODY_PAD_Y = scale(10)
@@ -28,6 +29,7 @@ class FolderCard(kit.Panel):
         self.folder_path = ""
         self.files = []
         self.filtered_files = []
+        self.removed_files = set()
         self.pack(fill="x", pady=(0, scale(12)))
 
         self.body.pack_propagate(False)
@@ -75,10 +77,8 @@ class FolderCard(kit.Panel):
             messagebox.showerror("错误", f"读取文件夹失败: {error}",
                                  parent=self.app.window)
             return
-        self.filtered_files = list(self.files)
-        self.set_right(f"{len(self.files)} 个文件")
-        self.grid.set_files(self.paths())
-        self.refresh_preview()
+        self.removed_files.clear()
+        self.apply_type_filter(self.app.selected_file_types())
         self.app.refresh_overall_counts()
         self.app.on_file_selected(None)
 
@@ -89,6 +89,30 @@ class FolderCard(kit.Panel):
         """
         return [os.path.join(self.folder_path, name)
                 for name in self.filtered_files]
+
+    def file_types(self):
+        """当前文件夹里可供筛选的文件类型
+
+        @return: 扩展名集合
+        """
+        return {file_type(name) for name in self.files
+                if name not in self.removed_files}
+
+    def apply_type_filter(self, selected_types):
+        """按页面多选的文件类型刷新当前文件列表
+
+        @param selected_types: None 表示全部类型, 否则是扩展名集合
+        """
+        allowed = None if selected_types is None else set(selected_types)
+        self.filtered_files = []
+        for name in self.files:
+            if name in self.removed_files:
+                continue
+            if allowed is not None and file_type(name) not in allowed:
+                continue
+            self.filtered_files.append(name)
+        self.set_right(f"{len(self.filtered_files)} 个文件")
+        self.grid.set_files(self.paths())
 
     def set_tier(self, tier):
         """切换缩略图档位; 由页面统一驱动, 保证各面板一致
@@ -121,7 +145,9 @@ class FolderCard(kit.Panel):
         path = self.get_selected_path()
         if not path or path not in self.paths():
             return
-        self.filtered_files.remove(os.path.basename(path))
+        name = os.path.basename(path)
+        self.removed_files.add(name)
+        self.filtered_files.remove(name)
         self.set_right(f"{len(self.filtered_files)} 个文件")
         self.grid.set_files(self.paths())
         self.app.on_file_removed()
