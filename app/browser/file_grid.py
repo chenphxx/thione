@@ -15,7 +15,7 @@ import tkinter.font as tkfont
 from PIL import ImageTk
 
 from ..dpi import scale
-from ..imaging import load_thumbnail, make_gradient
+from ..imaging import is_video_file, load_preview_thumbnail, make_gradient
 from ..theme import (
     ICON_ARROW,
     ICON_CHECK,
@@ -561,7 +561,8 @@ class FileGrid(tk.Frame):
     # ---------------- 缩略图加载 ----------------
     def _load_worker(self, paths):
         for path in paths:
-            img = load_thumbnail(path, CACHE_SIZE) if _is_image(path) else None
+            img = (load_preview_thumbnail(path, CACHE_SIZE)
+                   if _is_image(path) or is_video_file(path) else None)
             self._queue.put((path, img))
         self._queue.put(None)
 
