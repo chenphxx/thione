@@ -5,6 +5,7 @@
 """
 
 import os
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -17,6 +18,25 @@ from .type_filter import file_type
 
 #: 内容区上下各留出的空白, 与设计稿的 10 像素内边距一致
 BODY_PAD_Y = scale(10)
+
+#: 文件名里的连续数字, 用于自然排序
+_NATURAL_PARTS = re.compile(r"(\d+)")
+
+#: 数字补齐后的固定宽度, 让字符串比较得到数值顺序
+NATURAL_NUMBER_WIDTH = 64
+
+
+def _natural_name_key(name):
+    """生成大小写不敏感且按数字数值比较的文件名排序键
+
+    @param name: 文件名
+    @return: 排序键
+    """
+    folded = name.casefold()
+    normalized = _NATURAL_PARTS.sub(
+        lambda match: match.group(1).rjust(NATURAL_NUMBER_WIDTH, "0"),
+        folded)
+    return normalized, folded
 
 
 class FolderCard(kit.Panel):
@@ -70,7 +90,8 @@ class FolderCard(kit.Panel):
         """重新读取文件夹下的文件 (不递归)"""
         self.files = []
         try:
-            for name in sorted(os.listdir(self.folder_path), key=str.lower):
+            for name in sorted(os.listdir(self.folder_path),
+                               key=_natural_name_key):
                 if os.path.isfile(os.path.join(self.folder_path, name)):
                     self.files.append(name)
         except OSError as error:
