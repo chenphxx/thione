@@ -1,13 +1,13 @@
-"""批量重命名的多选文件类型筛选"""
+"""文件浏览组件的多选类型筛选"""
 
 import os
 import tkinter as tk
 from tkinter import ttk
 
-from ... import kit
-from ...dpi import scale
-from ...theme import tint
-from ...widgets import bind_mousewheel, unbind_mousewheel
+from .. import kit
+from ..dpi import scale
+from ..theme import tint
+from ..widgets import bind_mousewheel, unbind_mousewheel
 
 #: 弹出列表一次最多展示的类型数
 MAX_VISIBLE_TYPES = 10
@@ -46,7 +46,7 @@ class TypeFilter(kit.Field):
 
     def __init__(self, master, theme, command=None, width=170,
                  surface="canvas"):
-        super().__init__(master, theme, value="全部类型", surface=surface,
+        super().__init__(master, theme, value="全部", surface=surface,
                          token="text", mono_font=False, width=width,
                          chevron=True)
         self._command = command
@@ -59,16 +59,18 @@ class TypeFilter(kit.Field):
             widget.bind("<Button-1>", self._on_click)
         self.bind("<Destroy>", self._on_destroy)
 
-    def set_values(self, values):
+    def set_values(self, values, reset=False):
         """替换可筛选的文件类型
 
         如果当前选中的类型在新列表中全部消失, 自动回到全部类型;
         用户主动取消全部勾选时不会被这里改回全部类型
 
         @param values: 扩展名序列
+        @param reset: True 时无论之前的选择如何都回到全部类型
         """
         self._values = sorted(set(values), key=lambda value: (value != "", value))
-        if self._all:
+        if reset or self._all:
+            self._all = True
             self._selected = set(self._values)
         else:
             requested = set(self._selected)
@@ -130,9 +132,9 @@ class TypeFilter(kit.Field):
     def _update_text(self):
         """按当前选择更新控件框里的摘要"""
         if self._all:
-            text, token = "全部类型", "text"
+            text, token = "全部", "text"
         elif not self._selected:
-            text, token = "未选择类型", "muted"
+            text, token = "未选择", "muted"
         elif len(self._selected) == 1:
             text, token = type_label(next(iter(self._selected))), "text"
         elif len(self._selected) == 2:
@@ -188,7 +190,7 @@ class _TypeFilterPopup:
 
         all_row = self._row(body)
         self.all_var = tk.BooleanVar(value=field._all)
-        all_check = kit.Check(all_row, self.theme, value="全部类型",
+        all_check = kit.Check(all_row, self.theme, value="全部",
                               variable=self.all_var,
                               command=field._toggle_all, surface="panel")
         all_check.pack(fill="both", expand=True)

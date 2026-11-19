@@ -12,7 +12,14 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from ... import kit
-from ...browser import DetailsPane, FileGrid, PaneToggles, PreviewPane, ViewSwitch
+from ...browser import (
+    DetailsPane,
+    FileGrid,
+    PaneToggles,
+    PreviewPane,
+    TypeFilter,
+    ViewSwitch,
+)
 from ...browser.constants import DEFAULT_TIER, DEFAULT_VIEW
 from ...dpi import scale
 from ...errors import open_path
@@ -79,11 +86,9 @@ class DedupePage(ToolPage):
         self.view_switch.pack(side="right", padx=(8, 0))
         kit.text(row, self.theme, value="视图", size=SIZE_LABEL,
                  token="muted", surface="canvas").pack(side="right")
-        self.combo_ext = kit.Dropdown(row, self.theme, values=["全部"],
-                                      command=self._on_filter_change,
-                                      surface="canvas", width=104)
-        self.combo_ext.set("全部")
-        self.combo_ext.pack(side="right", padx=(8, 16))
+        self.type_filter = TypeFilter(row, self.theme,
+                                      command=self._on_filter_change)
+        self.type_filter.pack(side="right", padx=(8, 16))
         kit.text(row, self.theme, value="筛选类型", size=SIZE_LABEL,
                  token="muted", surface="canvas").pack(side="right")
 
@@ -252,9 +257,11 @@ class DedupePage(ToolPage):
 
     def on_hide(self):
         """切走时解除滚轮绑定, 避免在其他页面上仍然响应本页的滚动"""
+        self.type_filter.close_popup()
         self.grid.release_mousewheel()
 
     def on_theme_changed(self):
+        self.type_filter.close_popup()
         self.grid.apply_palette()
         self.preview.refresh()
 
@@ -316,9 +323,12 @@ class DedupePage(ToolPage):
 
     def _scan_folder(self, folder):
         self.all_files, extensions = scan_folder(folder)
-        self.extensions = extensions
-        self.combo_ext.set_values(["全部"] + extensions)
-        self.combo_ext.set("全部")
+        self.extensions = sorted({
+            os.path.splitext(path)[1].lower()
+            for path in self.all_files
+            if is_image_file(path)
+        })
+        self.type_filter.set_values(self.extensions, reset=True)
         self.apply_filter_and_show_list()
         self.status.set_kind("idle")
         self.status.set_text("已扫描 1 个文件夹")
@@ -327,13 +337,13 @@ class DedupePage(ToolPage):
     # -------------------------- 筛选 / 网格显示 --------------------------
     def apply_filter_and_show_list(self):
         """按当前筛选条件刷新网格与计数"""
-        selected_ext = self.combo_ext.value()
-        if selected_ext in ("", "全部"):
-            self.filtered_files = [f for f in self.all_files
-                                   if is_image_file(f)]
-        else:
-            self.filtered_files = [f for f in self.all_files
-                                   if f.lower().endswith(selected_ext)]
+        selected_exts = self.type_filter.selected_values()
+        self.filtered_files = [
+            path for path in self.all_files
+            if is_image_file(path)
+            and (selected_exts is None
+                 or os.path.splitext(path)[1].lower() in selected_exts)
+        ]
         # 换文件夹或换筛选后, 上一次查找重复项的进度提示不再适用
         self.grid.set_files(self.filtered_files)
         self.grid.set_badges(self._badges)
@@ -347,9 +357,10 @@ class DedupePage(ToolPage):
         @return: 计数文本
         """
         text = f"{len(self.filtered_files)} 项"
+        image_total = sum(1 for path in self.all_files if is_image_file(path))
         if self.duplicates:
             text += f" · {len(self.duplicates)} 组重复"
-        elif len(self.filtered_files) != len(self.all_files):
+        elif len(self.filtered_files) != image_total:
             text += f" · 已筛选 {len(self.filtered_files)} 个"
         return text
 

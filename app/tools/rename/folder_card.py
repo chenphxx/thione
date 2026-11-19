@@ -10,11 +10,10 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 
 from ... import kit
-from ...browser import FileGrid
+from ...browser import FileGrid, file_type
 from ...dpi import scale
 from ...errors import open_path
 from .constants import LIST_MIN_HEIGHT
-from .type_filter import file_type
 
 #: 内容区上下各留出的空白, 与设计稿的 10 像素内边距一致
 BODY_PAD_Y = scale(10)

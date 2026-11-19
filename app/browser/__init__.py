@@ -3,6 +3,8 @@
 from .details_pane import DetailsPane
 from .file_grid import FileGrid
 from .preview_pane import PreviewPane
+from .type_filter import TypeFilter, file_type
 from .view_bar import PaneToggles, ViewSwitch
 
-__all__ = ["DetailsPane", "FileGrid", "PreviewPane", "PaneToggles", "ViewSwitch"]
+__all__ = ["DetailsPane", "FileGrid", "PreviewPane", "PaneToggles",
+           "TypeFilter", "ViewSwitch", "file_type"]

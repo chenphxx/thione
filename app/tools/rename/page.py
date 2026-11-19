@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from ... import kit
-from ...browser import PreviewPane, ViewSwitch
+from ...browser import PreviewPane, TypeFilter, ViewSwitch
 from ...dpi import scale
 from ...errors import open_path
 from ...shell.page import ToolPage
@@ -27,12 +27,11 @@ from .renamer import (
     restore_inplace_temps,
     run_tasks,
 )
-from .type_filter import TypeFilter
 
 #: 预览列的宽度
 PREVIEW_FIELDS = (("name", "文件名"), ("size", "大小"))
 
-#: 平铺视图使用的档位 (设计稿里 rename 的视图只有 列表 与 平铺)
+#: 平铺视图的默认档位
 TILE_TIER = "medium"
 
 #: 输入前缀或起始数字后等待多久再刷新预览 (毫秒)
@@ -77,23 +76,21 @@ class RenamePage(ToolPage):
         row = self.add_row()
         self.view_switch = ViewSwitch(row, self.theme, self._on_view_change,
                                       self._on_tier_change, self.view,
-                                      self.tier, surface="canvas", tiers=())
-        # rename 只区分 列表 与 平铺, 因此收起两档缩略图按钮
+                                      self.tier, surface="canvas")
         self.view_switch.pack(side="right", padx=(8, 0))
         kit.text(row, self.theme, value="视图", size=SIZE_LABEL,
+                 token="muted", surface="canvas").pack(side="right")
+
+        self.type_filter = TypeFilter(row, self.theme,
+                                      command=self._on_type_filter_change)
+        self.type_filter.pack(side="right", padx=(8, 16))
+        kit.text(row, self.theme, value="筛选类型", size=SIZE_LABEL,
                  token="muted", surface="canvas").pack(side="right")
 
         self.btn_add_folder = ttk.Button(row, text="添加文件夹",
                                          style="Toolbar.TButton",
                                          command=self.add_folder)
         self.btn_add_folder.pack(side="left")
-
-        kit.text(row, self.theme, value="筛选类型", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="left",
-                                                      padx=(16, 8))
-        self.type_filter = TypeFilter(row, self.theme,
-                                      command=self._on_type_filter_change)
-        self.type_filter.pack(side="left")
 
         kit.text(row, self.theme, value="文件名前缀", size=SIZE_LABEL,
                  token="muted", surface="canvas").pack(side="left",
@@ -222,8 +219,21 @@ class RenamePage(ToolPage):
             card.fit_height()
         self._queue_card_layout()
 
-    def _on_tier_change(self, _tier):
-        """rename 只区分 列表 与 平铺, 忽略档位切换"""
+    def _on_tier_change(self, tier):
+        """切换缩略图档位, 在其他展示方式下同时切回平铺"""
+        changed = tier != self.tier
+        self.tier = tier
+        entering_tiles = self.view != "icons"
+        if entering_tiles:
+            self.view = "icons"
+        elif not changed:
+            return
+        for card in self.folder_blocks:
+            card.set_tier(tier)
+            if entering_tiles:
+                card.set_view("icons")
+        self.view_switch.set_state(self.view, self.tier)
+        self._relayout_blocks()
 
     def _on_parameter_change(self, _event=None):
         """前缀或起始数字变化后延迟重算, 避免每次按键都重排全部文件"""
