@@ -87,12 +87,13 @@ class DedupePage(ToolPage):
         kit.text(row, self.theme, value="筛选类型", size=SIZE_LABEL,
                  token="muted", surface="canvas").pack(side="right")
 
-        self.btn_choose = ttk.Button(row, text="选择文件夹", style="TButton",
+        self.btn_choose = ttk.Button(row, text="选择文件夹",
+                                     style="Toolbar.TButton",
                                      command=self.on_select_folder)
         self.btn_choose.pack(side="left")
         kit.text(row, self.theme, value="当前文件夹", size=SIZE_LABEL,
                  token="muted", surface="canvas").pack(side="left",
-                                                      padx=(12, 8))
+                                                      padx=(16, 8))
         self.lbl_folder = kit.text(row, self.theme, value="未选择",
                                    size=SIZE_LABEL, token="muted",
                                    mono_font=True, surface="canvas")

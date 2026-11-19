@@ -83,8 +83,8 @@ class RenamePage(ToolPage):
         kit.text(row, self.theme, value="视图", size=SIZE_LABEL,
                  token="muted", surface="canvas").pack(side="right")
 
-        self.btn_add_folder = ttk.Button(row, text="+ 添加文件夹",
-                                         style="TButton",
+        self.btn_add_folder = ttk.Button(row, text="添加文件夹",
+                                         style="Toolbar.TButton",
                                          command=self.add_folder)
         self.btn_add_folder.pack(side="left")
 

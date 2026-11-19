@@ -337,6 +337,17 @@ class ThemeManager:
                           ("pressed", p["fill_hi"]),
                           ("active", p["fill_hi"])],
               foreground=[("disabled", p["disabled_text"])])
+        # 功能区按钮: 与输入控件一致的 1 像素描边和高度
+        s.configure("Toolbar.TButton", padding=pad(12, 4), relief="solid",
+                    borderwidth=1, bordercolor=p["hair"],
+                    lightcolor=p["hair"], darkcolor=p["hair"],
+                    background=p["fill"], foreground=p["text"], font=sans(),
+                    focuscolor=p["fill"])
+        s.map("Toolbar.TButton",
+              background=[("disabled", p["disabled"]),
+                          ("pressed", p["fill_hi"]),
+                          ("active", p["fill_hi"])],
+              foreground=[("disabled", p["disabled_text"])])
         s.configure("Primary.TButton", padding=pad(13, 6), relief="flat",
                     borderwidth=0, background=p["accent"],
                     foreground=p["on_accent"], font=sans(SIZE_BODY, True),

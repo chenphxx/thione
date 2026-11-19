@@ -77,42 +77,39 @@ class MarkdownPage(ToolPage):
     # ---------------- 界面构建 ----------------
     def _build_toolbar(self):
         """添加输入文件并启动处理的主操作区"""
-        row = self.add_row(gap=8)
+        self.btn_start = self.add_actions((
+            ("开始改造", "Primary.TButton", self._start),
+        ))[0]
+
+        row = self.add_row()
         self.btn_add_files = ttk.Button(
             row,
             text="添加文件",
-            style="TButton",
+            style="Toolbar.TButton",
             command=self._add_files,
         )
         self.btn_add_files.pack(side="left")
         self.btn_add_folder = ttk.Button(
             row,
             text="添加文件夹",
-            style="TButton",
+            style="Toolbar.TButton",
             command=self._add_folder,
         )
         self.btn_add_folder.pack(side="left", padx=(8, 0))
         self.btn_remove = ttk.Button(
             row,
             text="移除选中",
-            style="TButton",
+            style="Toolbar.TButton",
             command=self._remove_selected,
         )
         self.btn_remove.pack(side="left", padx=(8, 0))
         self.btn_clear = ttk.Button(
             row,
             text="清空列表",
-            style="TButton",
+            style="Toolbar.TButton",
             command=self._clear_files,
         )
         self.btn_clear.pack(side="right")
-        self.btn_start = ttk.Button(
-            row,
-            text="开始改造",
-            style="Primary.TButton",
-            command=self._start,
-        )
-        self.btn_start.pack(side="right", padx=(0, 8))
 
     def _build_output_panel(self):
         """压缩模式, 输出路径, 图片目录与处理选项"""
@@ -167,7 +164,7 @@ class MarkdownPage(ToolPage):
         self.btn_output = ttk.Button(
             output_row,
             text="选择位置",
-            style="TButton",
+            style="Toolbar.TButton",
             command=self._choose_output,
         )
         self.btn_output.pack(side="left", padx=(8, 0))

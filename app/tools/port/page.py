@@ -119,7 +119,8 @@ class PortPage(ToolPage):
         self._file_controls.configure(bg=self.theme.rgb("panel"))
         ttk.Button(self._file_controls, text="查询", style="Primary.TButton",
                    command=self._query_file).pack(side="right")
-        ttk.Button(self._file_controls, text="选择文件", style="TButton",
+        ttk.Button(self._file_controls, text="选择文件",
+                   style="Toolbar.TButton",
                    command=self._choose_file).pack(side="right", padx=(0, 8))
         kit.text(self._file_controls, self.theme, value="文件",
                  size=SIZE_LABEL, token="muted",

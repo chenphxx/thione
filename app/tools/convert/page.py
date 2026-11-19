@@ -155,12 +155,13 @@ class ConvertPage(ToolPage):
             ("开始转换", "Primary.TButton", self._start),
         ))
 
-        source_row = self.add_row(gap=8)
+        source_row = self.add_row()
         self.btn_add_files = ttk.Button(source_row, text="添加文件",
-                                        style="TButton", command=self._add_files)
+                                        style="Toolbar.TButton",
+                                        command=self._add_files)
         self.btn_add_files.pack(side="left")
         self.btn_add_folder = ttk.Button(source_row, text="添加文件夹",
-                                         style="TButton",
+                                         style="Toolbar.TButton",
                                          command=self._add_folder)
         self.btn_add_folder.pack(side="left", padx=(8, 0))
 
@@ -206,11 +207,11 @@ class ConvertPage(ToolPage):
         self.check_custom.pack(side="left", padx=(12, 0))
 
         self.btn_clear = ttk.Button(options_row, text="清空列表",
-                                    style="TButton",
+                                    style="Toolbar.TButton",
                                     command=self._clear_items)
         self.btn_clear.pack(side="right")
         self.btn_remove = ttk.Button(options_row, text="移除选中",
-                                     style="TButton",
+                                     style="Toolbar.TButton",
                                      command=self._remove_selected)
         self.btn_remove.pack(side="right", padx=(0, 8))
 
