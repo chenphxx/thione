@@ -15,6 +15,7 @@ from ..theme import (
     SIZE_BODY,
     SIZE_BRAND,
     SIZE_LABEL,
+    SIZE_SECTION,
     SIDEBAR_WIDTH,
     icon,
     sans,
@@ -45,8 +46,11 @@ NAV_ROW_HEIGHT = scale(40)
 #: 导航项沿用面板的 8 像素圆角
 NAV_RADIUS = scale(8)
 
-#: 在这些工具之后增加组间间距, 不改变工具顺序与内容
-NAV_GROUP_ENDS = frozenset(("markdown", "port"))
+#: 工具分类与组内顺序; 未归类的工具会放进末尾的 其他 组
+NAV_GROUPS = (
+    ("文件", ("rename", "dedupe", "markdown", "convert")),
+    ("工具", ("translate", "radix", "port", "comm")),
+)
 
 #: 选中项左端强调条的宽度
 MARK_WIDTH = scale(2)
@@ -107,12 +111,24 @@ class Sidebar(tk.Frame):
         tint(nav, bg="side")
         nav.configure(bg=self.theme.rgb("side"))
         nav.pack(side="top", fill="x", padx=NAV_GUTTER)
-        for index, (key, glyph, title) in enumerate(items):
-            last = index == len(items) - 1
-            gap = 0 if last else (
-                NAV_GROUP_GAP if key in NAV_GROUP_ENDS else NAV_ITEM_GAP
+        for group_index, (label, group_items) in enumerate(
+                self._group_items(items)):
+            group_label = kit.text(
+                nav, self.theme, value=label, size=SIZE_SECTION,
+                token="muted", bold=True, surface="side",
             )
-            self._rows[key] = self._build_row(nav, key, glyph, title, gap)
+            group_label.pack(
+                anchor="w", padx=(NAV_CONTENT_PAD, 0),
+                pady=(
+                    0 if group_index == 0 else NAV_GROUP_GAP,
+                    NAV_ITEM_GAP,
+                ),
+            )
+            for item_index, (key, glyph, title) in enumerate(group_items):
+                gap = 0 if item_index == len(group_items) - 1 else NAV_ITEM_GAP
+                self._rows[key] = self._build_row(
+                    nav, key, glyph, title, gap,
+                )
         self._paint()
 
         foot = tk.Frame(self, bd=0, highlightthickness=0)
@@ -126,6 +142,27 @@ class Sidebar(tk.Frame):
         kit.text(foot, self.theme, value=f"v{APP_VERSION}", size=FOOT_TEXT_SIZE,
                  token="muted", mono_font=True,
                  surface="side").pack(anchor="w", pady=(0, scale(10)))
+
+    @staticmethod
+    def _group_items(items):
+        """按侧栏分类整理导航项
+
+        @param items: (工具标识, 图标字形, 工具名) 序列
+        @return: (分组名, 分组内导航项) 序列
+        """
+        by_key = {item[0]: item for item in items}
+        grouped = []
+        claimed = set()
+        for label, keys in NAV_GROUPS:
+            members = [by_key[key] for key in keys if key in by_key]
+            if not members:
+                continue
+            grouped.append((label, members))
+            claimed.update(item[0] for item in members)
+        others = [item for item in items if item[0] not in claimed]
+        if others:
+            grouped.append(("其他", others))
+        return grouped
 
     def _build_row(self, parent, key, glyph, title, gap):
         """建立一行导航项

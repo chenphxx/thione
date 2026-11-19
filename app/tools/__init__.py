@@ -15,13 +15,13 @@ from .translate import TranslatePage
 
 #: 外壳按此顺序装载页面, 顺序即侧栏顺序
 TOOL_PAGES = (
-    DedupePage,
     RenamePage,
+    DedupePage,
     MarkdownPage,
+    ConvertPage,
     TranslatePage,
     RadixPage,
     PortPage,
-    ConvertPage,
     CommPage,
 )
 
