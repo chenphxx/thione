@@ -82,7 +82,7 @@ def setup():
             root.warning("无法创建日志文件, 仅输出到标准错误")
 
     # 第三方库的 INFO 太吵, 只保留告警以上
-    for noisy in ("PIL", "urllib3"):
+    for noisy in ("PIL", "urllib3", "httpx", "httpcore"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     logger = logging.getLogger(LOGGER_NAME)

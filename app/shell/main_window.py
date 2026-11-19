@@ -5,13 +5,15 @@
 """
 
 import logging
+import os
 import queue
+import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
-from .. import kit, win32
+from .. import kit, updater, win32
 from ..constants import (APP_ICON, APP_MIN_SIZE, APP_SIZE, APP_TITLE,
-                         QUEUE_POLL_MS)
+                         APP_VERSION, QUEUE_POLL_MS)
 from ..dpi import scale
 from ..errors import open_path, show_error
 from ..paths import ensure_dir, resource_path, user_log_dir
@@ -39,6 +41,7 @@ class ShellWindow:
         self._show_job = None
         self._splitter_origin = None
         self._closing = False
+        self._update_busy = False
 
         root.title(APP_TITLE)
         self._apply_window_icon()
@@ -84,6 +87,7 @@ class ShellWindow:
             on_select=self.show,
             on_toggle_theme=self.toggle_theme,
             on_open_log=self.open_log_folder,
+            on_check_update=self.check_for_updates,
         )
         self.sidebar.pack(side="left", fill="y")
 
@@ -267,6 +271,212 @@ class ShellWindow:
             return
         open_path(folder, parent=self.root)
 
+    # ---------------- 获取最新版 ----------------
+    def check_for_updates(self):
+        """在后台检查 GitHub 上最新的正式 Release"""
+        if self._update_busy or self._closing:
+            return
+        self._set_update_busy(True, "检查中")
+        self.set_status("正在检查最新版本")
+        thread = threading.Thread(
+            target=self._check_update_worker,
+            name="thione-update-check",
+            daemon=True,
+        )
+        thread.start()
+
+    def _check_update_worker(self):
+        """后台线程: 读取最新 Release, 把结果交回 Tk 主线程"""
+        try:
+            release = updater.fetch_latest_release()
+        except Exception as exc:
+            logger.warning("检查更新失败", exc_info=True)
+            self.post(lambda error=str(exc): self._finish_update_check(
+                error=error,
+            ))
+            return
+        self.post(lambda result=release: self._finish_update_check(
+            release=result,
+        ))
+
+    def _finish_update_check(self, release=None, error=None):
+        """处理最新版本检查结果并询问是否升级
+
+        @param release: 最新 Release
+        @param error: 检查失败时的可读说明
+        """
+        if self._closing:
+            return
+        self._set_update_busy(False)
+        if error is not None:
+            self.set_status("检查更新失败")
+            show_error(
+                f"无法检查最新版本:\n{error}",
+                title="检查更新",
+                parent=self.root,
+            )
+            return
+
+        try:
+            newer = updater.is_newer(release.version, APP_VERSION)
+        except Exception as exc:
+            self.set_status("检查更新失败")
+            show_error(
+                f"无法比较版本号:\n{exc}",
+                title="检查更新",
+                parent=self.root,
+            )
+            return
+        if not newer:
+            self.set_status(f"已是最新版本 v{APP_VERSION}")
+            messagebox.showinfo(
+                "检查更新",
+                f"当前已是最新版本 v{APP_VERSION}",
+                parent=self.root,
+            )
+            return
+
+        target = updater.current_executable()
+        if target is None:
+            self.set_status(f"发现新版本 {release.tag}")
+            messagebox.showinfo(
+                "发现新版本",
+                "当前以源码方式运行, 自动覆盖仅支持打包后的 thione.exe\n\n"
+                "请构建新版本或从 GitHub Releases 下载安装包",
+                parent=self.root,
+            )
+            return
+
+        notes = release.notes
+        if len(notes) > 1600:
+            notes = notes[:1600].rstrip() + "\n..."
+        size_text = ""
+        if release.size > 0:
+            size_text = f"\n安装包大小: {release.size / 1024 / 1024:.1f} MB"
+        detail = f"\n\n{notes}" if notes else ""
+        accepted = messagebox.askyesno(
+            "发现新版本",
+            f"当前版本: v{APP_VERSION}\n"
+            f"最新版本: {release.tag}{size_text}"
+            f"{detail}\n\n是否下载并升级?",
+            parent=self.root,
+        )
+        if not accepted:
+            self.set_status("已取消更新")
+            return
+        self._start_update_download(release, target)
+
+    def _start_update_download(self, release, target):
+        """在后台下载并暂存新版本
+
+        @param release: 要安装的 Release
+        @param target: 当前运行的 exe
+        """
+        self._set_update_busy(True, "下载中")
+        self.set_status(f"正在下载 {release.tag}")
+        try:
+            destination = os.path.join(
+                updater.update_cache_dir(),
+                f"thione-{release.version}.exe",
+            )
+        except OSError as exc:
+            self._finish_update_error("无法创建更新缓存目录", exc)
+            return
+        thread = threading.Thread(
+            target=self._download_update_worker,
+            args=(release, target, destination),
+            name="thione-update-download",
+            daemon=True,
+        )
+        thread.start()
+
+    def _download_update_worker(self, release, target, destination):
+        """后台线程: 下载 校验并暂存更新文件
+
+        @param release: 要安装的 Release
+        @param target: 当前运行的 exe
+        @param destination: 下载缓存路径
+        """
+        def progress(received, total):
+            self.post(lambda done=received, size=total:
+                      self._on_update_progress(release, done, size))
+
+        try:
+            downloaded = updater.download_release(
+                release, destination, on_progress=progress,
+            )
+            staged = updater.stage_update(
+                downloaded, target, release.sha256,
+            )
+        except Exception as exc:
+            logger.warning("下载更新失败", exc_info=True)
+            self.post(lambda error=str(exc): self._finish_update_error(
+                "下载更新失败", error,
+            ))
+            return
+        self.post(lambda: self._finish_update_download(
+            release, target, downloaded, staged,
+        ))
+
+    def _on_update_progress(self, release, received, total):
+        """把下载进度写到当前页面状态栏"""
+        if self._closing or total <= 0:
+            return
+        percent = min(100, int(received * 100 / total))
+        self.set_status(f"正在下载 {release.tag}: {percent}%")
+
+    def _finish_update_download(self, release, target, downloaded, staged):
+        """启动安装进程并关闭主程序
+
+        @param release: 已下载的 Release
+        @param target: 当前运行的 exe
+        @param downloaded: 下载缓存文件
+        @param staged: 已校验的暂存文件
+        """
+        if self._closing:
+            return
+        self.set_status(f"更新 v{release.version} 已就绪, 正在重启")
+        try:
+            updater.launch_update(target, staged, downloaded)
+        except Exception as exc:
+            logger.warning("启动更新程序失败", exc_info=True)
+            self._finish_update_error("无法启动更新程序", exc)
+            return
+        self.root.after(150, lambda: self._close_for_update(staged))
+
+    def _finish_update_error(self, context, error):
+        """恢复按钮并显示更新错误
+
+        @param context: 操作阶段说明
+        @param error: 可读错误
+        """
+        if self._closing:
+            return
+        self._set_update_busy(False)
+        self.set_status(context)
+        show_error(
+            f"{context}:\n{error}",
+            title="更新失败",
+            parent=self.root,
+        )
+
+    def _close_for_update(self, staged):
+        """关闭主程序; 页面拒绝退出时取消已经启动的更新进程"""
+        if self.on_close():
+            return
+        updater.cancel_update(staged)
+        self._set_update_busy(False)
+        self.set_status("更新已取消")
+
+    def _set_update_busy(self, busy, text=None):
+        """同步更新按钮与忙碌状态
+
+        @param busy: 是否正在检查或下载更新
+        @param text: 忙碌时按钮显示的文案
+        """
+        self._update_busy = bool(busy)
+        self.sidebar.set_update_busy(busy, text=text)
+
     # ---------------- 状态栏 ----------------
     def set_status(self, message):
         """把提示写到当前页面的状态栏
@@ -329,11 +539,14 @@ class ShellWindow:
             logger.debug("Could not restore the main window", exc_info=True)
 
     def on_close(self):
-        """通知活动页面清理资源, 保存偏好并关闭窗口"""
+        """通知活动页面清理资源, 保存偏好并关闭窗口
+
+        @return: 页面允许退出并已开始关闭时返回 True
+        """
         for page in list(self._pages.values()):
             try:
                 if not page.on_close():
-                    return
+                    return False
             except Exception:
                 logger.exception("Shell action failed")
         self._closing = True
@@ -354,3 +567,4 @@ class ShellWindow:
             self.root.destroy()
         except tk.TclError:
             pass
+        return True

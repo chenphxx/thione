@@ -66,7 +66,7 @@ class Sidebar(tk.Frame):
     """显示可用工具 当前选中的导航项与底部的主题 日志入口"""
 
     def __init__(self, master, theme, items, on_select, on_toggle_theme,
-                 on_open_log):
+                 on_open_log, on_check_update):
         super().__init__(master, bd=0, highlightthickness=0,
                          width=SIDEBAR_WIDTH)
         self.theme = theme
@@ -76,6 +76,7 @@ class Sidebar(tk.Frame):
         self._on_select = on_select
         self._on_toggle_theme = on_toggle_theme
         self._on_open_log = on_open_log
+        self._on_check_update = on_check_update
         self._rows = {}
         self._active_key = None
         self._hover_key = None
@@ -139,9 +140,19 @@ class Sidebar(tk.Frame):
         self.theme_caption, self.theme_button = self._build_foot_row(
             foot, "深色模式", "切换", self._on_toggle_theme)
         self._build_foot_row(foot, "运行日志", "打开", self._on_open_log)
-        kit.text(foot, self.theme, value=f"v{APP_VERSION}", size=FOOT_TEXT_SIZE,
-                 token="muted", mono_font=True,
-                 surface="side").pack(anchor="w", pady=(0, scale(10)))
+
+        version_row = tk.Frame(foot, bd=0, highlightthickness=0)
+        tint(version_row, bg="side")
+        version_row.configure(bg=self.theme.rgb("side"))
+        version_row.pack(side="top", fill="x", pady=(0, scale(10)))
+        kit.text(version_row, self.theme, value=f"v{APP_VERSION}",
+                 size=FOOT_TEXT_SIZE, token="muted", mono_font=True,
+                 surface="side").pack(side="left")
+        self.update_button = ttk.Button(
+            version_row, text="获取最新版", style="Mini.TButton",
+            command=self._on_check_update,
+        )
+        self.update_button.pack(side="right")
 
     @staticmethod
     def _group_items(items):
@@ -243,6 +254,17 @@ class Sidebar(tk.Frame):
         self._mode = mode
         target = "深色模式" if mode == "light" else "浅色模式"
         self.theme_caption.configure(text=target)
+
+    def set_update_busy(self, busy, text=None):
+        """切换获取最新版按钮的忙碌状态
+
+        @param busy: True 时禁用按钮并显示检查中
+        @param text: 忙碌时显示的文案
+        """
+        self.update_button.configure(
+            state="disabled" if busy else "normal",
+            text=(text or "检查中") if busy else "获取最新版",
+        )
 
     def _set_hover(self, key):
         """记录指针所在的导航行
