@@ -1,22 +1,11 @@
-# 本地凭据
+.venv
 .env
-IAM_*-accessKeys.csv
 
-# 测试 
-test.py
-temp/
-test/
-tests/
-
-# Byte-compiled / optimized / DLL files
 __pycache__/
 
-# Distribution / packaging
 build/
 dist/
 
-# SageMath parsed files
-*.sage.py
+test/
 
-# Environments
-.venv
+test.py
