@@ -65,6 +65,9 @@ def invoke(command, value):
 #: 表格单元格的左右内边距
 CELL_PAD = scale(12)
 
+#: 可换行单元格的上下内边距
+CELL_PAD_Y = scale(6)
+
 
 def hairline(parent, theme, orient="horizontal"):
     """建立一条 1 像素分隔线
@@ -1115,6 +1118,8 @@ class Table(tk.Frame):
 
     表头一行 (11 像素字号 下方 1 像素分隔线), 数据行 31 像素高 行间 1 像素
     分隔线; 选中行使用 fill_hi 底色 左端画 2 像素强调条 首列文字改用强调色
+
+    列定义可设置 wrap=True, 该列文字按列宽换行并自动撑高所在行
     """
 
     def __init__(self, master, theme, columns, on_select=None, empty_text="",
@@ -1134,6 +1139,9 @@ class Table(tk.Frame):
         self._checked = set()
         self.multi = bool(multi)
         self._layout = []
+        self._font_cache = {}
+        self._row_tops = []
+        self._row_heights = []
         tint(self, bg=surface)
         self.configure(bg=theme.rgb(surface))
 
@@ -1286,6 +1294,8 @@ class Table(tk.Frame):
         canvas = self.body
         canvas.delete("all")
         width = max(self.body.winfo_width(), 1)
+        self._row_tops = []
+        self._row_heights = []
         if not self._rows:
             canvas.create_text(width / 2, self.row_height,
                                text=self._empty_text, anchor="n",
@@ -1293,19 +1303,22 @@ class Table(tk.Frame):
             canvas.configure(scrollregion=(0, 0, width, self.row_height * 3))
             self._update_scroll(False)
             return
+        top = 0
         for index, row in enumerate(self._rows):
-            top = index * self.row_height
-            self._draw_row(canvas, row, index, top, width)
-            canvas.create_line(self.padding, top + self.row_height - 0.5,
+            height, line_counts = self._row_layout(row)
+            self._row_tops.append(top)
+            self._row_heights.append(height)
+            self._draw_row(canvas, row, index, top, width,
+                           height, line_counts)
+            canvas.create_line(self.padding, top + height - 0.5,
                                max(width - self.padding, self.padding),
-                               top + self.row_height - 0.5,
+                               top + height - 0.5,
                                fill=self.theme.rgb("hair"))
-        canvas.configure(scrollregion=(0, 0, width,
-                                       len(self._rows) * self.row_height))
-        self._update_scroll(len(self._rows) * self.row_height
-                            > canvas.winfo_height())
+            top += height
+        canvas.configure(scrollregion=(0, 0, width, top))
+        self._update_scroll(top > canvas.winfo_height())
 
-    def _draw_row(self, canvas, row, index, top, width):
+    def _draw_row(self, canvas, row, index, top, width, height, line_counts):
         """画一行数据
 
         @param canvas: 数据区画布
@@ -1313,17 +1326,19 @@ class Table(tk.Frame):
         @param index: 行号
         @param top: 行的上边距
         @param width: 画布宽度
+        @param height: 行高
+        @param line_counts: 可换行列对应的行数
         """
         selected = (index in self._checked if self.multi
                     else index == self._selected)
         row_bg = row.get("row_bg")
         if selected:
-            canvas.create_rectangle(0, top, width, top + self.row_height,
+            canvas.create_rectangle(0, top, width, top + height,
                                     outline="", fill=self.theme.rgb("fill_hi"))
-            canvas.create_rectangle(0, top, 2, top + self.row_height,
+            canvas.create_rectangle(0, top, 2, top + height,
                                     outline="", fill=self.theme.rgb("accent"))
         elif row_bg:
-            canvas.create_rectangle(0, top, width, top + self.row_height,
+            canvas.create_rectangle(0, top, width, top + height,
                                     outline="", fill=self.theme.rgb(row_bg))
         for position, (col, x, col_width) in enumerate(self._layout):
             key = col.get("key")
@@ -1335,9 +1350,84 @@ class Table(tk.Frame):
                 token = "accent"
             anchor, offset = self._cell_anchor(col, x, col_width)
             font = mono() if col.get("mono") else sans()
-            canvas.create_text(offset, top + self.row_height / 2, text=cell,
-                               anchor=anchor, font=font,
-                               fill=self.theme.rgb(token))
+            if col.get("wrap"):
+                lines = line_counts.get(key, 1)
+                line_height = self._cell_font(col).metrics("linespace")
+                text_top = top + max((height - lines * line_height) / 2,
+                                     CELL_PAD_Y)
+                anchor = {"w": "nw", "e": "ne"}.get(anchor, "n")
+                canvas.create_text(offset, text_top, text=cell,
+                                   anchor=anchor, font=font,
+                                   width=max(col_width - CELL_PAD * 2, 1),
+                                   justify="left",
+                                   fill=self.theme.rgb(token))
+            else:
+                canvas.create_text(offset, top + height / 2, text=cell,
+                                   anchor=anchor, font=font,
+                                   fill=self.theme.rgb(token))
+
+    def _row_layout(self, row):
+        """计算一行的高度以及可换行列的文字行数
+
+        @param row: 行数据
+        @return: (行高, {列键: 行数})
+        """
+        height = self.row_height
+        line_counts = {}
+        for col, _x, col_width in self._layout:
+            if not col.get("wrap"):
+                continue
+            key = col.get("key")
+            cell = row.get(key, "")
+            if isinstance(cell, tuple):
+                cell = cell[0]
+            lines = self._wrapped_line_count(str(cell), col, col_width)
+            line_counts[key] = lines
+            line_height = self._cell_font(col).metrics("linespace")
+            height = max(height, lines * line_height + CELL_PAD_Y * 2)
+        return height, line_counts
+
+    def _wrapped_line_count(self, value, col, col_width):
+        """按列宽估算文字换行后的行数
+
+        @param value: 单元格文字
+        @param col: 列定义
+        @param col_width: 列宽
+        @return: 行数, 至少为 1
+        """
+        available = col_width - CELL_PAD * 2
+        if available <= 0:
+            return 1
+        font = self._cell_font(col)
+        lines = 0
+        for paragraph in value.split("\n"):
+            if font.measure(paragraph) <= available:
+                lines += 1
+                continue
+            width = 0
+            count = 1
+            for char in paragraph:
+                char_width = font.measure(char)
+                if width and width + char_width > available:
+                    count += 1
+                    width = char_width
+                else:
+                    width += char_width
+            lines += count
+        return max(lines, 1)
+
+    def _cell_font(self, col):
+        """取列使用的字体对象, 用于测量换行宽度
+
+        @param col: 列定义
+        @return: Tk 字体对象
+        """
+        mono_font = bool(col.get("mono"))
+        font = self._font_cache.get(mono_font)
+        if font is None:
+            font = tkfont.Font(root=self, font=mono() if mono_font else sans())
+            self._font_cache[mono_font] = font
+        return font
 
     def _cell_anchor(self, col, x, col_width):
         """算出某一列文字的锚点与横坐标
@@ -1409,7 +1499,11 @@ class Table(tk.Frame):
         """
         del x
         offset = self.body.canvasy(0)
-        return int((y + offset) // self.row_height)
+        position = y + offset
+        for index, top in enumerate(self._row_tops):
+            if top <= position < top + self._row_heights[index]:
+                return index
+        return -1
 
     def _thione_apply(self, palette):
         """主题切换后重画"""

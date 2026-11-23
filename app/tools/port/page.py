@@ -193,12 +193,12 @@ class PortPage(ToolPage):
         self.status.add_tail(self.metric)
 
     def _on_details_resize(self, event):
-        """路径与命令行可能很长, 按面板宽度换行
+        """进程名 路径与命令行可能很长, 按面板宽度换行
 
         @param event: 面板尺寸变化事件
         """
         width = max(120, event.width - DETAIL_LABEL_WIDTH - 40)
-        for key in ("path", "cmdline"):
+        for key in ("process", "path", "cmdline"):
             self._detail_labels[key].configure(wraplength=width)
 
     def _on_splitter_start(self):

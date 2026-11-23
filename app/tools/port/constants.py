@@ -19,13 +19,13 @@ PORT_COLUMNS = (
     {"key": "local", "title": "本地地址", "weight": 2.4, "mono": True},
     {"key": "state", "title": "状态", "weight": 2.1},
     {"key": "pid", "title": "PID", "weight": 0.9, "mono": True},
-    {"key": "process", "title": "程序", "weight": 4.0},
+    {"key": "process", "title": "程序", "weight": 4.0, "wrap": True},
 )
 
 # 占用文件的进程列表的列
 FILE_COLUMNS = (
     {"key": "pid", "title": "PID", "weight": 1.0, "mono": True},
-    {"key": "process", "title": "进程", "weight": 2.4},
+    {"key": "process", "title": "进程", "weight": 2.4, "wrap": True},
     {"key": "type", "title": "类型", "weight": 1.8},
     {"key": "path", "title": "路径", "weight": 6.0},
 )
