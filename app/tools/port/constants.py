@@ -16,7 +16,8 @@ VIEW_LABELS = ((VIEW_PORTS, "端口"), (VIEW_FILES, "文件"))
 # 列与设计稿一致: 协议 本地地址 状态 PID 程序
 PORT_COLUMNS = (
     {"key": "proto", "title": "协议", "weight": 0.7},
-    {"key": "local", "title": "本地地址", "weight": 2.4, "mono": True},
+    {"key": "local", "title": "本地地址", "weight": 2.4, "mono": True,
+     "wrap": True},
     {"key": "state", "title": "状态", "weight": 2.1},
     {"key": "pid", "title": "PID", "weight": 0.9, "mono": True},
     {"key": "process", "title": "程序", "weight": 4.0, "wrap": True},
@@ -27,7 +28,7 @@ FILE_COLUMNS = (
     {"key": "pid", "title": "PID", "weight": 1.0, "mono": True},
     {"key": "process", "title": "进程", "weight": 2.4, "wrap": True},
     {"key": "type", "title": "类型", "weight": 1.8},
-    {"key": "path", "title": "路径", "weight": 6.0},
+    {"key": "path", "title": "路径", "weight": 6.0, "wrap": True},
 )
 
 # 进程详情的字段: 键 标题

@@ -19,12 +19,12 @@ VSVersionInfo(
                     [
                         StringStruct("CompanyName", "thione"),
                         StringStruct("FileDescription", "thione"),
-                        StringStruct("FileVersion", "1.26.7"),
+                        StringStruct("FileVersion", "1.26.8"),
                         StringStruct("InternalName", "thione"),
                         StringStruct("LegalCopyright", ""),
                         StringStruct("OriginalFilename", "thione.exe"),
                         StringStruct("ProductName", "thione"),
-                        StringStruct("ProductVersion", "1.26.7"),
+                        StringStruct("ProductVersion", "1.26.8"),
                     ],
                 )
             ]

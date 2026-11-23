@@ -6,8 +6,10 @@ SUBTITLE = "把 Markdown 和本地图片整理成导入包或原始目录文档"
 DEFAULT_IMAGE_FOLDER = "assets/images"
 
 FILE_COLUMNS = (
-    {"key": "name", "title": "文件名", "weight": 2, "mono": False},
-    {"key": "folder", "title": "所在目录", "weight": 5, "mono": True},
+    {"key": "name", "title": "文件名", "weight": 2, "mono": False,
+     "wrap": True},
+    {"key": "folder", "title": "所在目录", "weight": 5, "mono": True,
+     "wrap": True},
 )
 
 EMPTY_TEXT = "还没有添加 Markdown 文件, 点击上方按钮开始"

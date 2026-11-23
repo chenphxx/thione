@@ -107,11 +107,11 @@ FORMAT_ALIASES = {
 
 # 文件列表的列, 与设计稿一致: 文件名 格式 大小 状态
 FILE_COLUMNS = (
-    {"key": "name", "title": "文件名", "weight": 42},
+    {"key": "name", "title": "文件名", "weight": 42, "wrap": True},
     {"key": "format", "title": "格式", "weight": 11, "mono": True},
     {"key": "size", "title": "大小", "weight": 14, "anchor": "e",
      "mono": True, "color": "muted"},
-    {"key": "status", "title": "状态", "weight": 33},
+    {"key": "status", "title": "状态", "weight": 33, "wrap": True},
 )
 
 #: 状态列的文字
