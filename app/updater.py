@@ -474,6 +474,8 @@ function Write-UpdateLog([string]$text)
     "$stamp $text" | Out-File -LiteralPath $log -Append -Encoding utf8
 }
 
+Write-UpdateLog ("更新进程已启动: pid=" + $PID)
+
 $processExited = $false
 $backupCreated = $false
 try
@@ -587,9 +589,10 @@ def launch_update(target, staged, downloaded):
         pass
     script = _update_script(target, staged, os.getpid(), downloaded)
     encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+    # DETACHED_PROCESS 会让 powershell.exe 在执行 -EncodedCommand 前直接退出,
+    # 独立进程组已经能保证脚本在主程序退出后继续运行
     flags = (
-        getattr(subprocess, "DETACHED_PROCESS", 0)
-        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         | getattr(subprocess, "CREATE_NO_WINDOW", 0)
     )
     try:
