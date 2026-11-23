@@ -2,7 +2,7 @@
 
 更新只接受当前仓库发布的正式版本和固定名称的 thione.exe 资源, 下载完成后必须
 与 GitHub 返回的 SHA-256 一致. 覆盖当前 exe 需要等主进程退出, 因此安装由独立
-的 PowerShell 进程完成, 成功后自动启动新版本
+的 PowerShell 进程完成, 优先使用 PowerShell 7, 成功后自动启动新版本
 """
 
 import base64
@@ -445,6 +445,21 @@ def _powershell_quote(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def _find_powershell():
+    """查找可用的 PowerShell 解释器
+
+    优先使用独立安装或商店版的 PowerShell 7, 找不到时回退到 Windows 自带的
+    Windows PowerShell 5.1
+
+    @return: 解释器绝对路径, 都不存在时返回 None
+    """
+    for name in ("pwsh.exe", "powershell.exe"):
+        executable = shutil.which(name)
+        if executable:
+            return executable
+    return None
+
+
 def _update_script(target, staged, process_id, downloaded):
     """生成等待退出 覆盖程序并重启的 PowerShell 脚本
 
@@ -521,12 +536,13 @@ try
         }
     }
     Start-Process -FilePath $target `
-        -WorkingDirectory (Split-Path -LiteralPath $target -Parent)
+        -WorkingDirectory ([System.IO.Path]::GetDirectoryName($target))
     Write-UpdateLog '更新安装完成'
 }
 catch
 {
     Write-UpdateLog ("更新安装失败: " + $_.Exception.ToString())
+    Write-UpdateLog ("失败位置: " + $_.InvocationInfo.PositionMessage)
     if ($processExited)
     {
         try
@@ -538,12 +554,13 @@ catch
             if (Test-Path -LiteralPath $target)
             {
                 Start-Process -FilePath $target `
-                    -WorkingDirectory (Split-Path -LiteralPath $target -Parent)
+                    -WorkingDirectory ([System.IO.Path]::GetDirectoryName($target))
             }
         }
         catch
         {
             Write-UpdateLog ("恢复旧版本失败: " + $_.Exception.ToString())
+            Write-UpdateLog ("恢复失败位置: " + $_.InvocationInfo.PositionMessage)
         }
     }
 }
@@ -580,16 +597,16 @@ def launch_update(target, staged, downloaded):
     """
     if os.name != "nt":
         raise UpdateError("自动更新仅支持 Windows")
-    powershell = shutil.which("powershell.exe")
+    powershell = _find_powershell()
     if not powershell:
-        raise UpdateError("找不到 PowerShell, 无法启动更新程序")
+        raise UpdateError("找不到 PowerShell 7 或 Windows PowerShell")
     try:
         os.remove(staged + ".cancel")
     except OSError:
         pass
     script = _update_script(target, staged, os.getpid(), downloaded)
     encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-    # DETACHED_PROCESS 会让 powershell.exe 在执行 -EncodedCommand 前直接退出,
+    # DETACHED_PROCESS 会让 PowerShell 在执行 -EncodedCommand 前直接退出,
     # 独立进程组已经能保证脚本在主程序退出后继续运行
     flags = (
         getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -617,8 +634,8 @@ def launch_update(target, staged, downloaded):
     except OSError as exc:
         raise UpdateError(f"无法启动更新程序: {exc}") from exc
     logger.info(
-        "更新进程已启动: pid=%s, target=%s, version_file=%s",
-        process.pid, target, staged,
+        "更新进程已启动: shell=%s, pid=%s, target=%s, version_file=%s",
+        powershell, process.pid, target, staged,
     )
     return process
 
