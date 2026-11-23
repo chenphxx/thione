@@ -1,69 +1,64 @@
 # Repository Guidelines
 
-thione is a Windows-only desktop toolbox (Python 3.10+, tkinter/ttk) bundling file and text
-utilities: image dedupe, batch rename, selection translate, radix conversion, port inspection,
-audio conversion, and a serial/network assistant.
+thione is a Windows-only Python 3.10+ desktop toolbox built with tkinter/ttk. Changes should
+remain small, follow the existing page and tool structure, and preserve unrelated work in the
+working tree.
 
 ## Project Structure & Module Organization
 
-```
-main.py            entry point: single-instance guard, Tk root, mainloop
-app/
-  shell/           main window, sidebar, ToolPage base class (page.py)
-  tools/           one subpackage per tool: dedupe, rename, translate, radix, port, convert, comm
-  browser/         shared explorer-style file view (grid, preview, details, view bar)
-  theme.py  settings.py  imaging.py  widgets.py  win32.py  constants.py
-assets/images/     runtime icons (logo.ico)
-docs/              architecture, dev guide, per-feature notes (Simplified Chinese)
-thione.spec        PyInstaller spec    version_info.txt  exe version resource
-```
-
-Each tool lives in `app/tools/<name>/`, exports a `ToolPage` subclass from `page.py` with `key`,
-`title`, `icon`, and `subtitle` class attributes, and registers it in `TOOL_PAGES`
-(`app/tools/__init__.py`), where order is sidebar order. Per-tool constants go in that package's
-`constants.py`. There is no test suite yet.
+- `main.py` initializes logging and the single-instance guard, then starts the Tk shell.
+- `app/shell/` contains the main window, sidebar, and shared `ToolPage` base class.
+- `app/tools/<tool>/` contains one feature per package, including `page.py`, `constants.py`, and
+  supporting logic. Register pages in `app/tools/__init__.py`; registration order controls the
+  sidebar.
+- `app/browser/` holds the shared file browser components. `assets/images/` contains runtime
+  images. `docs/` contains architecture and feature documentation in Simplified Chinese.
+- `test/` and `test.py` are ignored local scratch resources, not an automated test suite.
 
 ## Build, Test, and Development Commands
 
 ```powershell
-py -3.15 -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\python.exe main.py                                        # run from source
-.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean thione.spec # build dist/thione.exe
+py -3 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python main.py
+python -m compileall -q app main.py
+python -m PyInstaller --noconfirm --clean thione.spec
 ```
 
-Logs go to the terminal and `%LOCALAPPDATA%\thione\logs\thione.log`.
+The last command creates `dist/thione.exe`. Runtime logs are written to both the terminal and
+`%LOCALAPPDATA%\thione\logs\thione.log`.
 
 ## Coding Style & Naming Conventions
 
-- 4-space indent, double quotes, ~100-column soft limit. No formatter or linter is configured, so
-  match surrounding code.
-- `snake_case` modules and functions, `PascalCase` classes, `UPPER_CASE` module constants,
-  `_underscore` for internal helpers.
-- Docstrings and comments are Simplified Chinese in the `@param` / `@return` style — keep new code
-  consistent.
-- tkinter is not thread-safe: only the main thread touches Tk objects. Background threads post
-  work via the queue + `after` pattern (`ShellWindow.post`). Keep non-UI logic importable without
-  tkinter, as in `app/tools/radix/converter.py`.
+- Use 4-space indentation, double quotes, and the surrounding code's roughly 100-column style.
+  No formatter or linter is configured.
+- Use `snake_case` for modules and functions, `PascalCase` for classes, and `UPPER_CASE` for
+  constants. Prefix internal helpers with `_`.
+- Keep comments and docstrings consistent with existing Simplified Chinese `@param` /
+  `@return` documentation.
+- Only the main thread may touch tkinter objects. Return background results through the existing
+  queue-and-`after` pattern.
 
 ## Testing Guidelines
 
-No framework or CI is configured. Put tests for pure logic under `tests/` with `pytest`, free of
-tkinter and window creation, and describe manual verification in the PR.
+There is no configured test framework, CI pipeline, or coverage threshold. Run the application
+and manually exercise the changed tool plus startup and window switching. Check the log for
+exceptions. If adding automated tests, place pure-logic tests under `tests/` and keep tkinter and
+window creation out of them.
 
 ## Commit & Pull Request Guidelines
 
-- Use Conventional Commits with a short Chinese summary, e.g.
-  `fix: 修复长按ctrl也会触发翻译的问题`. Prefixes in use: `feat`, `fix`, `docs`, `chore`,
-  `refactor`, `style`, `perf`, `build`.
-- Keep each commit single-purpose and the subject under ~50 characters.
-- PRs should state the change and motivation, link related issues, and include screenshots for UI
-  changes. For releases, update `CHANGELOG.md` (newest `YYYY.M.D` heading first) and bump
-  `__version__` in `app/__init__.py` together with `version_info.txt`.
+Use Conventional Commits with a short Chinese summary, for example
+`fix: 修复长按 Ctrl 也会触发翻译的问题`. Common types are `feat`, `fix`, `docs`, `refactor`,
+`style`, `perf`, `build`, and `chore`. Keep commits single-purpose.
+
+Pull requests should explain the behavior change and motivation, link related issues, list
+verification performed, and include screenshots for UI changes. Update `docs/` when behavior or
+architecture changes, and update `CHANGELOG.md` only for user-visible changes.
 
 ## Security & Configuration
 
-Never commit credentials. Translation keys are read from `%APPDATA%\thione\config.ini`, preferences
-from `%APPDATA%\thione\settings.ini`; `.env` and `IAM_*-accessKeys.csv` are gitignored. Translation
-providers implement `app/tools/translate/providers/provider.py` and convert language codes
-internally, so business code only sees project codes (`zh`, `en`, ...).
+Never commit credentials or generated secrets. Translation credentials and preferences live in
+`%APPDATA%\thione\config.ini` and `settings.ini`, outside the repository. Do not add dependencies
+without first checking `requirements.txt` and `thione.spec`.
