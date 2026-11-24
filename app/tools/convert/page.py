@@ -1,4 +1,4 @@
-"""文件格式转换页面: 把选中的音频文件批量转成另一种格式"""
+"""文件格式转换页面: 批量转换音视频与图片格式"""
 
 import logging
 import os
@@ -11,7 +11,7 @@ from ... import kit
 from ...errors import open_path, show_error
 from ...shell.page import ToolPage
 from ...theme import SIZE_LABEL, tint
-from . import ffmpeg, platforms, tasks
+from . import ffmpeg, images, platforms, tasks
 from .constants import (
     AUDIO_FORMATS,
     AUTO_BITRATE,
@@ -24,6 +24,7 @@ from .constants import (
     DECRYPT_FAILED,
     DEFAULT_BITRATE,
     DEFAULT_FORMAT,
+    DEFAULT_IMAGE_FORMAT,
     DEST_CUSTOM,
     DEST_LABELS,
     DEST_SOURCE,
@@ -41,9 +42,22 @@ from .constants import (
     FORMAT_CHOICES,
     FORMAT_CODECS,
     FORMAT_LABELS,
+    IMAGE_ADD_HINT,
+    IMAGE_EMPTY_HINT,
+    IMAGE_EMPTY_TITLE,
+    IMAGE_ENGINE_LABEL,
+    IMAGE_EXTENSIONS,
+    IMAGE_FORMAT_CHOICES,
+    IMAGE_FORMAT_LABELS,
+    IMAGE_FORMATS,
+    IMAGE_QUALITY_HINT,
+    IMAGE_QUALITY_LABEL,
     INPUT_EXTENSIONS,
     LOSSLESS_ONLY_FORMATS,
     LOSSLESS_QUALITY,
+    MODE_AUDIO,
+    MODE_IMAGE,
+    MODE_LABELS,
     PAGE_HINT,
     PAGE_TITLE,
     PROGRESS_IDLE,
@@ -101,12 +115,12 @@ def _status_token(tag):
 
 
 class ConvertPage(ToolPage):
-    """在常见音频格式之间批量转换的工具页面"""
+    """在常见音视频与图片格式之间批量转换的工具页面"""
 
     key = "convert"
     title = PAGE_TITLE
     icon = "🎵"
-    subtitle = "把音频 视频与加密音乐文件批量转换成常见格式"
+    subtitle = SUBTITLE
 
     def __init__(self, master, shell):
         super().__init__(master, shell)
@@ -117,6 +131,7 @@ class ConvertPage(ToolPage):
         self._dest_dir = ""
         self._ffmpeg_path = ""
         self._engine_checked = False
+        self._engine_detecting = False
         self._engine_thread = None
         self._engine_request = 0
         self._messages = queue.Queue()
@@ -132,8 +147,13 @@ class ConvertPage(ToolPage):
         self._skipped = 0
         self._failed = 0
 
+        self._mode = MODE_AUDIO
         self._format = DEFAULT_FORMAT
         self._quality = BITRATE_LABELS[BITRATES.index(DEFAULT_BITRATE)]
+        self._audio_format = DEFAULT_FORMAT
+        self._image_format = DEFAULT_IMAGE_FORMAT
+        self._audio_quality = self._quality
+        self._ffmpeg_version = ""
         self._dest_source_var = tk.BooleanVar(value=True)
         self._dest_custom_var = tk.BooleanVar(value=False)
 
@@ -156,6 +176,10 @@ class ConvertPage(ToolPage):
         ))
 
         source_row = self.add_row()
+        self.mode_switch = kit.Segment(
+            source_row, self.theme, MODE_LABELS, value=self._mode,
+            command=self._select_mode, surface="canvas")
+        self.mode_switch.pack(side="left", padx=(0, 12))
         self.btn_add_files = ttk.Button(source_row, text="添加文件",
                                         style="Toolbar.TButton",
                                         command=self._add_files)
@@ -176,9 +200,10 @@ class ConvertPage(ToolPage):
         self.combo_format.set(FORMAT_LABELS[DEFAULT_FORMAT])
         self.combo_format.pack(side="left")
 
-        kit.text(source_row, self.theme, value="音质", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="left",
-                                                      padx=(14, 8))
+        self.lbl_quality_title = kit.text(
+            source_row, self.theme, value="音质", size=SIZE_LABEL,
+            token="muted", surface="canvas")
+        self.lbl_quality_title.pack(side="left", padx=(14, 8))
         self.combo_quality = kit.Dropdown(source_row, self.theme,
                                           command=self._on_quality_change,
                                           surface="canvas",
@@ -311,11 +336,16 @@ class ConvertPage(ToolPage):
 
     # ---------------- 文件列表 ----------------
     def _add_files(self):
-        """选择若干音频 视频或者加密文件加进列表"""
-        patterns = " ".join(f"*{ext}" for ext in INPUT_EXTENSIONS)
+        """按当前模式选择若干文件加进列表"""
+        extensions = self._extensions()
+        patterns = " ".join(f"*{ext}" for ext in extensions)
+        media = "图片" if self._mode == MODE_IMAGE else "音频 视频或加密文件"
+        filetypes = ((media, patterns),)
+        if self._mode == MODE_AUDIO:
+            filetypes += (("所有文件", "*.*"),)
         paths = filedialog.askopenfilenames(
-            title="选择要转换的音频 视频或加密文件",
-            filetypes=(("音频 视频与加密文件", patterns), ("所有文件", "*.*")),
+            title=f"选择要转换的{media}",
+            filetypes=filetypes,
             parent=self.window)
         if not paths:
             return
@@ -323,13 +353,14 @@ class ConvertPage(ToolPage):
         self._report_added(added)
 
     def _add_folder(self):
-        """选择文件夹并把里面的音频 视频与加密文件一次加进列表"""
-        folder = filedialog.askdirectory(title="选择包含音频或者视频的文件夹",
+        """选择文件夹并把里面当前模式支持的文件一次加进列表"""
+        media = "图片" if self._mode == MODE_IMAGE else "音频 视频与加密文件"
+        folder = filedialog.askdirectory(title=f"选择包含{media}的文件夹",
                                          parent=self.window)
         if not folder:
             return
         folder = os.path.normpath(folder)
-        found = tasks.scan_folder(folder)
+        found = tasks.scan_folder(folder, self._extensions())
         if not found:
             messagebox.showinfo("提示", "这个文件夹里没有可转换的文件",
                                 parent=self.window)
@@ -358,6 +389,9 @@ class ConvertPage(ToolPage):
         added = skipped = 0
         for path in paths:
             source = os.path.normpath(path)
+            if self._mode == MODE_IMAGE \
+                    and os.path.splitext(source)[1].lower() not in IMAGE_EXTENSIONS:
+                continue
             key = os.path.normcase(source)
             if key in known:
                 continue
@@ -409,7 +443,7 @@ class ConvertPage(ToolPage):
             if not os.path.isdir(folder):
                 self._folders.remove(folder)
                 continue
-            found = tasks.scan_folder(folder)
+            found = tasks.scan_folder(folder, self._extensions())
             new_added, new_skipped = self._add_paths(found, skip_outputs=True)
             added += new_added
             skipped += new_skipped
@@ -501,8 +535,11 @@ class ConvertPage(ToolPage):
             self.empty_state.pack_forget()
             self.table.pack(side="top", fill="both", expand=True)
             return
-        self.empty_title.configure(text=EMPTY_TITLE)
-        self.empty_hint.configure(text=EMPTY_HINT)
+        image_mode = self._mode == MODE_IMAGE
+        self.empty_title.configure(
+            text=IMAGE_EMPTY_TITLE if image_mode else EMPTY_TITLE)
+        self.empty_hint.configure(
+            text=IMAGE_EMPTY_HINT if image_mode else EMPTY_HINT)
         self.table.pack_forget()
         self.empty_state.pack(side="top", fill="both", expand=True)
 
@@ -512,8 +549,9 @@ class ConvertPage(ToolPage):
             self.counts_metric.configure(text="")
             return
         size = sum(item.size for item in self._items)
+        unit = "张图片" if self._mode == MODE_IMAGE else "个文件"
         self.counts_metric.configure(
-            text=f"{len(self._items)} 个文件 | {tasks.format_size(size)}")
+            text=f"{len(self._items)} {unit} | {tasks.format_size(size)}")
 
     def _update_actions(self, _event=None):
         """按运行状态与选中项刷新按钮的可用性"""
@@ -565,6 +603,60 @@ class ConvertPage(ToolPage):
                       reveal=True)
 
     # ---------------- 转换设置 ----------------
+    def _select_mode(self, mode):
+        """切换音视频与图片转换模式
+
+        @param mode: MODE_AUDIO 或 MODE_IMAGE
+        """
+        if mode not in (MODE_AUDIO, MODE_IMAGE) or mode == self._mode:
+            return
+        if self._ongoing:
+            self.mode_switch.set(self._mode)
+            return
+
+        if self._mode == MODE_AUDIO:
+            self._audio_format = self._format
+            self._audio_quality = self._quality
+        else:
+            self._image_format = self._format
+
+        self._mode = mode
+        if mode == MODE_AUDIO:
+            self._format = self._audio_format
+            self._quality = self._audio_quality
+        else:
+            self._format = self._image_format
+            self._quality = IMAGE_QUALITY_LABEL
+
+        self._items = []
+        self._folders = []
+        self._outputs.clear()
+        self.mode_switch.set(mode)
+        self._sync_format_choices()
+        self._sync_quality()
+        self._rebuild_rows()
+        if mode == MODE_AUDIO and not self._engine_checked:
+            self._detect_engine()
+        else:
+            self._sync_engine_status()
+        self.set_status("已切换到图片转换" if mode == MODE_IMAGE
+                        else "已切换到音视频转换")
+
+    def _extensions(self):
+        """当前模式允许的输入扩展名"""
+        return IMAGE_EXTENSIONS if self._mode == MODE_IMAGE else INPUT_EXTENSIONS
+
+    def _sync_format_choices(self):
+        """按当前模式刷新输出格式下拉框"""
+        if self._mode == MODE_IMAGE:
+            values = list(IMAGE_FORMAT_CHOICES)
+            current = IMAGE_FORMAT_LABELS[self._format]
+        else:
+            values = list(FORMAT_CHOICES)
+            current = FORMAT_LABELS[self._format]
+        self.combo_format.set_values(values)
+        self.combo_format.set(current)
+
     def _target_format(self):
         """下拉框当前选中的目标格式
 
@@ -592,11 +684,22 @@ class ConvertPage(ToolPage):
         return FORMAT_CODECS[extension], DEFAULT_BITRATE, ()
 
     def _sync_quality(self):
-        """按目标格式刷新音质选项与旁边的说明
+        """按当前模式与目标格式刷新质量选项
 
         容器支持无损编码时把无损排在最前, 有损格式再接最高音质档与共用的
         码率档, 只有 WAV FLAC AIFF 这类没有有损编码的容器才只有无损一项
         """
+        if self._mode == MODE_IMAGE:
+            self.lbl_quality_title.configure(text="质量")
+            self.combo_quality.set_values([IMAGE_QUALITY_LABEL])
+            self._quality = IMAGE_QUALITY_LABEL
+            self.combo_quality.set(self._quality)
+            self.combo_quality.set_enabled(False)
+            self.lbl_quality_hint.configure(text=IMAGE_QUALITY_HINT)
+            return
+
+        self.lbl_quality_title.configure(text="音质")
+        self.combo_quality.set_enabled(True)
         extension = self._target_format()
         lossless = LOSSLESS_QUALITY.get(extension)
         values = [lossless[0]] if lossless else []
@@ -617,10 +720,16 @@ class ConvertPage(ToolPage):
 
         @param label: 下拉框里选中的格式名
         """
-        for ext, _label, _codec, _by_rate in AUDIO_FORMATS:
-            if FORMAT_LABELS[ext] == label:
-                self._format = ext
-                break
+        if self._mode == MODE_IMAGE:
+            for ext, _label in IMAGE_FORMATS:
+                if IMAGE_FORMAT_LABELS[ext] == label:
+                    self._format = ext
+                    break
+        else:
+            for ext, _label, _codec, _by_rate in AUDIO_FORMATS:
+                if FORMAT_LABELS[ext] == label:
+                    self._format = ext
+                    break
         self._sync_quality()
 
     def _on_quality_change(self, label):
@@ -679,14 +788,14 @@ class ConvertPage(ToolPage):
         数秒; 因此定位与读版本号都放在后台线程, 期间状态栏先显示 正在检测
         """
         self._engine_request += 1
-        self.engine_metric.configure(text=ENGINE_DETECTING)
-        tint(self.engine_metric, bg="side", fg="muted")
+        self._engine_detecting = True
         thread = threading.Thread(
             target=self._detect_engine_worker,
             args=(self._engine_request, self._cached_engine_path()),
             name="convert-engine", daemon=True)
         self._engine_thread = thread
         thread.start()
+        self._sync_engine_status()
 
     def _detect_engine_worker(self, request, cached):
         """后台线程: 定位 ffmpeg 并读一次版本号, 只通过队列与主线程通信
@@ -724,15 +833,41 @@ class ConvertPage(ToolPage):
         @param version: 版本号, 读不到时为空串
         """
         self._ffmpeg_path = path
-        if not path:
-            self.engine_metric.configure(text=ENGINE_MISSING,
-                                         fg=self.theme.rgb("danger"))
+        self._ffmpeg_version = version
+        self._engine_detecting = False
+        self._sync_engine_status()
+        if path:
+            self._remember_engine(path)
+
+    def _sync_engine_status(self):
+        """按当前模式显示 ffmpeg 或内置图片引擎"""
+        if self._mode == MODE_IMAGE:
+            self.engine_metric.configure(
+                text=f"Pillow {images.version()}", fg=self.theme.rgb("text"))
+            tint(self.engine_metric, bg="side", fg="text")
+            self.btn_engine.configure(text=IMAGE_ENGINE_LABEL, state="disabled")
+            return
+
+        self.btn_engine.configure(text=ENGINE_CHOOSE, state="normal")
+        if self._ffmpeg_path:
+            self.engine_metric.configure(
+                text=f"ffmpeg {self._ffmpeg_version}".rstrip(),
+                fg=self.theme.rgb("text"))
+            tint(self.engine_metric, bg="side", fg="text")
+            return
+        if self._engine_detecting:
+            self.engine_metric.configure(
+                text=ENGINE_DETECTING, fg=self.theme.rgb("muted"))
+            tint(self.engine_metric, bg="side", fg="muted")
+            return
+        if self._engine_checked:
+            self.engine_metric.configure(
+                text=ENGINE_MISSING, fg=self.theme.rgb("danger"))
             tint(self.engine_metric, bg="side", fg="danger")
             return
-        self.engine_metric.configure(text=f"ffmpeg {version}".rstrip(),
-                                     fg=self.theme.rgb("text"))
-        tint(self.engine_metric, bg="side", fg="text")
-        self._remember_engine(path)
+        self.engine_metric.configure(
+            text=ENGINE_DETECTING, fg=self.theme.rgb("muted"))
+        tint(self.engine_metric, bg="side", fg="muted")
 
     def _remember_engine(self, path):
         """记住这次用的 ffmpeg, 下次启动直接采用
@@ -790,14 +925,20 @@ class ConvertPage(ToolPage):
         if self._ongoing:
             return
         if not self._items:
-            messagebox.showinfo("提示", "先添加要转换的音频文件",
+            message = (IMAGE_ADD_HINT if self._mode == MODE_IMAGE
+                       else "先添加要转换的音频文件")
+            messagebox.showinfo("提示", message,
                                 parent=self.window)
             return
-        if not self._ensure_engine():
-            return
 
+        mode = self._mode
         extension = self._target_format()
-        codec, bitrate, extra_args = self._quality_choice()
+        if mode == MODE_AUDIO:
+            if not self._ensure_engine():
+                return
+            codec, bitrate, extra_args = self._quality_choice()
+        else:
+            codec, bitrate, extra_args = None, 0, ()
         dest_dir = self._dest_dir
         if dest_dir and not os.path.isdir(dest_dir):
             messagebox.showwarning("提示", DEST_MISSING, parent=self.window)
@@ -817,12 +958,59 @@ class ConvertPage(ToolPage):
         self._update_progress()
         self.status.set_kind("run")
 
-        self._worker = threading.Thread(
-            target=self._run,
-            args=(jobs, extension, codec, bitrate, extra_args, dest_dir),
-            daemon=True)
+        if mode == MODE_IMAGE:
+            worker_target = self._run_images
+            worker_args = (jobs, extension, dest_dir)
+        else:
+            worker_target = self._run
+            worker_args = (jobs, extension, codec, bitrate, extra_args,
+                           dest_dir)
+        self._worker = threading.Thread(target=worker_target,
+                                        args=worker_args, daemon=True)
         self._worker.start()
         self.set_status(f"开始转换 {len(jobs)} 个文件为 {extension.upper()}")
+
+    def _run_images(self, jobs, extension, dest_dir):
+        """后台线程: 依次转换图片
+
+        @param jobs: (序号, 源文件路径) 组成的元组
+        @param extension: 目标扩展名, 不带点
+        @param dest_dir: 指定的输出目录, 空串表示与源文件同目录
+        """
+        for index, source in jobs:
+            if self._stop_event.is_set():
+                self._messages.put(("stopped",))
+                return
+            if tasks.is_same_target(source, dest_dir, extension):
+                self._messages.put(("skipped", index, SKIP_SAME_FORMAT))
+                continue
+
+            try:
+                target = tasks.output_path(source, dest_dir, extension)
+            except OSError as exc:
+                logger.exception("无法规划输出路径: %s", source)
+                self._messages.put(("failed", index, str(exc)))
+                continue
+
+            self._messages.put(("start", index))
+            try:
+                if tasks.is_same_format(source, extension):
+                    tasks.copy_file(source, target)
+                    self._messages.put(
+                        ("copied", index, os.path.basename(target), target))
+                    continue
+                images.convert(source, target, extension,
+                               on_progress=self._progress_sender(index))
+            except Exception as exc:
+                if self._stop_event.is_set():
+                    self._messages.put(("stopped",))
+                    return
+                logger.warning("图片转换失败: %s: %s", source, exc)
+                self._messages.put(("failed", index, str(exc)))
+                continue
+            self._messages.put(("done", index, os.path.basename(target),
+                                target))
+        self._messages.put(("finished",))
 
     def _run(self, jobs, extension, codec, bitrate, extra_args, dest_dir):
         """后台线程: 依次转换, 只通过队列与主线程通信
@@ -1113,6 +1301,7 @@ class ConvertPage(ToolPage):
         """主题切换后重新应用状态列的颜色"""
         self._refresh_rows()
         self._update_empty_state()
+        self._sync_engine_status()
 
     def on_close(self):
         """退出前结束子进程与后台线程, 避免留下没写完的输出文件"""

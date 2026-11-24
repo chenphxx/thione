@@ -49,16 +49,17 @@ def file_size(path):
         return 0
 
 
-def scan_folder(folder):
-    """递归收集文件夹里可以作为输入的音频文件
+def scan_folder(folder, extensions=INPUT_EXTENSIONS):
+    """递归收集文件夹里可以作为输入的文件
 
     @param folder: 要扫描的文件夹
+    @param extensions: 允许的扩展名集合
     @return: 按路径排序的文件列表
     """
     found = []
     for root, _dirs, filenames in os.walk(folder):
         for name in filenames:
-            if os.path.splitext(name)[1].lower() in INPUT_EXTENSIONS:
+            if os.path.splitext(name)[1].lower() in extensions:
                 found.append(os.path.join(root, name))
     return sorted(found)
 

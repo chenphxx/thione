@@ -4,6 +4,11 @@ from ...dpi import scale
 
 PAGE_TITLE = "文件格式转换"
 
+#: 页面的两种转换类型
+MODE_AUDIO = "audio"
+MODE_IMAGE = "image"
+MODE_LABELS = ((MODE_AUDIO, "音视频"), (MODE_IMAGE, "图片"))
+
 # 可选的输出格式: 扩展名 显示名 有损编码器 是否有损码率可选
 # 无损选项的编码器见 LOSSLESS_QUALITY; 一期只做音频, 之后加视频时在这里补一组格式
 AUDIO_FORMATS = (
@@ -24,11 +29,27 @@ FORMAT_CODECS = {ext: codec for ext, _label, codec, _by_rate in AUDIO_FORMATS}
 #: 下拉框的取值, 顺序与 AUDIO_FORMATS 一致
 FORMAT_CHOICES = tuple(FORMAT_LABELS[ext]
                        for ext, _label, _codec, _by_rate in AUDIO_FORMATS)
+
+#: 图片输出格式: 扩展名 显示名
+IMAGE_FORMATS = (
+    ("png", "PNG"),
+    ("jpg", "JPG"),
+    ("webp", "WEBP"),
+    ("bmp", "BMP"),
+    ("tiff", "TIFF"),
+    ("gif", "GIF"),
+)
+
+#: 图片格式的显示名与下拉框取值
+IMAGE_FORMAT_LABELS = {ext: label for ext, label in IMAGE_FORMATS}
+IMAGE_FORMAT_CHOICES = tuple(label for _ext, label in IMAGE_FORMATS)
+
 #: 只有无损编码的容器: 音质下拉框里只有无损一项, 没有码率可选
 LOSSLESS_ONLY_FORMATS = frozenset(ext for ext, _label, _codec, by_rate in AUDIO_FORMATS
                                   if not by_rate)
 
 DEFAULT_FORMAT = "mp3"
+DEFAULT_IMAGE_FORMAT = "png"
 
 # 有损编码的码率档 (kbps), 所有支持有损编码的格式共用同一套
 BITRATES = (128, 192, 256, 320)
@@ -97,12 +118,18 @@ ENCRYPTED_EXTENSIONS = (".ncm",)
 #: 可以加进列表参与转换的全部扩展名
 INPUT_EXTENSIONS = AUDIO_EXTENSIONS + VIDEO_EXTENSIONS + ENCRYPTED_EXTENSIONS
 
+#: 图片模式下可以选择与扫描的扩展名
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".jfif", ".webp", ".bmp",
+                    ".gif", ".tif", ".tiff")
+
 #: 同一编码格式的其它扩展名: 命中时与目标格式视为相同 直接复制而不再编码
 #  没有列出的扩展名只与自身相同
 FORMAT_ALIASES = {
     "ogg": ("oga",),
     "aiff": ("aif",),
     "m4a": ("m4b",),
+    "jpg": ("jpeg", "jfif"),
+    "tiff": ("tif",),
 }
 
 # 文件列表的列, 与设计稿一致: 文件名 格式 大小 状态
@@ -144,8 +171,8 @@ EMPTY_HINT = "点击左上角的'添加文件'或者'添加文件夹'开始"
 
 #: 列表面板的标题与顶栏的说明
 CARD_TITLE = "待转换文件"
-PAGE_HINT = "添加音频 视频或加密文件, 选好输出格式后点'开始转换'"
-SUBTITLE = "添加音频 视频或加密文件, 选好输出格式后点'开始转换'"
+PAGE_HINT = "添加音频 视频 图片或加密文件, 选好输出格式后点'开始转换'"
+SUBTITLE = "把音频 视频 图片与加密文件批量转换成常见格式"
 #: 选好指定文件夹之后的提示
 CUSTOM_DEST_HINT = "输出到 {path}"
 #: 输出位置一行: 源文件夹时路径框里的说明 与 刷新扫描按钮
@@ -156,6 +183,14 @@ DEST_MISSING = "输出文件夹不存在, 请点路径框重新选择"
 
 #: 没有任务时进度区的文字
 PROGRESS_IDLE = "等待开始"
+
+#: 图片模式的空状态与添加提示
+IMAGE_EMPTY_TITLE = "还没有要转换的图片"
+IMAGE_EMPTY_HINT = "点击左上角的'添加文件'或者'添加文件夹'开始"
+IMAGE_ADD_HINT = "先添加要转换的图片"
+IMAGE_QUALITY_LABEL = "最高质量"
+IMAGE_QUALITY_HINT = "尽量无损"
+IMAGE_ENGINE_LABEL = "内置图片引擎"
 
 # 进度条右侧的文字
 PROGRESS_RUNNING = "正在转换 {index}/{total}"
