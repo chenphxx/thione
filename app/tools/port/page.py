@@ -84,8 +84,7 @@ class PortPage(ToolPage):
 
     def _build_query(self):
         """查询条件行: 查询方式切换与两种查询条件"""
-        panel = self.add_panel(head=False, grow=False, body_pad=(14, 12))
-        row = tk.Frame(panel.body, bd=0, highlightthickness=0)
+        row = tk.Frame(self.add_toolbar(), bd=0, highlightthickness=0)
         tint(row, bg="panel")
         row.configure(bg=self.theme.rgb("panel"))
         row.pack(side="top", fill="x")

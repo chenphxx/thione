@@ -79,29 +79,30 @@ class DedupePage(ToolPage):
             ("查找重复项", "Primary.TButton", self.on_find_duplicates),
         ))
 
-        row = self.add_row()
+        row = self.add_toolbar()
         self.view_switch = ViewSwitch(row, self.theme, self._on_view_change,
                                       self._on_tier_change, self.view,
-                                      self.tier, surface="canvas")
+                                      self.tier, surface="panel")
         self.view_switch.pack(side="right", padx=(8, 0))
         kit.text(row, self.theme, value="视图", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="right")
+                 token="muted", surface="panel").pack(side="right")
         self.type_filter = TypeFilter(row, self.theme,
-                                      command=self._on_filter_change)
+                                      command=self._on_filter_change,
+                                      surface="panel")
         self.type_filter.pack(side="right", padx=(8, 16))
         kit.text(row, self.theme, value="筛选类型", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="right")
+                 token="muted", surface="panel").pack(side="right")
 
         self.btn_choose = ttk.Button(row, text="选择文件夹",
                                      style="Toolbar.TButton",
                                      command=self.on_select_folder)
         self.btn_choose.pack(side="left")
         kit.text(row, self.theme, value="当前文件夹", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="left",
+                 token="muted", surface="panel").pack(side="left",
                                                       padx=(16, 8))
         self.lbl_folder = kit.text(row, self.theme, value="未选择",
                                    size=SIZE_LABEL, token="muted",
-                                   mono_font=True, surface="canvas")
+                                   mono_font=True, surface="panel")
         self.lbl_folder.pack(side="left")
 
     def _build_main_area(self):

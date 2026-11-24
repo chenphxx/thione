@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 from ... import kit
 from ...errors import open_path, show_error
 from ...shell.page import ToolPage
-from ...theme import SIZE_LABEL, tint
+from ...theme import BODY_GAP, SIZE_LABEL, tint
 from . import ffmpeg, images, platforms, tasks
 from .constants import (
     AUDIO_FORMATS,
@@ -50,7 +50,6 @@ from .constants import (
     IMAGE_FORMAT_CHOICES,
     IMAGE_FORMAT_LABELS,
     IMAGE_FORMATS,
-    IMAGE_QUALITY_HINT,
     IMAGE_QUALITY_LABEL,
     INPUT_EXTENSIONS,
     LOSSLESS_ONLY_FORMATS,
@@ -175,10 +174,14 @@ class ConvertPage(ToolPage):
             ("开始转换", "Primary.TButton", self._start),
         ))
 
-        source_row = self.add_row()
+        toolbar = self.add_toolbar()
+        source_row = tk.Frame(toolbar, bd=0, highlightthickness=0)
+        tint(source_row, bg="panel")
+        source_row.configure(bg=self.theme.rgb("panel"))
+        source_row.pack(side="top", fill="x")
         self.mode_switch = kit.Segment(
             source_row, self.theme, MODE_LABELS, value=self._mode,
-            command=self._select_mode, surface="canvas")
+            command=self._select_mode, surface="panel")
         self.mode_switch.pack(side="left", padx=(0, 12))
         self.btn_add_files = ttk.Button(source_row, text="添加文件",
                                         style="Toolbar.TButton",
@@ -190,34 +193,37 @@ class ConvertPage(ToolPage):
         self.btn_add_folder.pack(side="left", padx=(8, 0))
 
         kit.text(source_row, self.theme, value="输出格式", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="left",
+                 token="muted", surface="panel").pack(side="left",
                                                       padx=(16, 8))
         self.combo_format = kit.Dropdown(source_row, self.theme,
                                          values=list(FORMAT_CHOICES),
                                          command=self._on_format_change,
-                                         surface="canvas",
+                                         surface="panel",
                                          width=104)
         self.combo_format.set(FORMAT_LABELS[DEFAULT_FORMAT])
         self.combo_format.pack(side="left")
 
         self.lbl_quality_title = kit.text(
             source_row, self.theme, value="音质", size=SIZE_LABEL,
-            token="muted", surface="canvas")
+            token="muted", surface="panel")
         self.lbl_quality_title.pack(side="left", padx=(14, 8))
         self.combo_quality = kit.Dropdown(source_row, self.theme,
                                           command=self._on_quality_change,
-                                          surface="canvas",
+                                          surface="panel",
                                           width=104)
         self.combo_quality.pack(side="left")
         # 说明音质可选项为什么与别的格式不同: 无损 与 码率 两类
         self.lbl_quality_hint = kit.text(source_row, self.theme, value="",
                                          size=SIZE_LABEL, token="muted",
-                                         surface="canvas")
+                                         surface="panel")
         self.lbl_quality_hint.pack(side="left", padx=(10, 0))
 
-        options_row = self.add_row()
+        options_row = tk.Frame(toolbar, bd=0, highlightthickness=0)
+        tint(options_row, bg="panel")
+        options_row.configure(bg=self.theme.rgb("panel"))
+        options_row.pack(side="top", fill="x", pady=(BODY_GAP, 0))
         kit.text(options_row, self.theme, value="输出到", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="left")
+                 token="muted", surface="panel").pack(side="left")
         self.check_source = kit.Check(options_row, self.theme,
                                       value=DEST_LABELS[0][1],
                                       variable=self._dest_source_var,
@@ -695,11 +701,13 @@ class ConvertPage(ToolPage):
             self._quality = IMAGE_QUALITY_LABEL
             self.combo_quality.set(self._quality)
             self.combo_quality.set_enabled(False)
-            self.lbl_quality_hint.configure(text=IMAGE_QUALITY_HINT)
+            self.lbl_quality_hint.pack_forget()
             return
 
         self.lbl_quality_title.configure(text="音质")
         self.combo_quality.set_enabled(True)
+        if not self.lbl_quality_hint.winfo_manager():
+            self.lbl_quality_hint.pack(side="left", padx=(10, 0))
         extension = self._target_format()
         lossless = LOSSLESS_QUALITY.get(extension)
         values = [lossless[0]] if lossless else []

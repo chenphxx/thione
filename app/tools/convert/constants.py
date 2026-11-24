@@ -189,7 +189,6 @@ IMAGE_EMPTY_TITLE = "还没有要转换的图片"
 IMAGE_EMPTY_HINT = "点击左上角的'添加文件'或者'添加文件夹'开始"
 IMAGE_ADD_HINT = "先添加要转换的图片"
 IMAGE_QUALITY_LABEL = "最高质量"
-IMAGE_QUALITY_HINT = "尽量无损"
 IMAGE_ENGINE_LABEL = "内置图片引擎"
 
 # 进度条右侧的文字

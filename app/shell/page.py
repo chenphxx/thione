@@ -140,6 +140,17 @@ class ToolPage(tk.Frame):
         row.pack(side="top", fill=fill, expand=expand, pady=(0, gap))
         return row
 
+    def add_toolbar(self, gap=BODY_GAP, body_pad=(14, 12)):
+        """在内容区顶部加一块与端口与占用一致的工具栏面板
+
+        @param gap: 与下方内容的间距
+        @param body_pad: 工具栏内容区的左右与上下内边距
+        @return: 工具栏内容区 Frame
+        """
+        panel = self.add_panel(head=False, grow=False, gap=gap,
+                               body_pad=body_pad)
+        return panel.body
+
     def add_panel(self, title=None, right=None, parent=None, head=True,
                   grow=True, gap=BODY_GAP, body_pad=(14, 14)):
         """在内容区里加一个面板

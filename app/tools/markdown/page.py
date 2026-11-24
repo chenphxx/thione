@@ -81,7 +81,7 @@ class MarkdownPage(ToolPage):
             ("开始改造", "Primary.TButton", self._start),
         ))[0]
 
-        row = self.add_row()
+        row = self.add_toolbar()
         self.btn_add_files = ttk.Button(
             row,
             text="添加文件",

@@ -73,19 +73,20 @@ class RenamePage(ToolPage):
             ("开始处理", "Primary.TButton", self.rename_and_save),
         ))
 
-        row = self.add_row()
+        row = self.add_toolbar()
         self.view_switch = ViewSwitch(row, self.theme, self._on_view_change,
                                       self._on_tier_change, self.view,
-                                      self.tier, surface="canvas")
+                                      self.tier, surface="panel")
         self.view_switch.pack(side="right", padx=(8, 0))
         kit.text(row, self.theme, value="视图", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="right")
+                 token="muted", surface="panel").pack(side="right")
 
         self.type_filter = TypeFilter(row, self.theme,
-                                      command=self._on_type_filter_change)
+                                      command=self._on_type_filter_change,
+                                      surface="panel")
         self.type_filter.pack(side="right", padx=(8, 16))
         kit.text(row, self.theme, value="筛选类型", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="right")
+                 token="muted", surface="panel").pack(side="right")
 
         self.btn_add_folder = ttk.Button(row, text="添加文件夹",
                                          style="Toolbar.TButton",
@@ -93,14 +94,14 @@ class RenamePage(ToolPage):
         self.btn_add_folder.pack(side="left")
 
         kit.text(row, self.theme, value="文件名前缀", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="left",
+                 token="muted", surface="panel").pack(side="left",
                                                       padx=(16, 8))
         self.entry_prefix = kit.EntryField(row, self.theme, width=150)
         self.entry_prefix.pack(side="left")
         self.entry_prefix.entry.bind("<KeyRelease>", self._on_parameter_change)
 
         kit.text(row, self.theme, value="起始数字", size=SIZE_LABEL,
-                 token="muted", surface="canvas").pack(side="left",
+                 token="muted", surface="panel").pack(side="left",
                                                       padx=(16, 8))
         self.entry_start = kit.EntryField(row, self.theme, width=76)
         self.entry_start.set("1")
